@@ -253,6 +253,8 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_pal_platform.cpp
         tests/unit/test_pal_sdl2_backend.cpp
         tests/unit/test_pal_sdl3_backend.cpp
+        # Contract Gates
+        tests/unit/test_contract_gates.cpp
     )
 
     target_link_libraries(legends_unit_tests PRIVATE

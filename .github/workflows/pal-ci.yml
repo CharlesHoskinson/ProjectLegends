@@ -96,6 +96,97 @@ jobs:
           fi
           echo "SDL header firewall: PASS"
 
+  contract-gates:
+    name: Contract Gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DPAL_BACKEND_HEADLESS=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Run Contract Gate Tests
+        run: |
+          ./build/legends_unit_tests --gtest_filter="ContractGate*" \
+            --gtest_output=xml:contract-gates.xml
+
+      - name: Verify No SDL Symbols in Core
+        run: |
+          echo "Checking legends_core for SDL symbol leakage..."
+          if nm build/liblegends_core.a 2>/dev/null | grep -i 'SDL_'; then
+            echo "ERROR: SDL symbols found in legends_core"
+            exit 1
+          fi
+          echo "Symbol firewall: PASS"
+
+      - name: Verify No main Symbol
+        run: |
+          echo "Checking legends_core exports no main..."
+          if nm build/liblegends_core.a 2>/dev/null | grep ' T main$'; then
+            echo "ERROR: main symbol exported from legends_core"
+            exit 1
+          fi
+          echo "No main exported: PASS"
+
+  asan-lifecycle:
+    name: ASan Lifecycle Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure with ASan
+        run: |
+          cmake -B build \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DPAL_BACKEND_HEADLESS=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+            -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Run Lifecycle Tests under ASan
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+        run: |
+          ./build/legends_unit_tests \
+            --gtest_filter="ContractGate_Lifecycle*" \
+            --gtest_repeat=3
+
+  abi-c-compile:
+    name: Pure C ABI Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DPAL_BACKEND_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Run ABI Tests
+        run: ./build/legends_abi_test
+
+      - name: Verify C11 Compilation
+        run: |
+          echo "Verifying legends_embed.h compiles as C11..."
+          gcc -std=c11 -fsyntax-only -I include \
+            -c tests/unit/test_legends_abi.c -o /dev/null
+          echo "C11 compilation: PASS"
+
   windows-build:
     name: Windows Build
     runs-on: windows-latest
