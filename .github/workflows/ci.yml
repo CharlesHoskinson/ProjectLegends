@@ -1,0 +1,182 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Project Legends - Continuous Integration
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Copyright (c) 2024-2025 Charles Hoskinson and Contributors
+# Licensed under GNU General Public License v2.0
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build and Test - Linux
+  # ─────────────────────────────────────────────────────────────────────────────
+  linux:
+    name: Linux (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            cc: gcc-13
+            cxx: g++-13
+          - compiler: clang
+            cc: clang-16
+            cxx: clang++-16
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build ${{ matrix.cc }} ${{ matrix.cxx }}
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build and Test - Windows
+  # ─────────────────────────────────────────────────────────────────────────────
+  windows:
+    name: Windows (MSVC)
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -B build `
+            -DLEGENDS_BUILD_TESTS=ON `
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build and Test - macOS
+  # ─────────────────────────────────────────────────────────────────────────────
+  macos:
+    name: macOS (AppleClang)
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Sanitizer Builds
+  # ─────────────────────────────────────────────────────────────────────────────
+  sanitizers:
+    name: ${{ matrix.sanitizer }} Sanitizer
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        sanitizer: [address, undefined]
+        include:
+          - sanitizer: address
+            flags: "-fsanitize=address -fno-omit-frame-pointer"
+            env: "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1"
+          - sanitizer: undefined
+            flags: "-fsanitize=undefined -fno-omit-frame-pointer"
+            env: "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
+            -DCMAKE_C_FLAGS="${{ matrix.flags }}" \
+            -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.flags }}" \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        env:
+          ${{ matrix.env }}
+        run: ctest --test-dir build --output-on-failure
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # C ABI Verification
+  # ─────────────────────────────────────────────────────────────────────────────
+  abi-check:
+    name: C ABI Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify C11 Compatibility
+        run: |
+          echo "Checking legends_embed.h compiles as pure C11..."
+          gcc -std=c11 -fsyntax-only -x c include/legends/legends_embed.h \
+            -I include -Werror
+          echo "C ABI check passed!"
+
+      - name: Verify Header Guards
+        run: |
+          echo "Checking header guards..."
+          for header in include/legends/*.h; do
+            guard=$(head -30 "$header" | grep -E "^#ifndef [A-Z_]+_H$" || true)
+            if [ -z "$guard" ]; then
+              echo "WARNING: $header may be missing proper header guard"
+            fi
+          done
+          echo "Header guard check complete."
