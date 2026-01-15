@@ -5,86 +5,138 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue)]()
 [![C++ Standard](https://img.shields.io/badge/C%2B%2B-23-blue)]()
-[![Tests](https://img.shields.io/badge/tests-1533%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-4000%2B%20passing-brightgreen)]()
 [![TLA+ Verified](https://img.shields.io/badge/TLA%2B-verified-green)]()
 
 ---
 
 ## Overview
 
-Project Legends is a modernized, embeddable x86 emulation framework designed for deterministic execution and AI integration. Built on the foundation of DOSBox-X, it provides a clean C API boundary for embedding DOS/x86 emulation into modern applications, with a particular focus on:
+Project Legends is a modernized, embeddable x86 emulation framework designed for deterministic execution and AI integration. Built on a fully refactored DOSBox-X engine, it provides a clean C API boundary for embedding DOS/x86 emulation into modern applications.
+
+**Key Features:**
 
 - **Deterministic Execution**: Bit-perfect reproducibility: `f(config, trace, schedule) -> hash`
 - **LLM Integration**: Structured I/O optimized for language model interaction
-- **Vision Model Support**: Screen capture with semantic annotations
+- **Vision Model Support**: Screen capture with semantic annotations (COCO/YOLO export)
 - **Platform Abstraction**: Clean separation from SDL2/SDL3 via PAL layer
 - **Formal Verification**: TLA+ specifications with TLC model checking
 - **Contract Gates**: 23 mechanically enforceable architectural invariants
+- **Library-First Design**: No threads spawned, no globals leaked, host controls everything
 
 ---
 
-## Architecture
+## Engine Architecture
+
+The engine is a fully refactored DOSBox-X core (~900k lines) transformed into an embeddable library:
 
 ```
-                              ┌─────────────────────────────────────────────────────────────────────────────┐
-                              │                     Host Application (Rust/Python/C++)                      │
-                              │                     LLM Agents, Game Bots, Testing Harnesses                 │
-                              └─────────────────────────────────────────────────────────────────────────────┘
-                                                                  │
-                                                                  ▼ (Stable C ABI - 23 Contract Gates)
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                          legends_embed.h (C API Boundary)                                             │
-│  ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐  ┌──────────────────┐ │
-│  │     Lifecycle      │  │     Stepping       │  │      Capture       │  │       Input        │  │    Save/Load     │ │
-│  │  legends_create()  │  │ legends_step_ms()  │  │legends_capture_*() │  │legends_key_event() │  │legends_save_*()  │ │
-│  │ legends_destroy()  │  │legends_step_cycles │  │ legends_is_dirty() │  │legends_text_input()│  │legends_load_*()  │ │
-│  │  legends_reset()   │  │legends_get_time()  │  │legends_get_cursor()│  │legends_mouse_*()   │  │legends_get_hash()│ │
-│  └────────────────────┘  └────────────────────┘  └────────────────────┘  └────────────────────┘  └──────────────────┘ │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                                                                  │
-                       ┌──────────────────────────────────────────┴──────────────────────────────────────────┐
-                       │                                                                                      │
-                       ▼                                                                                      ▼
-┌─────────────────────────────────────────────────────────────┐     ┌─────────────────────────────────────────────────────────────┐
-│              Legends Core (Modern C++23)                     │     │              Platform Abstraction Layer (PAL)                │
-│  ┌───────────────────┐  ┌───────────────────────────────┐   │     │  ┌───────────────────────────────────────────────────────┐  │
-│  │  MachineContext   │  │      LLM Frame Layer          │   │     │  │  IWindow - create/resize/fullscreen/present           │  │
-│  │  Event Bus        │  │  llm_frame.h, llm_actions.h   │   │     │  │  IContext - software surface / OpenGL context         │  │
-│  │  Handle Registry  │  │  llm_diff.h, llm_serializer.h │   │     │  │  IAudioSink - push samples (NO callbacks into core)   │  │
-│  └───────────────────┘  └───────────────────────────────┘   │     │  │  IHostClock - wall time (NOT emulated time)           │  │
-│  ┌───────────────────────────────────────────────────────┐  │     │  │  IInputSource - poll events, mouse capture            │  │
-│  │              Vision Capture Layer                      │  │     │  └───────────────────────────────────────────────────────┘  │
-│  │  vision_capture.h, vision_framebuffer.h                │  │     │                              │                              │
-│  │  vision_overlay.h, vision_annotations.h                │  │     │          ┌──────────────────┼──────────────────┐           │
-│  └───────────────────────────────────────────────────────┘  │     │          ▼                  ▼                  ▼           │
-└──────────────────────────────────────────────┬──────────────┘     │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-                                               │                     │   │   Headless   │  │     SDL2     │  │     SDL3     │     │
-                                               │                     │   │   Backend    │  │   Backend    │  │   Backend    │     │
-                                               │                     │   │ (in-memory)  │  │(SDL_Window)  │  │(SDL_Window)  │     │
-                                               │                     │   │ Virtual clock│  │SDL_Callback  │  │SDL_AudioStream    │
-                                               │                     │   └──────────────┘  └──────────────┘  └──────────────┘     │
-                                               │                     └─────────────────────────────────────────────────────────────┘
-                                               │
-                                               ▼ (Compile Firewall - No SDL headers leak)
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                    Legacy DOSBox-X Core (903k lines, Minimal Patches)                                            │
-│  ┌───────────────────────────────┐  ┌───────────────────────────────┐  ┌───────────────────────────────────────────────────────┐ │
-│  │            CPU                │  │          Hardware             │  │                    DOS/BIOS                           │ │
-│  │  Normal_Loop(), cpudecoder()  │  │  PIC, PIT, DMA, VGA, SB16     │  │  INT 21h, INT 10h, INT 13h, INT 16h                   │ │
-│  │  x86 instruction execution    │  │  PIC_RunQueue(), mixer        │  │  File system, video modes, disk I/O                  │ │
-│  └───────────────────────────────┘  └───────────────────────────────┘  └───────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                          Host Application (Rust/Python/C++)                          │
+│                          LLM Agents, Game Bots, Testing Harnesses                    │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                            │
+                                            ▼ (Stable C ABI - 23 Contract Gates)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              legends_embed.h (C API Boundary)                        │
+│    Lifecycle │ Stepping │ Capture │ Input │ Save/Load │ LLM │ Vision                │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+                                            │
+              ┌─────────────────────────────┴─────────────────────────────┐
+              ▼                                                           ▼
+┌───────────────────────────────────────┐     ┌───────────────────────────────────────┐
+│         AIBox Layer (C++23)           │     │    Platform Abstraction Layer (PAL)   │
+│  ┌─────────────┐  ┌─────────────┐     │     │  ┌─────────────────────────────────┐  │
+│  │ FFI Core    │  │ FFI LLM     │     │     │  │ IWindow, IContext, IAudioSink  │  │
+│  │ FFI Vision  │  │ FFI Events  │     │     │  │ IHostClock, IInputSource       │  │
+│  ├─────────────┤  ├─────────────┤     │     │  └─────────────────────────────────┘  │
+│  │DOSBoxContext│  │HandleRegistry│    │     │        │         │         │          │
+│  │ContextGuard │  │ EventBus    │     │     │   Headless    SDL2      SDL3          │
+│  └─────────────┘  └─────────────┘     │     └───────────────────────────────────────┘
+└───────────────────────────────────────┘
+                    │
+                    ▼ (Context-Based State - No Leaked Globals)
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                     Refactored DOSBox-X Core (900k lines)                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
+│  │     CPU     │  │   Hardware  │  │  DOS/BIOS   │  │    GUI      │                 │
+│  │ x86 decode  │  │ PIC,PIT,DMA │  │ INT 21h/10h │  │ Menu system │                 │
+│  │ Protected   │  │ VGA, SB16  │  │ File system │  │ Mapper      │                 │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘                 │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Layer Responsibilities
+### Global State Migration
 
-| Layer | Responsibility | Key Files |
-|-------|---------------|-----------|
-| **Host Application** | Owns the emulator lifecycle, provides config, consumes output | User code |
-| **C API Boundary** | Stable ABI, version handshake, single-instance enforcement | `legends_embed.h` |
-| **Legends Core** | Modern C++23 wrapper, event bus, LLM/Vision layers | `src/legends/` |
-| **PAL** | Platform services: window, audio, clock, input | `src/pal/` |
-| **DOSBox-X Core** | x86 emulation, hardware, DOS | Legacy code |
+The original DOSBox-X used extensive global variables. Over 21 PRs, these have been systematically migrated to `DOSBoxContext`:
+
+| Status | Count | Description |
+|--------|-------|-------------|
+| **Migrated** | 49 | Moved to DOSBoxContext (74%) |
+| **Pending** | 17 | Remaining for multi-instance (26%) |
+| **Total** | 66 | Tracked in `globals_registry.yaml` |
+
+The `globals_registry.yaml` file tracks every global with:
+- Migration status (pending → in_progress → migrated)
+- Target context location
+- PR that performed migration
+- Determinism relevance flag
+
+This enables CI to prevent regressions during the migration.
+
+### Engine Statistics
+
+| Metric | Value |
+|--------|-------|
+| Source files | 1,139 |
+| Lines of code | ~1.1M |
+| New AIBox layer | ~47k lines |
+| Engine tests | 2,493 |
+| Embedding tests | 1,533 |
+| **Total tests** | **4,000+** |
+
+---
+
+## FFI Modules
+
+The engine exposes four FFI modules for host integration:
+
+### ffi_core.h - Lifecycle and Memory
+
+```c
+aibox_handle_t aibox_create(const char* config);
+int aibox_init(aibox_handle_t handle);
+int aibox_step(aibox_handle_t handle, uint32_t ms);
+int aibox_destroy(aibox_handle_t handle);
+int aibox_memory_read(aibox_handle_t h, uint32_t addr, void* buf, size_t len);
+int aibox_memory_write(aibox_handle_t h, uint32_t addr, const void* buf, size_t len);
+```
+
+### ffi_llm.h - LLM Integration
+
+```c
+int aibox_llm_get_frame(aibox_handle_t h, int format, char* buf, size_t len, size_t* out);
+int aibox_llm_execute_batch(aibox_handle_t h, const char* json_actions);
+int aibox_llm_type(aibox_handle_t h, const char* text, uint32_t flags);
+int aibox_llm_estimate_tokens(aibox_handle_t h, size_t* count);
+```
+
+### ffi_vision.h - Screenshot and Overlays
+
+```c
+int aibox_vision_capture_rgb(aibox_handle_t h, uint8_t* buf, size_t len, uint16_t* w, uint16_t* h);
+int aibox_vision_add_overlay(aibox_handle_t h, const aibox_bbox_t* bbox);
+int aibox_vision_export_coco(aibox_handle_t h, char* json, size_t len);
+int aibox_vision_export_yolo(aibox_handle_t h, char* txt, size_t len);
+```
+
+### ffi_events.h - Event System
+
+```c
+int aibox_event_subscribe(aibox_handle_t h, int event_type, aibox_callback_t cb);
+int aibox_event_unsubscribe(aibox_handle_t h, int subscription_id);
+int aibox_event_poll(aibox_handle_t h);
+```
 
 ---
 
@@ -109,248 +161,125 @@ See [`spec/CONTRACT.md`](spec/CONTRACT.md) for complete specification.
 
 ## Key Invariants (TLA+ Verified)
 
+> **"TLA+ Verified" badge scope:** TLA+ verifies the lifecycle, threading, audio, and save/load invariants defined in [`spec/CONTRACT.md`](spec/CONTRACT.md). It does not verify full x86 instruction semantics.
+
 ### Determinism
 ```
 f(config, input_trace, step_schedule) -> state_hash
 ```
-Same inputs always produce same outputs. Verified by `IdenticalTracesProduceIdenticalHash` test.
 
 ### Round-Trip Preservation
 ```
 Obs(Deserialize(Serialize(S))) = Obs(S)
 ```
-Save/load preserves observable state. Verified by `SaveLoadRoundTripPreservesState` test and TLA+ model checking.
-
-### Audio Push Model
-```
-currentThread = "AudioCallback" => lastCaller != "Core"
-```
-Audio callbacks never drive emulation. Verified by `PALMinimal.tla` specification.
 
 ### Thread Isolation
 ```
 coreOwner in {"None", "Main"} AND forall t in palThreads: t != coreOwner
 ```
-Core is single-threaded; PAL threads never access core. Verified by `ThreadingMinimal.tla`.
 
----
-
-## TLA+ Specifications
-
-> **"TLA+ Verified" badge scope:** TLA+ verifies the lifecycle, threading, audio, and save/load invariants defined in [`spec/CONTRACT.md`](spec/CONTRACT.md). It does not verify full x86 instruction semantics.
-
-| Specification | States | Invariants | Status |
-|--------------|--------|------------|--------|
-| `LifecycleMinimal.tla` | 85 | AtMostOneInstance, MisuseSafe, HandleConsistency | PASSED |
-| `PALMinimal.tla` | 99 | AudioPushModel, ThreadSafety, AudioQueueBounded | PASSED |
-| `ThreadingMinimal.tla` | 1,474 | CoreSingleThreaded, PALIsolation, NoDataRaces | PASSED |
-| `SaveStateTest.tla` | 8 | ObservationPreserved, EventCountPreserved, TimePreserved | PASSED |
-
-Full specifications in [`spec/tla/`](spec/tla/). Verification report: [`spec/VERIFICATION_REPORT.md`](spec/VERIFICATION_REPORT.md).
+| Specification | States | Status |
+|--------------|--------|--------|
+| `LifecycleMinimal.tla` | 85 | PASSED |
+| `PALMinimal.tla` | 99 | PASSED |
+| `ThreadingMinimal.tla` | 1,474 | PASSED |
+| `SaveStateTest.tla` | 8 | PASSED |
 
 ---
 
 ## Quick Start
 
+### Building
+
+```bash
+# Configure and build
+cmake -B build -G Ninja -DLEGENDS_BUILD_TESTS=ON
+cmake --build build
+
+# Run tests
+ctest --test-dir build --output-on-failure
+
+# Build with SDL2 backend
+cmake -B build -G Ninja -DPAL_BACKEND_SDL2=ON
+cmake --build build
+```
+
 ### Embedding Example
 
 ```c
 #include <legends/legends_embed.h>
-#include <stdio.h>
-#include <stdlib.h>
 
-// Error checking macro (library never terminates host - always check returns)
-#define LEGENDS_CHECK(call) do { \
-    legends_error_t err = (call); \
-    if (err != LEGENDS_OK) { \
-        fprintf(stderr, "Error %d at %s:%d\n", err, __FILE__, __LINE__); \
-        return 1; \
-    } \
-} while(0)
+#define CHECK(call) do { if ((call) != LEGENDS_OK) return 1; } while(0)
 
 int main() {
-    // Create emulator instance
     legends_handle handle;
     legends_config_t config = LEGENDS_CONFIG_INIT;
     config.deterministic = 1;
-    LEGENDS_CHECK(legends_create(&config, &handle));
 
-    // Run for 1 second of emulated time
+    CHECK(legends_create(&config, &handle));
+
+    // Run for 1 second
     for (int i = 0; i < 100; i++) {
-        LEGENDS_CHECK(legends_step_ms(handle, 10, NULL));
+        CHECK(legends_step_ms(handle, 10, NULL));
     }
 
-    // Capture screen (two-call pattern: query size, then fill)
-    size_t cell_count;
-    LEGENDS_CHECK(legends_capture_text(handle, NULL, 0, &cell_count, NULL));
-    legends_text_cell_t* cells = malloc(cell_count * sizeof(legends_text_cell_t));
-    LEGENDS_CHECK(legends_capture_text(handle, cells, cell_count, &cell_count, NULL));
-
     // Type a command
-    LEGENDS_CHECK(legends_text_input(handle, "DIR\n"));
-    LEGENDS_CHECK(legends_step_ms(handle, 500, NULL));
+    CHECK(legends_text_input(handle, "DIR\n"));
+    CHECK(legends_step_ms(handle, 500, NULL));
 
-    // Save state
-    size_t state_size;
-    LEGENDS_CHECK(legends_save_state(handle, NULL, 0, &state_size));
-    uint8_t* state = malloc(state_size);
-    LEGENDS_CHECK(legends_save_state(handle, state, state_size, &state_size));
-
-    // Verify determinism
-    int is_deterministic;
-    LEGENDS_CHECK(legends_verify_determinism(handle, 10000, &is_deterministic));
-    assert(is_deterministic);
-
-    // Cleanup
     legends_destroy(handle);
-    free(cells);
-    free(state);
     return 0;
 }
 ```
 
-### Building
-
-```bash
-# Headless only (no SDL required)
-cmake -B build -DLEGENDS_BUILD_TESTS=ON
-cmake --build build
-ctest --test-dir build
-
-# With SDL2 backend
-cmake -B build -DPAL_BACKEND_SDL2=ON -DLEGENDS_BUILD_TESTS=ON
-cmake --build build
-
-# With SDL3 backend
-cmake -B build -DPAL_BACKEND_SDL3=ON -DLEGENDS_BUILD_TESTS=ON
-cmake --build build
-
-# Run TLA+ model checking
-java -jar tla2tools.jar -config spec/tla/LifecycleMinimal.cfg spec/tla/LifecycleMinimal.tla
-```
-
-### Developer Build Acceleration
-
-For fast iteration during development:
-
-```bash
-# Use Ninja + compiler cache (fastest)
-cmake -B build -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-cmake --build build -j$(nproc)
-
-# CMake presets (if CMakePresets.json exists)
-cmake --preset headless-dev
-cmake --build --preset headless-dev
-
-# Unity build for legacy core (reduces compile units)
-cmake -B build -DCMAKE_UNITY_BUILD=ON
-
-# Precompiled headers
-cmake -B build -DLEGENDS_USE_PCH=ON
-```
-
-**Recommended setup:**
-1. Install Ninja: `apt install ninja-build` / `brew install ninja`
-2. Install ccache: `apt install ccache` / `brew install ccache`
-3. Configure once, rebuild fast: `cmake --build build` after changes
-
 ---
 
-## Platform Abstraction Layer (PAL)
-
-The PAL provides platform services (NOT rendering primitives):
+## Project Structure
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                         PAL Interfaces (include/pal/)                                    │
-├──────────────────┬──────────────────┬──────────────────┬──────────────────┬─────────────┤
-│     IWindow      │     IContext     │    IAudioSink    │   IHostClock     │IInputSource │
-├──────────────────┼──────────────────┼──────────────────┼──────────────────┼─────────────┤
-│ create()         │ createSoftware() │ open()           │ getTicksMs()     │ poll()      │
-│ resize()         │ createOpenGL()   │ pushSamples()    │ getTicksUs()     │ setCapture()│
-│ setFullscreen()  │ lockSurface()    │ getQueuedFrames()│ sleepMs()        │ setRelative │
-│ present()        │ makeCurrent()    │ pause()          │ sleepUs()        │             │
-│ getDisplayInfo() │ swapBuffers()    │ setVolume()      │                  │             │
-└──────────────────┴──────────────────┴──────────────────┴──────────────────┴─────────────┘
-                                              │
-              ┌───────────────────────────────┼───────────────────────────────┐
-              ▼                               ▼                               ▼
-       ┌─────────────┐                 ┌─────────────┐                 ┌─────────────┐
-       │  Headless   │                 │    SDL2     │                 │    SDL3     │
-       ├─────────────┤                 ├─────────────┤                 ├─────────────┤
-       │ Memory buf  │                 │ SDL_Window  │                 │ SDL_Window  │
-       │ Virtual clk │                 │ SDL_Surface │                 │ SDL_Texture │
-       │ Event inject│                 │ SDL_Audio   │                 │ AudioStream │
-       │ No deps     │                 │ Callback    │                 │ Push model  │
-       └─────────────┘                 └─────────────┘                 └─────────────┘
+ProjectLegends/
+├── engine/                     # Refactored DOSBox-X core (900k lines)
+│   ├── include/
+│   │   ├── aibox/              # AIBox FFI headers
+│   │   │   ├── ffi_core.h      # Lifecycle, memory, stepping
+│   │   │   ├── ffi_llm.h       # LLM frame serialization
+│   │   │   ├── ffi_vision.h    # Screenshot, overlays
+│   │   │   └── ffi_events.h    # Event subscription
+│   │   └── dosbox/             # DOSBox abstraction
+│   │       ├── dosbox_context.h    # Master context struct
+│   │       ├── instance_handle.h   # Handle management
+│   │       └── platform/           # Platform interfaces
+│   ├── src/
+│   │   ├── aibox/              # AIBox implementation
+│   │   ├── cpu/                # x86 CPU emulation
+│   │   ├── dos/                # DOS kernel
+│   │   ├── hardware/           # PIC, PIT, DMA, VGA, Sound
+│   │   ├── gui/                # Menu system, mapper
+│   │   └── ...
+│   ├── tests/                  # 2,493 engine tests
+│   ├── globals_registry.yaml   # Global state tracking
+│   └── CMakeLists.txt
+│
+├── include/
+│   ├── legends/                # Embedding API headers
+│   │   └── legends_embed.h     # Main C API
+│   └── pal/                    # Platform Abstraction Layer
+│
+├── src/
+│   ├── legends/                # Embedding implementation
+│   └── pal/                    # PAL backends (headless/SDL2/SDL3)
+│
+├── tests/                      # 1,533 embedding tests
+│   ├── unit/
+│   └── integration/
+│
+├── spec/
+│   ├── CONTRACT.md             # 23 contract gates
+│   ├── VERIFICATION_REPORT.md  # TLA+ results
+│   └── tla/                    # TLA+ specifications
+│
+└── TODO.md                     # Development roadmap
 ```
-
-### Key Design Decisions
-
-1. **PAL = Platform Services, NOT Framebuffer Owner**
-   - PAL provides window/context resources
-   - Existing `OUTPUT_*` layer owns pixels
-   - No duplicate rendering abstractions
-
-2. **Audio = Push Model (NOT Callback-Driven)**
-   - Emulation produces samples -> pushes to PAL
-   - SDL2 callback only reads ring buffer
-   - SDL3 uses `SDL_AudioStream` (pure push)
-
-3. **Host Clock vs Emulated Time**
-   - `IHostClock`: Wall time for throttling/UI
-   - Emulated time: Advanced ONLY by `stepMs()`/`stepCycles()`
-   - Never confused
-
----
-
-## API Reference
-
-### Lifecycle Functions
-
-| Function | Description |
-|----------|-------------|
-| `legends_get_api_version()` | Get API version for ABI checks |
-| `legends_create()` | Create emulator instance (single per process) |
-| `legends_destroy()` | Destroy instance and free resources |
-| `legends_reset()` | Soft reset (preserves config) |
-| `legends_get_config()` | Query current configuration |
-
-### Stepping Functions
-
-| Function | Description |
-|----------|-------------|
-| `legends_step_ms()` | Step by emulated milliseconds |
-| `legends_step_cycles()` | Step by exact CPU cycles |
-| `legends_get_emu_time()` | Get current emulated time |
-| `legends_get_total_cycles()` | Get total cycles executed |
-
-### Capture Functions
-
-| Function | Description |
-|----------|-------------|
-| `legends_capture_text()` | Capture text mode screen (CP437 + attributes) |
-| `legends_capture_rgb()` | Capture RGB24 framebuffer (pre-scaler) |
-| `legends_is_frame_dirty()` | Check if frame changed since last capture |
-| `legends_get_cursor()` | Get cursor position and visibility |
-
-### Input Functions
-
-| Function | Description |
-|----------|-------------|
-| `legends_key_event()` | Inject AT scancode (set 1) |
-| `legends_key_event_ext()` | Inject extended scancode (E0 prefix) |
-| `legends_text_input()` | Type UTF-8 text string |
-| `legends_mouse_event()` | Inject mouse movement/buttons |
-
-### State Functions
-
-| Function | Description |
-|----------|-------------|
-| `legends_save_state()` | Serialize complete state |
-| `legends_load_state()` | Restore from serialized state |
-| `legends_get_state_hash()` | SHA-256 of observable state |
-| `legends_verify_determinism()` | Round-trip determinism test |
 
 ---
 
@@ -363,7 +292,7 @@ The PAL provides platform services (NOT rendering primitives):
 | `LEGENDS_ERR_NULL_POINTER` | -2 | Null pointer argument |
 | `LEGENDS_ERR_ALREADY_CREATED` | -3 | Instance already exists |
 | `LEGENDS_ERR_NOT_INITIALIZED` | -4 | Instance not initialized |
-| `LEGENDS_ERR_REENTRANT_CALL` | -5 | Step called from within callback (reentrancy) |
+| `LEGENDS_ERR_REENTRANT_CALL` | -5 | Step called from within callback |
 | `LEGENDS_ERR_BUFFER_TOO_SMALL` | -6 | Buffer too small |
 | `LEGENDS_ERR_INVALID_CONFIG` | -7 | Invalid configuration |
 | `LEGENDS_ERR_INVALID_STATE` | -8 | Invalid save state |
@@ -376,86 +305,19 @@ The PAL provides platform services (NOT rendering primitives):
 
 ---
 
-## Project Structure
+## Platform Abstraction Layer (PAL)
 
-```
-ProjectLegends/
-├── include/
-│   ├── legends/                # Embeddable API headers
-│   │   ├── legends_embed.h     # Main C API (23 contract gates)
-│   │   ├── llm_frame.h         # LLM-optimized output
-│   │   ├── llm_actions.h       # Semantic action descriptors
-│   │   ├── vision_capture.h    # Screen capture
-│   │   └── vision_overlay.h    # Annotation rendering
-│   │
-│   └── pal/                    # Platform Abstraction Layer
-│       ├── platform.h          # Backend factory
-│       ├── window.h            # Window interface
-│       ├── context.h           # Rendering context
-│       ├── audio_sink.h        # Audio output (push model)
-│       ├── host_clock.h        # Host timing
-│       └── input_source.h      # Input events
-│
-├── src/
-│   ├── legends/                # Core implementation
-│   └── pal/                    # PAL backends
-│       ├── headless/           # In-memory (no deps)
-│       ├── sdl2/               # SDL2 backend
-│       └── sdl3/               # SDL3 backend
-│
-├── tests/
-│   └── unit/                   # 1500+ unit tests
-│       ├── test_contract_gates.cpp  # 23 contract gate tests
-│       ├── test_legends_abi.c       # Pure C compilation
-│       └── ...
-│
-├── spec/
-│   ├── CONTRACT.md             # Contract specification
-│   ├── VERIFICATION_REPORT.md  # TLA+ verification results
-│   └── tla/                    # TLA+ specifications
-│       ├── LifecycleMinimal.tla
-│       ├── PALMinimal.tla
-│       ├── ThreadingMinimal.tla
-│       ├── SaveStateTest.tla
-│       └── ...
-│
-└── .github/workflows/          # CI configuration
-    └── pal-ci.yml              # Contract gate enforcement
-```
+The PAL provides platform services without leaking SDL dependencies:
 
----
+| Interface | Purpose |
+|-----------|---------|
+| `IWindow` | Window creation, resize, fullscreen |
+| `IContext` | Software surface / OpenGL context |
+| `IAudioSink` | Push-based audio (no callbacks into core) |
+| `IHostClock` | Wall time for throttling (not emulated time) |
+| `IInputSource` | Event polling, mouse capture |
 
-## CI Pipeline
-
-| Job | Purpose |
-|-----|---------|
-| `headless-tests` | Headless backend on Ubuntu |
-| `sdl2-tests` | SDL2 backend on Ubuntu |
-| `sdl3-tests` | SDL3 backend (built from source) |
-| `contract-gates` | Run contract gate tests + symbol verification |
-| `asan-lifecycle` | 100x create/destroy under AddressSanitizer |
-| `abi-c-compile` | Pure C11 compilation verification |
-| `sdl-firewall` | Verify SDL headers isolated to `src/pal/` |
-| `windows-build` | Windows headless build |
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Write tests (contract gates for architectural changes)
-4. Update TLA+ specs for critical changes
-5. Ensure all tests pass
-6. Submit a pull request
-
-### Code Style
-
-- C++23 with modern idioms
-- `gsl-lite` for contracts (violations return errors, never terminate host)
-- TLA+ specs for critical invariants
-- No hidden singletons (all state explicit via handle; v1 is single-instance due to legacy globals)
-- Function names in diagrams are abbreviated (e.g., `create()` = `legends_create()`)
+**Backends:** Headless (no deps), SDL2, SDL3
 
 ---
 
@@ -475,4 +337,4 @@ Project Legends is licensed under the GNU General Public License v2.0, consisten
 
 **Project Legends** - Bringing deterministic x86 emulation to the AI era.
 
-*Copyright (c) 2024-2025 Charles Hoskinson and Contributors*
+*Copyright (c) 2024-2025 Charles Hoskinson*
