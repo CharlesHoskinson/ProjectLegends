@@ -87,6 +87,21 @@ public:
         write_pos_.store(0, std::memory_order_relaxed);
     }
 
+    /// Discard oldest samples to make room
+    /// @return Number of samples discarded
+    size_t discard(size_t count) {
+        size_t read = read_pos_.load(std::memory_order_relaxed);
+        size_t write = write_pos_.load(std::memory_order_acquire);
+
+        size_t available = write - read;
+        size_t to_discard = std::min(count, available);
+
+        if (to_discard > 0) {
+            read_pos_.store(read + to_discard, std::memory_order_release);
+        }
+        return to_discard;
+    }
+
 private:
     std::vector<int16_t> buffer_;
     size_t capacity_;
@@ -154,6 +169,7 @@ public:
             device_id_ = 0;
         }
         ring_buffer_.reset();
+        dropped_frames_ = 0;
         paused_ = false;
     }
 
@@ -177,12 +193,17 @@ public:
         }
 
         size_t sample_count = static_cast<size_t>(frame_count) * config_.channels;
-        size_t pushed = ring_buffer_->push(samples, sample_count);
 
-        if (pushed < sample_count) {
-            return Result::BufferFull;
+        // Backpressure policy: drop oldest samples if buffer is full
+        size_t free = ring_buffer_->free_space();
+        if (sample_count > free) {
+            size_t to_discard = sample_count - free;
+            size_t discarded = ring_buffer_->discard(to_discard);
+            // Track dropped frames (samples / channels)
+            dropped_frames_ += static_cast<uint32_t>(discarded / config_.channels);
         }
 
+        ring_buffer_->push(samples, sample_count);
         return Result::Success;
     }
 
@@ -195,6 +216,10 @@ public:
 
     uint32_t getBufferCapacity() const override {
         return capacity_frames_;
+    }
+
+    uint32_t getDroppedFrames() const override {
+        return dropped_frames_;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -257,6 +282,7 @@ private:
     std::unique_ptr<AudioRingBuffer> ring_buffer_;
     AudioConfig config_{};
     uint32_t capacity_frames_ = 0;
+    uint32_t dropped_frames_ = 0;
     bool paused_ = false;
     float volume_ = 1.0f;
 };

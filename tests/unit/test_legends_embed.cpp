@@ -354,7 +354,7 @@ TEST(DosboxxNullHandleTest, SaveStateRejectsNullHandle) {
 }
 
 TEST(DosboxxNullHandleTest, LoadStateRejectsNullHandle) {
-    uint8_t buffer[16];
+    uint8_t buffer[16] = {0};
     auto err = legends_load_state(nullptr, buffer, sizeof(buffer));
     EXPECT_EQ(err, LEGENDS_ERR_NULL_HANDLE);
 }

@@ -70,7 +70,8 @@ typedef int32_t legends_error_t;
 #define LEGENDS_ERR_IO_FAILED         -10
 #define LEGENDS_ERR_OUT_OF_MEMORY     -11
 #define LEGENDS_ERR_NOT_SUPPORTED     -12
-#define LEGENDS_ERR_INTERNAL          -99
+#define LEGENDS_ERR_INTERNAL          -13
+#define LEGENDS_ERR_WRONG_THREAD      -14   /* Called from non-owner thread */
 
 /* =========================================================================
  * HANDLE TYPE (opaque)

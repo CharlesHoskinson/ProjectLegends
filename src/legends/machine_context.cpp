@@ -73,16 +73,16 @@ MachineContext::~MachineContext() {
 }
 
 MachineContext::MachineContext(MachineContext&& other) noexcept
-    : config_(std::move(other.config_))
+    : cpu(std::move(other.cpu))
+    , memory(std::move(other.memory))
+    , dma(std::move(other.dma))
+    , config_(std::move(other.config_))
     , state_(other.state_)
     , last_error_(std::move(other.last_error_))
     , total_cycles_(other.total_cycles_)
     , virtual_ticks_ms_(other.virtual_ticks_ms_)
     , stop_requested_(other.stop_requested_.load())
     , init_stage_(other.init_stage_)
-    , cpu(std::move(other.cpu))
-    , memory(std::move(other.memory))
-    , dma(std::move(other.dma))
 {
     other.state_ = MachineState::Destroyed;
     other.init_stage_ = InitStage::None;

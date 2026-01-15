@@ -18,6 +18,7 @@
 #include <array>
 #include <vector>
 #include <cstdint>
+#include <thread>
 
 namespace {
 
@@ -27,6 +28,9 @@ namespace {
 
 // Single instance enforcement
 std::atomic<bool> g_instance_exists{false};
+
+// Owner thread ID - core must only be accessed from creating thread
+std::thread::id g_owner_thread_id{};
 
 // The actual machine instance
 std::unique_ptr<legends::MachineContext> g_instance;
@@ -745,7 +749,7 @@ constexpr ScancodeMapping ASCII_TO_SCANCODE[128] = {
     {0x2C, false}, // 'z'
     // 0x7B-0x7F: Braces and special
     {0x1A, true},  // '{' Shift+[
-    {0x2B, true},  // '|' Shift+\
+    {0x2B, true},  // '|' Shift+backslash
     {0x1B, true},  // '}' Shift+]
     {0x29, true},  // '~' Shift+`
     {0x00, false}, // DEL (0x7F)
@@ -797,7 +801,20 @@ legends_error_t safe_call(Func&& func) noexcept {
 #define LEGENDS_REQUIRE(cond, err) \
     do { if (!(cond)) return (err); } while(0)
 
+// Check that caller is on the owner thread
+#define LEGENDS_CHECK_THREAD() \
+    do { \
+        if (g_instance_exists.load() && std::this_thread::get_id() != g_owner_thread_id) { \
+            g_last_error = "Called from non-owner thread"; \
+            return LEGENDS_ERR_WRONG_THREAD; \
+        } \
+    } while(0)
+
 // Set error message, log it, and return error code
+// Undef if already defined (error.h may have it)
+#ifdef LEGENDS_ERROR
+#undef LEGENDS_ERROR
+#endif
 #define LEGENDS_ERROR(err, msg) \
     do { \
         g_last_error = (msg); \
@@ -849,6 +866,9 @@ legends_error_t legends_create(
         LEGENDS_ERROR(LEGENDS_ERR_ALREADY_CREATED,
             "Instance already exists - only one instance per process allowed");
     }
+
+    // Store owner thread ID for thread affinity checking
+    g_owner_thread_id = std::this_thread::get_id();
 
     // Validate config if provided
     if (config != nullptr) {
@@ -942,8 +962,9 @@ legends_error_t legends_destroy(legends_handle handle) {
     // Reset time state
     g_time_state.reset();
 
-    // Reset single instance flag
+    // Reset single instance flag and owner thread
     g_instance_exists = false;
+    g_owner_thread_id = std::thread::id{};
     g_last_error.clear();
 
     // Reset log state (do this last so we can log the destroy)
@@ -954,6 +975,7 @@ legends_error_t legends_destroy(legends_handle handle) {
 
 legends_error_t legends_reset(legends_handle handle) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
     LEGENDS_REQUIRE(g_instance != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1018,6 +1040,7 @@ legends_error_t legends_step_cycles(
     legends_step_result_t* result_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
     LEGENDS_REQUIRE(g_instance != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
 

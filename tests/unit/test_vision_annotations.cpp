@@ -3,6 +3,11 @@
  * @brief Unit tests for vision_annotations.h
  */
 
+// Suppress missing-field-initializers for aggregate init of Detection
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+
 #include <gtest/gtest.h>
 #include "legends/vision_annotations.h"
 #include <cmath>

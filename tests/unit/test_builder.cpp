@@ -324,7 +324,7 @@ TEST(MachineBuilderTest, IsValidForInvalidConfig) {
 TEST(MachineBuilderTest, ErrorsAfterBuild) {
     MachineBuilder builder;
     builder.with_memory(512_KB);
-    builder.build();
+    (void)builder.build();
 
     EXPECT_FALSE(builder.errors().empty());
 }
@@ -351,7 +351,7 @@ TEST(MachineBuilderTest, BuildOrThrowSuccess) {
 
 TEST(MachineBuilderTest, BuildOrThrowFailure) {
     EXPECT_THROW({
-        MachineBuilder()
+        (void)MachineBuilder()
             .with_memory(512_KB)
             .build_or_throw();
     }, std::runtime_error);
@@ -372,7 +372,7 @@ TEST(MachineBuilderTest, MultipleErrorsCollected) {
     MachineBuilder builder;
     builder.with_memory(512_KB);
     builder.with_cycles(50);
-    builder.build();
+    (void)builder.build();
 
     EXPECT_GE(builder.errors().size(), 2u);
 }

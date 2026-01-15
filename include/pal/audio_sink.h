@@ -50,9 +50,11 @@ public:
     ///
     /// @param samples Interleaved 16-bit signed PCM samples
     /// @param frame_count Number of frames (samples per channel)
-    /// @return Success, InvalidParameter (null), BufferFull, NotInitialized
+    /// @return Success, InvalidParameter (null), NotInitialized
     ///
-    /// @note This call is non-blocking. If buffer is full, returns BufferFull.
+    /// @note This call is non-blocking. If buffer is full, oldest samples are
+    ///       dropped to make room (backpressure policy). Use getDroppedFrames()
+    ///       to monitor drops.
     /// @note Samples are interleaved: L0, R0, L1, R1, ... for stereo
     virtual Result pushSamples(const int16_t* samples, uint32_t frame_count) = 0;
 
@@ -61,6 +63,10 @@ public:
 
     /// Get total buffer capacity in frames
     virtual uint32_t getBufferCapacity() const = 0;
+
+    /// Get number of frames dropped due to buffer overflow
+    /// @note Resets to 0 when close() is called
+    virtual uint32_t getDroppedFrames() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Playback Control

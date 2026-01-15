@@ -54,6 +54,7 @@ public:
         capacity_frames_ = 0;
         queued_frames_ = 0;
         write_pos_ = 0;
+        dropped_frames_ = 0;
         paused_ = false;
         open_ = false;
     }
@@ -77,14 +78,18 @@ public:
             return Result::Success;
         }
 
-        // Check if buffer has space
+        // Check if buffer has space - drop oldest if full (backpressure policy)
         uint32_t available = capacity_frames_ - queued_frames_;
         if (frame_count > available) {
-            return Result::BufferFull;
+            // Drop oldest frames to make room
+            uint32_t to_drop = frame_count - available;
+            dropped_frames_ += to_drop;
+            queued_frames_ -= std::min(to_drop, queued_frames_);
         }
 
         // Copy samples to buffer
-        uint32_t samples_to_copy = frame_count * config_.channels;
+        uint32_t frames_to_write = std::min(frame_count, capacity_frames_);
+        uint32_t samples_to_copy = frames_to_write * config_.channels;
         size_t buffer_size = buffer_.size();
 
         for (uint32_t i = 0; i < samples_to_copy; ++i) {
@@ -92,7 +97,7 @@ public:
         }
 
         write_pos_ = (write_pos_ + samples_to_copy) % buffer_size;
-        queued_frames_ += frame_count;
+        queued_frames_ += frames_to_write;
         total_frames_pushed_ += frame_count;
 
         return Result::Success;
@@ -104,6 +109,10 @@ public:
 
     uint32_t getBufferCapacity() const override {
         return capacity_frames_;
+    }
+
+    uint32_t getDroppedFrames() const override {
+        return dropped_frames_;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -174,6 +183,7 @@ private:
     std::vector<int16_t> buffer_;
     uint32_t capacity_frames_ = 0;
     uint32_t queued_frames_ = 0;
+    uint32_t dropped_frames_ = 0;
     size_t write_pos_ = 0;
     uint64_t total_frames_pushed_ = 0;
 };

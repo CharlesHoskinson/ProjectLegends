@@ -229,7 +229,13 @@ class CpuContext {
 public:
     // ─────────────────────────────────────────────────────────────────────────
     // General Purpose Registers (using anonymous unions for aliasing)
+    // Anonymous structs are a common extension for register aliasing in emulators
     // ─────────────────────────────────────────────────────────────────────────
+
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 
     union {
         uint32_t eax = 0;
@@ -283,6 +289,10 @@ public:
         uint32_t eip = 0;
         struct { uint16_t ip; uint16_t eip_hi_; };
     };
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
     CpuFlags flags;
 

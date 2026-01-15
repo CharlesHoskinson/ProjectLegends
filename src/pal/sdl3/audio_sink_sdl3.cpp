@@ -65,6 +65,7 @@ public:
             SDL_DestroyAudioStream(stream_);
             stream_ = nullptr;
         }
+        dropped_frames_ = 0;
         paused_ = false;
     }
 
@@ -87,6 +88,15 @@ public:
             return Result::Success;
         }
 
+        // Backpressure policy: if stream is already over capacity, clear oldest
+        uint32_t queued = getQueuedFrames();
+        if (queued + frame_count > capacity_frames_ * 4) {  // Allow 4x buffer
+            // Clear stream to make room (drops oldest)
+            uint32_t to_drop = queued;
+            SDL_ClearAudioStream(stream_);
+            dropped_frames_ += to_drop;
+        }
+
         // Apply volume if not 1.0
         if (volume_ < 1.0f) {
             // Create temporary buffer with volume applied
@@ -102,7 +112,8 @@ public:
 
         // SDL3: Push directly to audio stream
         if (!SDL_PutAudioStreamData(stream_, samples, static_cast<int>(bytes))) {
-            return Result::BufferFull;
+            // If push fails despite clearing, count all as dropped
+            dropped_frames_ += frame_count;
         }
 
         return Result::Success;
@@ -118,6 +129,10 @@ public:
 
     uint32_t getBufferCapacity() const override {
         return capacity_frames_;
+    }
+
+    uint32_t getDroppedFrames() const override {
+        return dropped_frames_;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -164,6 +179,7 @@ private:
     SDL_AudioStream* stream_ = nullptr;
     AudioConfig config_{};
     uint32_t capacity_frames_ = 0;
+    uint32_t dropped_frames_ = 0;
     bool paused_ = false;
     float volume_ = 1.0f;
     std::vector<int16_t> temp_buffer_;  // For volume adjustment

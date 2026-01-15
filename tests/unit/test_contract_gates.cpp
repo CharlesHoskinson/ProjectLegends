@@ -470,6 +470,29 @@ TEST(ContractGate_Threading, PALThreadsNeverCallCore) {
     SUCCEED() << "PAL threads never invoke legends_* functions";
 }
 
+// 8c) Calling from wrong thread returns LEGENDS_ERR_WRONG_THREAD
+TEST(ContractGate_Threading, WrongThreadReturnsError) {
+    // Create instance on main thread
+    legends_handle handle = nullptr;
+    legends_error_t err = legends_create(nullptr, &handle);
+    ASSERT_EQ(err, LEGENDS_OK);
+    ASSERT_NE(handle, nullptr);
+
+    // Call from another thread - should return LEGENDS_ERR_WRONG_THREAD
+    std::atomic<legends_error_t> thread_result{LEGENDS_OK};
+    std::thread other_thread([&]() {
+        legends_step_result_t result;
+        thread_result = legends_step_cycles(handle, 1000, &result);
+    });
+    other_thread.join();
+
+    EXPECT_EQ(thread_result.load(), LEGENDS_ERR_WRONG_THREAD)
+        << "Calling core from non-owner thread must return WRONG_THREAD";
+
+    // Cleanup from owner thread
+    legends_destroy(handle);
+}
+
 // =============================================================================
 // CONTRACT SUMMARY TEST
 // =============================================================================
@@ -498,7 +521,8 @@ TEST(ContractGate_Summary, AllGatesEnumerated) {
         "7b) Audio queue policy documented",
         "7c) Push model - no callback driving emulation",
         "8a) Core is single-threaded",
-        "8b) PAL threads never call core"
+        "8b) PAL threads never call core",
+        "8c) Wrong thread returns LEGENDS_ERR_WRONG_THREAD"
     };
 
     for (const auto& gate : gates) {
@@ -506,6 +530,6 @@ TEST(ContractGate_Summary, AllGatesEnumerated) {
         std::cout << "  [GATE] " << gate << std::endl;
     }
 
-    EXPECT_EQ(gates.size(), 22u) << "22 contract gates defined";
+    EXPECT_EQ(gates.size(), 23u) << "23 contract gates defined";
 }
 

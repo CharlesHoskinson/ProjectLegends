@@ -210,6 +210,8 @@ void CaptureEngine::flip_vertical(Span<uint8_t> buffer, uint16_t width, uint16_t
 }
 
 void CaptureEngine::render_text_mode(Span<uint8_t> output, uint16_t width, uint16_t height) {
+    (void)width;   // Reserved for future font rendering
+    (void)height;  // Reserved for future font rendering
     // Text mode rendering is complex - for now, fill with a pattern
     // Full implementation would need font data
     std::fill(output.begin(), output.end(), 0);

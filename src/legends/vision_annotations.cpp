@@ -228,6 +228,7 @@ std::string CocoAnnotation::export_results_json(int32_t image_id) const {
 }
 
 CocoAnnotation CocoAnnotation::parse_json(const std::string& json) {
+    (void)json;  // Reserved for future JSON parsing implementation
     // Simplified JSON parsing - a full implementation would use a proper JSON library
     // This is a basic implementation for demonstration purposes
     CocoAnnotation result;
@@ -246,6 +247,8 @@ std::vector<int32_t> RleEncoder::encode(
     int32_t width,
     int32_t height
 ) {
+    (void)width;   // Reserved for future 2D encoding optimization
+    (void)height;  // Reserved for future 2D encoding optimization
     std::vector<int32_t> rle;
     if (mask.empty()) return rle;
 

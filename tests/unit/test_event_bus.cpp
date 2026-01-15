@@ -314,7 +314,7 @@ TEST_F(ExternalEventBridgeTest, Subscribe) {
     ExternalEventBridge bridge(internal_bus);
 
     int call_count = 0;
-    auto callback = [](int type, const void* data, size_t size, void* user) {
+    auto callback = [](int /*type*/, const void* /*data*/, size_t /*size*/, void* user) {
         int* count = static_cast<int*>(user);
         (*count)++;
     };
@@ -328,7 +328,7 @@ TEST_F(ExternalEventBridgeTest, EventQueued) {
     ExternalEventBridge bridge(internal_bus);
 
     int call_count = 0;
-    auto callback = [](int type, const void* data, size_t size, void* user) {
+    auto callback = [](int /*type*/, const void* /*data*/, size_t /*size*/, void* user) {
         int* count = static_cast<int*>(user);
         (*count)++;
     };
@@ -347,7 +347,7 @@ TEST_F(ExternalEventBridgeTest, FlushDelivers) {
     ExternalEventBridge bridge(internal_bus);
 
     int call_count = 0;
-    auto callback = [](int type, const void* data, size_t size, void* user) {
+    auto callback = [](int /*type*/, const void* /*data*/, size_t /*size*/, void* user) {
         int* count = static_cast<int*>(user);
         (*count)++;
     };
@@ -395,7 +395,7 @@ TEST_F(ExternalEventBridgeTest, Unsubscribe) {
     ExternalEventBridge bridge(internal_bus);
 
     int call_count = 0;
-    auto callback = [](int type, const void* data, size_t size, void* user) {
+    auto callback = [](int /*type*/, const void* /*data*/, size_t /*size*/, void* user) {
         int* count = static_cast<int*>(user);
         (*count)++;
     };
@@ -426,7 +426,7 @@ TEST_F(ExternalEventBridgeTest, MultipleEvents) {
     ExternalEventBridge bridge(internal_bus);
 
     int call_count = 0;
-    auto callback = [](int type, const void*, size_t, void* user) {
+    auto callback = [](int /*type*/, const void*, size_t, void* user) {
         (*static_cast<int*>(user))++;
     };
 

@@ -236,7 +236,7 @@ TEST_F(IoPortRegistrationTest, MoveToDefaultConstructed) {
 TEST_F(IoPortRegistrationTest, ReadHandlerInvoked) {
     uint32_t read_value = 0;
     IoPortRegistration reg(0x9999,
-        [&](uint16_t port, size_t width) {
+        [&](uint16_t /*port*/, size_t /*width*/) {
             read_value = 0xCAFEBABE;
             return read_value;
         },
@@ -255,7 +255,7 @@ TEST_F(IoPortRegistrationTest, WriteHandlerInvoked) {
 
     IoPortRegistration reg(0xAAAA,
         nullptr,
-        [&](uint16_t port, uint32_t value, size_t width) {
+        [&](uint16_t port, uint32_t value, size_t /*width*/) {
             written_port = port;
             written_value = value;
         }

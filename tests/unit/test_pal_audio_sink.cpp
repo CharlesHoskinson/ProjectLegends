@@ -158,21 +158,23 @@ TEST_F(PalAudioSinkTest, PushSamplesBeforeOpenFails) {
     EXPECT_EQ(result, Result::NotInitialized);
 }
 
-TEST_F(PalAudioSinkTest, PushSamplesBufferFullReturnsError) {
+TEST_F(PalAudioSinkTest, PushSamplesOverflowDropsOldest) {
     AudioConfig config;
     config.buffer_ms = 10;  // Small buffer
     ASSERT_EQ(sink_->open(config), Result::Success);
 
     uint32_t capacity = sink_->getBufferCapacity();
+    EXPECT_EQ(sink_->getDroppedFrames(), 0u);
 
     // Fill the buffer
     auto samples = generateSineWave(capacity);
     ASSERT_EQ(sink_->pushSamples(samples.data(), capacity), Result::Success);
 
-    // Try to push more
+    // Push more - should drop oldest, not return error
     auto more = generateSineWave(100);
     Result result = sink_->pushSamples(more.data(), 100);
-    EXPECT_EQ(result, Result::BufferFull);
+    EXPECT_EQ(result, Result::Success);  // Backpressure policy: always succeeds
+    EXPECT_GT(sink_->getDroppedFrames(), 0u);  // But tracks dropped frames
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -206,6 +208,30 @@ TEST_F(PalAudioSinkTest, QueuedFramesNeverExceedsCapacity) {
     auto samples = generateSineWave(capacity + 100);
     sink_->pushSamples(samples.data(), capacity);
     EXPECT_LE(sink_->getQueuedFrames(), capacity);
+}
+
+TEST_F(PalAudioSinkTest, GetDroppedFramesInitiallyZero) {
+    AudioConfig config;
+    ASSERT_EQ(sink_->open(config), Result::Success);
+    EXPECT_EQ(sink_->getDroppedFrames(), 0u);
+}
+
+TEST_F(PalAudioSinkTest, DroppedFramesResetsOnClose) {
+    AudioConfig config;
+    config.buffer_ms = 10;  // Small buffer
+    ASSERT_EQ(sink_->open(config), Result::Success);
+
+    uint32_t capacity = sink_->getBufferCapacity();
+
+    // Fill buffer and overflow to get drops
+    auto samples = generateSineWave(capacity + 100);
+    sink_->pushSamples(samples.data(), capacity + 100);
+    EXPECT_GT(sink_->getDroppedFrames(), 0u);
+
+    // Close and reopen
+    sink_->close();
+    ASSERT_EQ(sink_->open(config), Result::Success);
+    EXPECT_EQ(sink_->getDroppedFrames(), 0u);  // Reset on close
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

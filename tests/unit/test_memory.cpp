@@ -111,8 +111,8 @@ TEST_F(GuestMemoryTest, UncheckedWrite32Read32) {
 #if !defined(NDEBUG) || defined(LEGENDS_ALWAYS_BOUNDS_CHECK)
 
 TEST_F(GuestMemoryTest, Read8OutOfBoundsThrows) {
-    EXPECT_THROW(mem_->read8(static_cast<uint32_t>(TEST_SIZE)), MemoryAccessException);
-    EXPECT_THROW(mem_->read8(static_cast<uint32_t>(TEST_SIZE + 1000)), MemoryAccessException);
+    EXPECT_THROW((void)mem_->read8(static_cast<uint32_t>(TEST_SIZE)), MemoryAccessException);
+    EXPECT_THROW((void)mem_->read8(static_cast<uint32_t>(TEST_SIZE + 1000)), MemoryAccessException);
 }
 
 TEST_F(GuestMemoryTest, Write8OutOfBoundsThrows) {
@@ -120,16 +120,16 @@ TEST_F(GuestMemoryTest, Write8OutOfBoundsThrows) {
 }
 
 TEST_F(GuestMemoryTest, Read16CrossingBoundaryThrows) {
-    EXPECT_THROW(mem_->read16(static_cast<uint32_t>(TEST_SIZE - 1)), MemoryAccessException);
+    EXPECT_THROW((void)mem_->read16(static_cast<uint32_t>(TEST_SIZE - 1)), MemoryAccessException);
 }
 
 TEST_F(GuestMemoryTest, Read32CrossingBoundaryThrows) {
-    EXPECT_THROW(mem_->read32(static_cast<uint32_t>(TEST_SIZE - 3)), MemoryAccessException);
+    EXPECT_THROW((void)mem_->read32(static_cast<uint32_t>(TEST_SIZE - 3)), MemoryAccessException);
 }
 
 TEST_F(GuestMemoryTest, ExceptionContainsAddress) {
     try {
-        mem_->read8(0xFFFFFFFF);
+        (void)mem_->read8(0xFFFFFFFF);
         FAIL() << "Expected MemoryAccessException";
     } catch (const MemoryAccessException& e) {
         EXPECT_EQ(e.address(), 0xFFFFFFFF);
@@ -138,7 +138,7 @@ TEST_F(GuestMemoryTest, ExceptionContainsAddress) {
 
 TEST_F(GuestMemoryTest, ExceptionContainsSize) {
     try {
-        mem_->read32(static_cast<uint32_t>(TEST_SIZE - 2));
+        (void)mem_->read32(static_cast<uint32_t>(TEST_SIZE - 2));
         FAIL() << "Expected MemoryAccessException";
     } catch (const MemoryAccessException& e) {
         EXPECT_EQ(e.size(), 4u);

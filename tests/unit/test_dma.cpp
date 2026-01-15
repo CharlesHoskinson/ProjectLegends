@@ -187,7 +187,7 @@ TEST_F(DmaTransferTest, TransferWithCallback) {
     size_t callback_length = 0;
     uint8_t* callback_buffer = nullptr;
 
-    channel_->set_callback([&](uint8_t ch, uint8_t* buf, size_t len) {
+    channel_->set_callback([&](uint8_t /*ch*/, uint8_t* buf, size_t len) {
         callback_length = len;
         callback_buffer = buf;
         return len;

@@ -22,14 +22,14 @@ TEST(OptionalUtilsTest, UnwrapOrThrowWithValue) {
 TEST(OptionalUtilsTest, UnwrapOrThrowWithEmpty) {
     std::optional<int> opt;
 
-    EXPECT_THROW(unwrap_or_throw(opt), std::runtime_error);
+    EXPECT_THROW((void)unwrap_or_throw(opt), std::runtime_error);
 }
 
 TEST(OptionalUtilsTest, UnwrapOrThrowCustomMessage) {
     std::optional<int> opt;
 
     try {
-        unwrap_or_throw(opt, "Custom error message");
+        (void)unwrap_or_throw(opt, "Custom error message");
         FAIL() << "Expected exception";
     } catch (const std::runtime_error& e) {
         EXPECT_STREQ(e.what(), "Custom error message");

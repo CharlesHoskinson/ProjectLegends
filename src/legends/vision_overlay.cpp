@@ -3,6 +3,11 @@
  * @brief Implementation of overlay system for visual annotations.
  */
 
+// GCC 15 has false positives with std::variant containing std::string
+#if defined(__GNUC__) && __GNUC__ >= 15
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+
 #include "legends/vision_overlay.h"
 #include <algorithm>
 #include <cmath>
@@ -264,6 +269,7 @@ void OverlayManager::composite(
     PixelFormat output_format
 ) {
     size_t out_bpp = bytes_per_pixel(output_format);
+    (void)out_bpp;  // Reserved for future format-aware compositing
     size_t num_pixels = static_cast<size_t>(width) * height;
 
     for (size_t i = 0; i < num_pixels; ++i) {
