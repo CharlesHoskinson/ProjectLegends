@@ -19,7 +19,7 @@ Project Legends is a modernized, embeddable x86 emulation framework designed for
 - **Vision Model Support**: Screen capture with semantic annotations
 - **Platform Abstraction**: Clean separation from SDL2/SDL3 via PAL layer
 - **Formal Verification**: TLA+ specifications with TLC model checking
-- **Contract Gates**: 22 mechanically enforceable architectural invariants
+- **Contract Gates**: 23 mechanically enforceable architectural invariants
 
 ---
 
@@ -31,7 +31,7 @@ Project Legends is a modernized, embeddable x86 emulation framework designed for
                               │                     LLM Agents, Game Bots, Testing Harnesses                 │
                               └─────────────────────────────────────────────────────────────────────────────┘
                                                                   │
-                                                                  ▼ (Stable C ABI - 22 Contract Gates)
+                                                                  ▼ (Stable C ABI - 23 Contract Gates)
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                          legends_embed.h (C API Boundary)                                             │
 │  ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐  ┌──────────────────┐ │
@@ -90,7 +90,7 @@ Project Legends is a modernized, embeddable x86 emulation framework designed for
 
 ## Contract Gates
 
-The architecture is enforced by 22 mechanically verifiable gates:
+The architecture is enforced by 23 mechanically verifiable gates:
 
 | Category | Gates | Enforcement |
 |----------|-------|-------------|
@@ -101,7 +101,7 @@ The architecture is enforced by 22 mechanically verifiable gates:
 | **Capture** | 5a-5c | Consistent dimensions, RGB24 format, backend independence |
 | **Input** | 6a-6b | AT scancode set 1, replay determinism |
 | **Audio** | 7a-7c | Push model, queue queryable, no callback into core |
-| **Threading** | 8a-8b | Single-threaded core, PAL isolation |
+| **Threading** | 8a-8c | Single-threaded core, PAL isolation, wrong thread returns error |
 
 See [`spec/CONTRACT.md`](spec/CONTRACT.md) for complete specification.
 
@@ -349,10 +349,16 @@ The PAL provides platform services (NOT rendering primitives):
 | `LEGENDS_ERR_NULL_POINTER` | -2 | Null pointer argument |
 | `LEGENDS_ERR_ALREADY_CREATED` | -3 | Instance already exists |
 | `LEGENDS_ERR_NOT_INITIALIZED` | -4 | Instance not initialized |
+| `LEGENDS_ERR_ALREADY_RUNNING` | -5 | Already running |
 | `LEGENDS_ERR_BUFFER_TOO_SMALL` | -6 | Buffer too small |
 | `LEGENDS_ERR_INVALID_CONFIG` | -7 | Invalid configuration |
 | `LEGENDS_ERR_INVALID_STATE` | -8 | Invalid save state |
 | `LEGENDS_ERR_VERSION_MISMATCH` | -9 | API version mismatch |
+| `LEGENDS_ERR_IO_FAILED` | -10 | I/O operation failed |
+| `LEGENDS_ERR_OUT_OF_MEMORY` | -11 | Memory allocation failed |
+| `LEGENDS_ERR_NOT_SUPPORTED` | -12 | Operation not supported |
+| `LEGENDS_ERR_INTERNAL` | -13 | Internal error |
+| `LEGENDS_ERR_WRONG_THREAD` | -14 | Called from non-owner thread |
 
 ---
 
