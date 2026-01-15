@@ -135,7 +135,14 @@ Rationale: DOSBox-X uses global state. Future versions may support multi-instanc
 
 Core never calls `exit()`, `abort()`, or `E_Exit()`. All error conditions return error codes.
 
-**Verification:** All tests complete without termination.
+**Verification:** CI `forbidden-symbols` job greps core sources for banned calls:
+
+```bash
+# Banned termination calls in core library sources
+grep -rE '\b(exit|abort|E_Exit)\s*\(' src/legends/ include/legends/ && exit 1 || true
+```
+
+**Test:** `ContractGate_SideEffects::NoExitOrAbortOnError`
 
 ### 3b) No Direct stdout/stderr
 
@@ -153,13 +160,20 @@ legends_set_log_callback(handle, log_callback, NULL);
 ### 3c) No chdir/getenv/putenv
 
 Core never accesses:
-- Environment variables (`getenv`, `putenv`)
+- Environment variables (`getenv`, `putenv`, `setenv`)
 - Current working directory (`chdir`, `getcwd`)
 - Command-line arguments
 
 All configuration via `legends_config_t`.
 
-**Verification:** Code audit, grep for banned functions.
+**Verification:** CI `forbidden-symbols` job greps core sources for banned calls:
+
+```bash
+# Banned environment/directory calls in core library sources
+grep -rE '\b(getenv|putenv|setenv|chdir|getcwd)\s*\(' src/legends/ include/legends/ && exit 1 || true
+```
+
+**Test:** `ContractGate_SideEffects::NoChdirGetenvPutenv`
 
 ---
 
@@ -633,7 +647,8 @@ host display scaling). The scaler is a PAL/presentation concern.
 | Text 40x25 | 320x400 | 8x16 font |
 | Mode 13h | 320x200 | VGA 256-color |
 | Mode 12h | 640x480 | VGA 16-color |
-| Mode 03h (graphics) | 640x200 | CGA |
+| Mode 06h | 640x200 | CGA 2-color |
+| Mode 04h | 320x200 | CGA 4-color |
 
 ### Palette Application
 
@@ -659,6 +674,23 @@ struct SaveStateHeader {
     uint32_t flags;        // Reserved
     uint8_t  hash[32];     // SHA-256 of payload
 };
+```
+
+### Portability Guarantees
+
+For cross-platform and cross-language interoperability:
+
+- **Endianness**: All integer fields are **little-endian** (x86 native order)
+- **Alignment**: Header is written field-by-field with no compiler padding (48 bytes total)
+- **Hash scope**: SHA-256 is computed over payload bytes exactly as serialized (after header)
+- **String encoding**: All embedded strings are UTF-8, null-terminated
+
+```c
+// Writing header (portable)
+void write_u32_le(FILE* f, uint32_t val) {
+    uint8_t bytes[4] = {val & 0xFF, (val >> 8) & 0xFF, (val >> 16) & 0xFF, (val >> 24) & 0xFF};
+    fwrite(bytes, 1, 4, f);
+}
 ```
 
 ### Completeness Guarantee
@@ -695,7 +727,7 @@ Verified by `SaveStateTest.tla` with TLC model checking.
 | `LEGENDS_ERR_NULL_POINTER` | -2 | Required pointer is NULL |
 | `LEGENDS_ERR_ALREADY_CREATED` | -3 | Instance already exists |
 | `LEGENDS_ERR_NOT_INITIALIZED` | -4 | Not initialized |
-| `LEGENDS_ERR_ALREADY_RUNNING` | -5 | Already running |
+| `LEGENDS_ERR_REENTRANT_CALL` | -5 | Step called from within callback (reentrancy) |
 | `LEGENDS_ERR_BUFFER_TOO_SMALL` | -6 | Buffer too small |
 | `LEGENDS_ERR_INVALID_CONFIG` | -7 | Invalid configuration |
 | `LEGENDS_ERR_INVALID_STATE` | -8 | Invalid save state |

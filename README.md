@@ -137,6 +137,8 @@ Core is single-threaded; PAL threads never access core. Verified by `ThreadingMi
 
 ## TLA+ Specifications
 
+> **"TLA+ Verified" badge scope:** TLA+ verifies the lifecycle, threading, audio, and save/load invariants defined in [`spec/CONTRACT.md`](spec/CONTRACT.md). It does not verify full x86 instruction semantics.
+
 | Specification | States | Invariants | Status |
 |--------------|--------|------------|--------|
 | `LifecycleMinimal.tla` | 85 | AtMostOneInstance, MisuseSafe, HandleConsistency | PASSED |
@@ -154,44 +156,56 @@ Full specifications in [`spec/tla/`](spec/tla/). Verification report: [`spec/VER
 
 ```c
 #include <legends/legends_embed.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+// Error checking macro (library never terminates host - always check returns)
+#define LEGENDS_CHECK(call) do { \
+    legends_error_t err = (call); \
+    if (err != LEGENDS_OK) { \
+        fprintf(stderr, "Error %d at %s:%d\n", err, __FILE__, __LINE__); \
+        return 1; \
+    } \
+} while(0)
 
 int main() {
     // Create emulator instance
     legends_handle handle;
     legends_config_t config = LEGENDS_CONFIG_INIT;
     config.deterministic = 1;
-    legends_create(&config, &handle);
+    LEGENDS_CHECK(legends_create(&config, &handle));
 
     // Run for 1 second of emulated time
     for (int i = 0; i < 100; i++) {
-        legends_step_ms(handle, 10, NULL);
+        LEGENDS_CHECK(legends_step_ms(handle, 10, NULL));
     }
 
-    // Capture screen
+    // Capture screen (two-call pattern: query size, then fill)
     size_t cell_count;
-    legends_capture_text(handle, NULL, 0, &cell_count, NULL);
+    LEGENDS_CHECK(legends_capture_text(handle, NULL, 0, &cell_count, NULL));
     legends_text_cell_t* cells = malloc(cell_count * sizeof(legends_text_cell_t));
-    legends_capture_text(handle, cells, cell_count, &cell_count, NULL);
+    LEGENDS_CHECK(legends_capture_text(handle, cells, cell_count, &cell_count, NULL));
 
     // Type a command
-    legends_text_input(handle, "DIR\n");
-    legends_step_ms(handle, 500, NULL);
+    LEGENDS_CHECK(legends_text_input(handle, "DIR\n"));
+    LEGENDS_CHECK(legends_step_ms(handle, 500, NULL));
 
     // Save state
     size_t state_size;
-    legends_save_state(handle, NULL, 0, &state_size);
+    LEGENDS_CHECK(legends_save_state(handle, NULL, 0, &state_size));
     uint8_t* state = malloc(state_size);
-    legends_save_state(handle, state, state_size, &state_size);
+    LEGENDS_CHECK(legends_save_state(handle, state, state_size, &state_size));
 
     // Verify determinism
     int is_deterministic;
-    legends_verify_determinism(handle, 10000, &is_deterministic);
+    LEGENDS_CHECK(legends_verify_determinism(handle, 10000, &is_deterministic));
     assert(is_deterministic);
 
     // Cleanup
     legends_destroy(handle);
     free(cells);
     free(state);
+    return 0;
 }
 ```
 
@@ -349,7 +363,7 @@ The PAL provides platform services (NOT rendering primitives):
 | `LEGENDS_ERR_NULL_POINTER` | -2 | Null pointer argument |
 | `LEGENDS_ERR_ALREADY_CREATED` | -3 | Instance already exists |
 | `LEGENDS_ERR_NOT_INITIALIZED` | -4 | Instance not initialized |
-| `LEGENDS_ERR_ALREADY_RUNNING` | -5 | Already running |
+| `LEGENDS_ERR_REENTRANT_CALL` | -5 | Step called from within callback (reentrancy) |
 | `LEGENDS_ERR_BUFFER_TOO_SMALL` | -6 | Buffer too small |
 | `LEGENDS_ERR_INVALID_CONFIG` | -7 | Invalid configuration |
 | `LEGENDS_ERR_INVALID_STATE` | -8 | Invalid save state |
@@ -440,7 +454,7 @@ ProjectLegends/
 - C++23 with modern idioms
 - `gsl-lite` for contracts (violations return errors, never terminate host)
 - TLA+ specs for critical invariants
-- No singletons (explicit ownership)
+- No hidden singletons (all state explicit via handle; v1 is single-instance due to legacy globals)
 - Function names in diagrams are abbreviated (e.g., `create()` = `legends_create()`)
 
 ---

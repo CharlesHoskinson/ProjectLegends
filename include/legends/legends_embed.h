@@ -62,7 +62,7 @@ typedef int32_t legends_error_t;
 #define LEGENDS_ERR_NULL_POINTER       -2
 #define LEGENDS_ERR_ALREADY_CREATED    -3   /* Single instance violation */
 #define LEGENDS_ERR_NOT_INITIALIZED    -4
-#define LEGENDS_ERR_ALREADY_RUNNING    -5
+#define LEGENDS_ERR_REENTRANT_CALL     -5   /* Step called from within callback */
 #define LEGENDS_ERR_BUFFER_TOO_SMALL   -6
 #define LEGENDS_ERR_INVALID_CONFIG     -7
 #define LEGENDS_ERR_INVALID_STATE      -8
