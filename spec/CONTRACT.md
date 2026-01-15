@@ -32,6 +32,7 @@ and TLA+ specifications in `spec/tla/`.
 | 7c | Audio | Push model only | `PushModelNoCallback` | `AudioPushModel` |
 | 8a | Threading | Core single-threaded | `CoreIsSingleThreaded` | `CoreSingleThreaded` |
 | 8b | Threading | PAL threads never call core | By design | `PALIsolation` |
+| 8c | Threading | Wrong-thread returns error code | `WrongThreadReturnsError` | - |
 
 ---
 
@@ -447,6 +448,27 @@ PAL backend threads (audio callbacks, event loops) never invoke `legends_*()` fu
 \A t \in palThreads : t # coreOwner
 ```
 
+### 8c) Wrong-Thread Access Returns Error Code
+
+API calls from non-owner threads return `LEGENDS_ERR_WRONG_THREAD` (not undefined behavior):
+
+```c
+// Thread A (owner)
+legends_create(NULL, &handle);  // Thread A recorded as owner
+
+// Thread B (non-owner)
+std::thread([&]() {
+    legends_step_result_t result;
+    legends_error_t err = legends_step_ms(handle, 10, &result);
+    assert(err == LEGENDS_ERR_WRONG_THREAD);  // Deterministic error
+}).join();
+```
+
+This provides safe error handling rather than undefined behavior or crashes.
+
+**Test:** `ContractGate_Threading::WrongThreadReturnsError`
+**Test:** All tests in `test_thread_safety.cpp` (16 tests)
+
 ---
 
 ## Instance Model
@@ -702,7 +724,7 @@ All error conditions return error codes.
 
 | Job | Enforcement |
 |-----|-------------|
-| `contract-gates` | Run all 22 gate tests |
+| `contract-gates` | Run all 23 gate tests |
 | `asan-lifecycle` | 100x create/destroy under ASan |
 | `abi-c-compile` | C11 compilation verification |
 | `sdl-firewall` | No SDL headers outside `src/pal/` |

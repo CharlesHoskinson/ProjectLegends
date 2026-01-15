@@ -244,11 +244,18 @@ Model checking completed. No error has been found.
 | Property | Test File | Test Count |
 |----------|-----------|------------|
 | ABI stability | test_legends_abi.c | 1 |
-| API functionality | test_contract_gates.cpp | 21 |
+| Contract gates | test_contract_gates.cpp | 23 |
+| Thread safety | test_thread_safety.cpp | 16 |
+| Error codes | test_error_codes.cpp | 53 |
+| Edge cases | test_edge_cases.cpp | 36 |
+| Stress tests | test_stress.cpp | 23 |
+| Negative tests | test_negative.cpp | 34 |
 | PAL backends | test_pal_*.cpp | ~50 |
-| Integration | various | ~1,200 |
+| LLM/Vision | test_llm_*.cpp, test_vision_*.cpp | ~200 |
+| Integration | tests/integration/*.cpp | 25 |
+| Other unit tests | various | ~1,070 |
 
-**Total C++ Tests**: 1,345+
+**Total C++ Tests**: 1,533
 
 ---
 

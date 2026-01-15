@@ -5,7 +5,7 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue)]()
 [![C++ Standard](https://img.shields.io/badge/C%2B%2B-23-blue)]()
-[![Tests](https://img.shields.io/badge/tests-1345%2B%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-1533%20passing-brightgreen)]()
 [![TLA+ Verified](https://img.shields.io/badge/TLA%2B-verified-green)]()
 
 ---
@@ -390,7 +390,7 @@ ProjectLegends/
 │       └── sdl3/               # SDL3 backend
 │
 ├── tests/
-│   └── unit/                   # 1345+ unit tests
+│   └── unit/                   # 1500+ unit tests
 │       ├── test_contract_gates.cpp  # 23 contract gate tests
 │       ├── test_legends_abi.c       # Pure C compilation
 │       └── ...
