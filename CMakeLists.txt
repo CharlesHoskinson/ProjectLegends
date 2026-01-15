@@ -387,11 +387,7 @@ if(LEGENDS_BUILD_TESTS)
         COMMENT "Running unit tests"
     )
 
-    add_custom_target(test-all
-        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        DEPENDS legends_unit_tests legends_abi_test
-        COMMENT "Running all tests"
-    )
+    # Note: test-all target will be updated below after integration tests are defined
 
     add_custom_target(test-abi
         COMMAND ${CMAKE_CTEST_COMMAND} -L abi --output-on-failure
@@ -427,6 +423,51 @@ if(LEGENDS_BUILD_TESTS)
         COMMAND ${CMAKE_CTEST_COMMAND} -L toolchain --output-on-failure
         DEPENDS legends_toolchain_tests
         COMMENT "Running toolchain verification tests"
+    )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Integration Tests
+    # ─────────────────────────────────────────────────────────────────────────
+
+    add_executable(legends_integration_tests
+        tests/integration/test_workflow_basic.cpp
+        tests/integration/test_workflow_determinism.cpp
+        tests/integration/test_workflow_saveload.cpp
+        tests/integration/test_workflow_input.cpp
+        tests/integration/test_workflow_llm.cpp
+    )
+
+    legends_set_strict_cxx_standard(legends_integration_tests)
+
+    target_link_libraries(legends_integration_tests PRIVATE
+        legends_core
+        legends_pal
+        GTest::gtest_main
+        GTest::gmock
+    )
+
+    target_compile_definitions(legends_integration_tests PRIVATE
+        LEGENDS_LIBRARY_MODE=1
+    )
+
+    gtest_discover_tests(legends_integration_tests
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        PROPERTIES
+            LABELS "integration"
+            TIMEOUT 60
+    )
+
+    add_custom_target(test-integration
+        COMMAND ${CMAKE_CTEST_COMMAND} -L integration --output-on-failure
+        DEPENDS legends_integration_tests
+        COMMENT "Running integration tests"
+    )
+
+    # test-all includes all test types
+    add_custom_target(test-all
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        DEPENDS legends_unit_tests legends_abi_test legends_integration_tests
+        COMMENT "Running all tests"
     )
 
 endif()

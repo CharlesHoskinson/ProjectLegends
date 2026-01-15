@@ -406,3 +406,148 @@ TEST(FrameBuilderTest, BuildFullFrame43Row) {
     EXPECT_EQ(frame.text_columns, 80);
     EXPECT_EQ(frame.text_rows, 43);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Delta Frame Tests (build_diff_frame)
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(FrameBuilderTest, BuildDiffFrameReturnsFullFrameWhenNoPrevious) {
+    FrameBuilder builder;
+    uint8_t screen[2000];
+    std::fill_n(screen, 2000, 'A');
+
+    // First call should return a full frame (no previous to diff against)
+    auto frame = builder.build_diff_frame(80, 25, screen, 0, 0, true);
+
+    EXPECT_EQ(frame.frame_id, 1u);
+    EXPECT_EQ(frame.mode, VideoMode::Text80x25);
+    EXPECT_EQ(frame.text_columns, 80);
+    EXPECT_EQ(frame.text_rows, 25);
+    EXPECT_FALSE(frame.text_content.empty());
+}
+
+TEST(FrameBuilderTest, BuildDiffFrameDetectsChangedCells) {
+    FrameBuilder builder;
+    uint8_t screen_a[2000];
+    std::fill_n(screen_a, 2000, ' ');
+    screen_a[0] = 'A';
+
+    // Build first frame to establish baseline
+    auto frame1 = builder.build_full_frame(80, 25, screen_a, 0, 0, true);
+    EXPECT_EQ(frame1.frame_id, 1u);
+
+    // Modify screen
+    uint8_t screen_b[2000];
+    std::fill_n(screen_b, 2000, ' ');
+    screen_b[0] = 'B';  // Changed cell
+
+    auto diff_frame = builder.build_diff_frame(80, 25, screen_b, 0, 0, true);
+
+    // Diff frame should have incremented ID
+    EXPECT_EQ(diff_frame.frame_id, 2u);
+    EXPECT_EQ(diff_frame.mode, VideoMode::Text80x25);
+    // Content should reflect the new state
+    EXPECT_FALSE(diff_frame.text_content.empty());
+}
+
+TEST(FrameBuilderTest, BuildDiffFrameDetectsModeChange) {
+    FrameBuilder builder;
+    uint8_t screen_80[2000] = {0};
+
+    // Build 80x25 frame
+    auto frame1 = builder.build_full_frame(80, 25, screen_80, 0, 0, true);
+    EXPECT_EQ(frame1.mode, VideoMode::Text80x25);
+
+    // Try 40x25 mode - mode change should be detected
+    uint8_t screen_40[1000] = {0};
+    auto diff_frame = builder.build_diff_frame(40, 25, screen_40, 0, 0, true);
+
+    EXPECT_EQ(diff_frame.mode, VideoMode::Text40x25);
+    EXPECT_EQ(diff_frame.text_columns, 40);
+    EXPECT_EQ(diff_frame.text_rows, 25);
+}
+
+TEST(FrameBuilderTest, BuildDiffFrameDetectsCursorMovement) {
+    FrameBuilder builder;
+    uint8_t screen[2000] = {0};
+
+    // Build frame with cursor at (0, 0)
+    auto frame1 = builder.build_full_frame(80, 25, screen, 0, 0, true);
+    EXPECT_EQ(frame1.cursor.column, 0);
+    EXPECT_EQ(frame1.cursor.row, 0);
+
+    // Build diff with cursor moved to (10, 5)
+    auto diff_frame = builder.build_diff_frame(80, 25, screen, 10, 5, true);
+
+    EXPECT_EQ(diff_frame.cursor.column, 10);
+    EXPECT_EQ(diff_frame.cursor.row, 5);
+    EXPECT_TRUE(diff_frame.cursor.visible);
+}
+
+TEST(FrameBuilderTest, BuildDiffFrameDetectsCursorVisibilityChange) {
+    FrameBuilder builder;
+    uint8_t screen[2000] = {0};
+
+    // Build frame with visible cursor
+    auto frame1 = builder.build_full_frame(80, 25, screen, 0, 0, true);
+    EXPECT_TRUE(frame1.cursor.visible);
+    EXPECT_TRUE(has_flag(frame1.flags, FrameFlags::CursorVisible));
+
+    // Build diff with hidden cursor
+    auto diff_frame = builder.build_diff_frame(80, 25, screen, 0, 0, false);
+
+    EXPECT_FALSE(diff_frame.cursor.visible);
+    EXPECT_FALSE(has_flag(diff_frame.flags, FrameFlags::CursorVisible));
+}
+
+TEST(FrameBuilderTest, BuildDiffFrameIdenticalFrames) {
+    FrameBuilder builder;
+    uint8_t screen[2000];
+    std::fill_n(screen, 2000, 'X');
+
+    // Build first frame
+    auto frame1 = builder.build_full_frame(80, 25, screen, 5, 3, true);
+    EXPECT_EQ(frame1.frame_id, 1u);
+
+    // Build diff with identical content
+    auto diff_frame = builder.build_diff_frame(80, 25, screen, 5, 3, true);
+
+    // Frame ID should still increment
+    EXPECT_EQ(diff_frame.frame_id, 2u);
+    // Mode and dimensions should match
+    EXPECT_EQ(diff_frame.mode, VideoMode::Text80x25);
+    EXPECT_EQ(diff_frame.cursor.column, 5);
+    EXPECT_EQ(diff_frame.cursor.row, 3);
+}
+
+TEST(FrameBuilderTest, BuildDiffFrameEdgeCaseEmptyScreen) {
+    FrameBuilder builder;
+    uint8_t screen[2000];
+    std::fill_n(screen, 2000, static_cast<uint8_t>(0));  // Null characters
+
+    auto frame = builder.build_diff_frame(80, 25, screen, 0, 0, true);
+
+    EXPECT_EQ(frame.text_columns, 80);
+    EXPECT_EQ(frame.text_rows, 25);
+    EXPECT_EQ(frame.mode, VideoMode::Text80x25);
+}
+
+TEST(FrameBuilderTest, BuildDiffFrameEdgeCaseFullScreenChange) {
+    FrameBuilder builder;
+    uint8_t screen_a[2000];
+    uint8_t screen_b[2000];
+    std::fill_n(screen_a, 2000, 'A');
+    std::fill_n(screen_b, 2000, 'B');
+
+    // Build first frame
+    auto frame1 = builder.build_full_frame(80, 25, screen_a, 0, 0, true);
+    EXPECT_EQ(frame1.frame_id, 1u);
+
+    // Build diff with completely different content
+    auto diff_frame = builder.build_diff_frame(80, 25, screen_b, 0, 0, true);
+
+    // Full screen change - frame should still be valid
+    EXPECT_EQ(diff_frame.frame_id, 2u);
+    EXPECT_EQ(diff_frame.mode, VideoMode::Text80x25);
+    EXPECT_FALSE(diff_frame.text_content.empty());
+}

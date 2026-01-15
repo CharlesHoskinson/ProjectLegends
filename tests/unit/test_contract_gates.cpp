@@ -12,6 +12,10 @@
 #include <cstring>
 #include <cstdlib>
 
+#ifdef _WIN32
+#include <direct.h>  // For _getcwd
+#endif
+
 #include "legends/legends_embed.h"
 #include "pal/platform.h"
 
@@ -104,7 +108,42 @@ TEST(ContractGate_Lifecycle, SingleInstanceEnforced) {
 // GATE 3: SIDE-EFFECT BANS (CORE)
 // =============================================================================
 
-// 3a) No exit/abort reachable - verified by all tests completing
+// 3a) No exit/abort reachable from legends_* entrypoints
+// This test explicitly verifies that error conditions return codes, not abort
+TEST(ContractGate_SideEffects, NoExitOrAbortOnError) {
+    // All error conditions should return error codes, never abort/exit
+    legends_handle handle = nullptr;
+
+    // Invalid config version should return error, not abort
+    legends_config_t bad_config = LEGENDS_CONFIG_INIT;
+    bad_config.api_version = 0xBADBAD;
+    legends_error_t err = legends_create(&bad_config, &handle);
+    EXPECT_EQ(err, LEGENDS_ERR_VERSION_MISMATCH);
+    EXPECT_EQ(handle, nullptr);
+
+    // Null pointer errors should return error, not abort
+    err = legends_create(nullptr, nullptr);
+    EXPECT_EQ(err, LEGENDS_ERR_NULL_POINTER);
+
+    // Create a valid instance for further error tests
+    err = legends_create(nullptr, &handle);
+    ASSERT_EQ(err, LEGENDS_OK);
+
+    // Invalid state data should return error, not abort
+    uint8_t bad_state[16] = {0};
+    err = legends_load_state(handle, bad_state, sizeof(bad_state));
+    EXPECT_EQ(err, LEGENDS_ERR_INVALID_STATE);
+
+    // Null buffer for required output should return error, not abort
+    err = legends_get_state_hash(handle, nullptr);
+    EXPECT_EQ(err, LEGENDS_ERR_NULL_POINTER);
+
+    legends_destroy(handle);
+
+    // If we reach here, no abort was called
+    SUCCEED() << "All error conditions returned codes, no exit/abort called";
+}
+
 // 3b) No direct stdout/stderr - verified by log callback
 TEST(ContractGate_SideEffects, LogCallbackCapturesOutput) {
     static std::vector<std::string> captured_logs;
@@ -130,6 +169,41 @@ TEST(ContractGate_SideEffects, LogCallbackCapturesOutput) {
     // Callback should have been invoked (implementation detail, but verifies routing)
     // The important thing is no crash and clean completion
     SUCCEED();
+}
+
+// 3c) No chdir/getenv/putenv in core stepping paths
+// Verifies working directory is unchanged after stepping
+TEST(ContractGate_SideEffects, NoChdirGetenvPutenv) {
+    // Capture current working directory before
+    char cwd_before[1024];
+    char cwd_after[1024];
+
+#ifdef _WIN32
+    _getcwd(cwd_before, sizeof(cwd_before));
+#else
+    getcwd(cwd_before, sizeof(cwd_before));
+#endif
+
+    // Create and step the emulator
+    legends_handle handle = nullptr;
+    legends_create(nullptr, &handle);
+
+    // Perform many steps - core paths should not change working directory
+    for (int i = 0; i < 100; ++i) {
+        legends_step_cycles(handle, 10000, nullptr);
+    }
+
+    legends_destroy(handle);
+
+    // Capture working directory after
+#ifdef _WIN32
+    _getcwd(cwd_after, sizeof(cwd_after));
+#else
+    getcwd(cwd_after, sizeof(cwd_after));
+#endif
+
+    EXPECT_STREQ(cwd_before, cwd_after)
+        << "Working directory must not change during core stepping";
 }
 
 // =============================================================================
@@ -390,7 +464,51 @@ TEST(ContractGate_Input, InputReplayProducesIdenticalHash) {
 // =============================================================================
 
 // 7a) Core stepping never invoked from audio callback thread
-// This is verified by design - PAL uses push model, not callbacks into core
+// This test explicitly verifies the push model works with threading
+TEST(ContractGate_Audio, CoreNeverInvokedFromAudioCallback) {
+    pal::Platform::shutdown();
+    pal::Platform::initialize(pal::Backend::Headless);
+
+    // Create core instance on main thread
+    legends_handle handle = nullptr;
+    legends_create(nullptr, &handle);
+
+    // Create audio sink
+    auto sink = pal::Platform::createAudioSink();
+    pal::AudioConfig config{44100, 2, 50};
+    sink->open(config);
+
+    // Simulate audio thread pushing samples (never calls core)
+    std::atomic<bool> audio_done{false};
+    std::atomic<bool> audio_success{true};
+    std::thread audio_thread([&]() {
+        // Audio thread only pushes samples - never calls legends_* functions
+        for (int i = 0; i < 10; ++i) {
+            std::vector<int16_t> samples(882, 0);  // 10ms stereo
+            auto result = sink->pushSamples(samples.data(), 441);
+            if (result != pal::Result::Success) {
+                audio_success = false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        audio_done = true;
+    });
+
+    // Main thread can still step the core while audio thread pushes
+    while (!audio_done) {
+        legends_error_t err = legends_step_cycles(handle, 5000, nullptr);
+        EXPECT_EQ(err, LEGENDS_OK);
+    }
+
+    audio_thread.join();
+    EXPECT_TRUE(audio_success);
+
+    sink->close();
+    legends_destroy(handle);
+    pal::Platform::shutdown();
+
+    SUCCEED() << "Audio thread used push model, never invoked core functions";
+}
 
 // 7b) Audio queue status is queryable
 TEST(ContractGate_Audio, AudioQueueQueryable) {

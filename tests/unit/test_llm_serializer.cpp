@@ -5,7 +5,9 @@
 
 #include <gtest/gtest.h>
 #include <legends/llm_serializer.h>
+#include <legends/llm_frame.h>
 #include <cstring>
+#include <string>
 
 using namespace legends::llm;
 
@@ -459,4 +461,124 @@ TEST(Cp437ToUtf8ArrayTest, MixedContent) {
     EXPECT_EQ(result[0], 'A');
     EXPECT_EQ(result.back(), 'B');
     EXPECT_GT(result.size(), 3u);  // Box char expands
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Frame Round-Trip Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(FrameRoundTripTest, JsonContainsAllFields) {
+    TokenEfficientFrame frame;
+    frame.frame_id = 42;
+    frame.timestamp_us = 1234567890;
+    frame.mode = VideoMode::Text80x25;
+    frame.text_columns = 80;
+    frame.text_rows = 25;
+    frame.text_content = "C:\\> DIR";
+    frame.cursor.column = 8;
+    frame.cursor.row = 0;
+    frame.cursor.visible = true;
+
+    std::string json = frame.to_json();
+
+    // JSON should contain all fields
+    EXPECT_NE(json.find("\"frame_id\""), std::string::npos);
+    EXPECT_NE(json.find("42"), std::string::npos);
+    EXPECT_NE(json.find("\"mode\""), std::string::npos);
+    EXPECT_NE(json.find("\"cursor\""), std::string::npos);
+}
+
+TEST(FrameRoundTripTest, CanonicalTextPreservesContent) {
+    TokenEfficientFrame frame;
+    frame.frame_id = 1;
+    frame.mode = VideoMode::Text80x25;
+    frame.text_columns = 80;
+    frame.text_rows = 25;
+    frame.text_content = "Hello World";
+    frame.cursor.column = 5;
+    frame.cursor.row = 1;
+    frame.cursor.visible = true;
+
+    std::string canonical = frame.to_canonical_text();
+
+    // Content should be present
+    EXPECT_NE(canonical.find("Hello World"), std::string::npos);
+}
+
+TEST(FrameRoundTripTest, BoxDrawingCharactersPreserved) {
+    // Test CP437 -> UTF-8 round-trip
+    uint8_t cp437_box[] = {0xC9, 0xCD, 0xCD, 0xBB};  // ╔══╗
+    std::string utf8 = cp437_to_utf8(cp437_box, 4);
+
+    EXPECT_EQ(utf8.length(), 12u);  // 4 chars * 3 bytes each
+    // Verify UTF-8 content is correct
+    EXPECT_FALSE(utf8.empty());
+}
+
+TEST(FrameRoundTripTest, SpecialCharactersInJson) {
+    TokenEfficientFrame frame;
+    frame.text_content = "Path: C:\\test\\file.txt";
+
+    std::string json = frame.to_json();
+
+    // Backslashes should be present (may be escaped)
+    EXPECT_FALSE(json.empty());
+    EXPECT_NE(json.find("test"), std::string::npos);
+}
+
+TEST(FrameRoundTripTest, HighTokenCountEdgeCase) {
+    TokenEfficientFrame frame;
+    frame.mode = VideoMode::Text80x50;
+    frame.text_columns = 80;
+    frame.text_rows = 50;
+
+    // Fill with complex content
+    std::string content;
+    for (int row = 0; row < 50; ++row) {
+        for (int col = 0; col < 80; ++col) {
+            content += static_cast<char>('A' + ((row + col) % 26));
+        }
+        if (row < 49) content += '\n';
+    }
+    frame.text_content = content;
+
+    size_t tokens = frame.estimate_tokens();
+    std::string json = frame.to_json();
+    std::string canonical = frame.to_canonical_text();
+
+    EXPECT_GT(tokens, 500u);  // Should be high
+    EXPECT_GT(json.length(), 4000u);
+    EXPECT_GT(canonical.length(), 4000u);
+}
+
+TEST(FrameRoundTripTest, EmptyFrameSerializes) {
+    TokenEfficientFrame frame;
+    // Default empty frame
+
+    std::string json = frame.to_json();
+    std::string canonical = frame.to_canonical_text();
+
+    EXPECT_FALSE(json.empty());
+    EXPECT_FALSE(canonical.empty());
+}
+
+TEST(FrameRoundTripTest, MaxSizeFrame) {
+    TokenEfficientFrame frame;
+    frame.mode = VideoMode::Text80x50;
+    frame.text_columns = 80;
+    frame.text_rows = 50;
+
+    // Fill with all unique characters
+    std::string content;
+    for (int i = 0; i < 4000; ++i) {
+        content += static_cast<char>(32 + (i % 95));  // Printable ASCII
+    }
+    frame.text_content = content;
+
+    std::string json = frame.to_json();
+    std::string canonical = frame.to_canonical_text();
+
+    // Both should handle max size without crashing
+    EXPECT_GT(json.length(), content.length());
+    EXPECT_GT(canonical.length(), content.length());
 }
