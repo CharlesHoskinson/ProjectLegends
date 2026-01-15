@@ -1,7 +1,410 @@
 # Project Legends Contract Specification
 
 This document defines the enforceable contracts that make the architecture diagram into law.
-Every statement here is verified by automated tests in `tests/unit/test_contract_gates.cpp`.
+Every statement here is verified by automated tests in `tests/unit/test_contract_gates.cpp`
+and TLA+ specifications in `spec/tla/`.
+
+---
+
+## Contract Gates Summary
+
+| Gate | Category | Description | Test | TLA+ |
+|------|----------|-------------|------|------|
+| 1a | Link/ABI | No `main`, no SDL symbols in core lib | `nm` verification | - |
+| 1b | Link/ABI | `legends_embed.h` compiles as C and C++ | `test_legends_abi.c` | - |
+| 1c | Link/ABI | ABI version handshake exists | `VersionHandshakeExists` | - |
+| 2a | Lifecycle | create->step->destroy 100x | `CreateDestroyLoop100x` | `AtMostOneInstance` |
+| 2b | Lifecycle | Misuse returns error, no crash | `MisuseSafe_*` | `MisuseSafe` |
+| 2c | Lifecycle | Single-instance enforced | `SingleInstanceEnforced` | `AtMostOneInstance` |
+| 3a | Side-Effects | No exit/abort reachable | All tests complete | - |
+| 3b | Side-Effects | Log via callback only | `LogCallbackCapturesOutput` | - |
+| 3c | Side-Effects | No chdir/getenv/putenv | Code audit | - |
+| 4a | Determinism | State hash API exists | `StateHashAPIExists` | - |
+| 4b | Determinism | Identical traces -> identical hash | `IdenticalTracesProduceIdenticalHash` | `TraceDeterminism` |
+| 4c | Determinism | Save/load round-trip | `SaveLoadRoundTripPreservesState` | `ObservationPreserved` |
+| 5a | Capture | Consistent dimensions | `TextCaptureConsistentDimensions` | - |
+| 5b | Capture | RGB24 fixed format | `RGBCaptureFixedFormat` | - |
+| 5c | Capture | Backend independent | `CaptureBackendIndependent` | - |
+| 6a | Input | AT scancode set 1 | `ScancodeEncodingAT` | - |
+| 6b | Input | Replay determinism | `InputReplayProducesIdenticalHash` | - |
+| 7a | Audio | No callback into core | By design | `AudioPushModel` |
+| 7b | Audio | Queue queryable | `AudioQueueQueryable` | `AudioQueueBounded` |
+| 7c | Audio | Push model only | `PushModelNoCallback` | `AudioPushModel` |
+| 8a | Threading | Core single-threaded | `CoreIsSingleThreaded` | `CoreSingleThreaded` |
+| 8b | Threading | PAL threads never call core | By design | `PALIsolation` |
+
+---
+
+## Gate 1: Link/ABI Gates
+
+### 1a) Core Library Exports No `main`, No SDL Symbols
+
+```bash
+# Verification command
+nm -g libprojectlegends_core.a | grep -E "(main|SDL_)" && exit 1
+```
+
+The core library must be embeddable. It cannot:
+- Export a `main()` function
+- Depend on SDL directly (SDL is behind PAL)
+
+**CI Job:** `contract-gates` runs symbol verification.
+
+### 1b) `legends_embed.h` Compiles as Pure C
+
+```bash
+# Verification command
+gcc -std=c11 -c test_legends_abi.c -I include/
+```
+
+The C API header must be usable from C code without C++ compiler.
+
+**CI Job:** `abi-c-compile` verifies C11 compilation.
+
+### 1c) ABI Version Handshake Exists
+
+```c
+legends_config_t config = LEGENDS_CONFIG_INIT;
+config.api_version = 0xDEADBEEF;  // Wrong version
+
+legends_handle handle;
+legends_error_t err = legends_create(&config, &handle);
+assert(err == LEGENDS_ERR_VERSION_MISMATCH);
+```
+
+Mismatched API versions are rejected at creation time.
+
+**Test:** `ContractGate_LinkABI::VersionHandshakeExists`
+**Test:** `ContractGate_LinkABI::VersionMismatchRejected`
+
+---
+
+## Gate 2: Lifecycle Correctness Gates
+
+### 2a) Create/Step/Destroy Works 100x in Loop
+
+```c
+for (int i = 0; i < 100; i++) {
+    legends_handle handle;
+    legends_create(NULL, &handle);
+    legends_step_ms(handle, 10, NULL);
+    legends_destroy(handle);
+}
+```
+
+No memory leaks, no crashes, no resource exhaustion.
+
+**Test:** `ContractGate_Lifecycle::CreateDestroyLoop100x`
+**CI Job:** `asan-lifecycle` runs under AddressSanitizer.
+**TLA+:** `LifecycleMinimal.tla` - `HandleConsistency` invariant
+
+### 2b) Misuse is Safe
+
+API misuse returns defined error codes, never crashes:
+
+```c
+legends_step_ms(NULL, 100, NULL);  // Returns LEGENDS_ERR_NULL_HANDLE
+legends_destroy(NULL);              // No-op, returns LEGENDS_OK
+legends_destroy(handle);            // First destroy OK
+legends_destroy(handle);            // Second destroy safe (handle invalid)
+```
+
+**Test:** `ContractGate_Lifecycle::MisuseSafe_StepWithoutCreate`
+**Test:** `ContractGate_Lifecycle::MisuseSafe_DoubleDestroy`
+**TLA+:** `LifecycleMinimal.tla` - `MisuseSafe` invariant
+
+### 2c) Single-Instance Enforced
+
+```c
+legends_handle h1, h2;
+legends_create(NULL, &h1);  // OK
+legends_create(NULL, &h2);  // LEGENDS_ERR_ALREADY_CREATED
+```
+
+Rationale: DOSBox-X uses global state. Future versions may support multi-instance.
+
+**Test:** `ContractGate_Lifecycle::SingleInstanceEnforced`
+**TLA+:** `LifecycleMinimal.tla` - `AtMostOneInstance` invariant
+
+---
+
+## Gate 3: Side-Effect Bans
+
+### 3a) No exit/abort Reachable
+
+Core never calls `exit()`, `abort()`, or `E_Exit()`. All error conditions return error codes.
+
+**Verification:** All tests complete without termination.
+
+### 3b) No Direct stdout/stderr
+
+All output goes through log callback:
+
+```c
+void log_callback(int level, const char* msg, void* userdata) {
+    // Application handles logging
+}
+legends_set_log_callback(handle, log_callback, NULL);
+```
+
+**Test:** `ContractGate_SideEffects::LogCallbackCapturesOutput`
+
+### 3c) No chdir/getenv/putenv
+
+Core never accesses:
+- Environment variables (`getenv`, `putenv`)
+- Current working directory (`chdir`, `getcwd`)
+- Command-line arguments
+
+All configuration via `legends_config_t`.
+
+**Verification:** Code audit, grep for banned functions.
+
+---
+
+## Gate 4: Determinism Gates
+
+### 4a) State Hash API Exists
+
+```c
+uint8_t hash[32];
+legends_get_state_hash(handle, hash);
+```
+
+Returns SHA-256 of observable state.
+
+**Test:** `ContractGate_Determinism::StateHashAPIExists`
+
+### 4b) Identical Traces Produce Identical Hash
+
+**The Core Determinism Guarantee:**
+
+```
+f(config, input_trace, step_schedule) -> state_hash
+```
+
+```c
+// Run 1
+legends_create(&config, &h1);
+legends_step_cycles(h1, 10000, NULL);
+legends_key_event(h1, 0x1E, 1);
+legends_step_cycles(h1, 10000, NULL);
+legends_get_state_hash(h1, hash1);
+legends_destroy(h1);
+
+// Run 2 - identical
+legends_create(&config, &h2);
+legends_step_cycles(h2, 10000, NULL);
+legends_key_event(h2, 0x1E, 1);
+legends_step_cycles(h2, 10000, NULL);
+legends_get_state_hash(h2, hash2);
+legends_destroy(h2);
+
+assert(memcmp(hash1, hash2, 32) == 0);
+```
+
+**Test:** `ContractGate_Determinism::IdenticalTracesProduceIdenticalHash`
+**TLA+:** `Determinism.tla` - `TraceDeterminism` invariant
+
+### 4c) Save/Load Round-Trip Preserves Observable State
+
+**The Round-Trip Invariant:**
+
+```
+Obs(Deserialize(Serialize(S))) = Obs(S)
+```
+
+```c
+legends_get_state_hash(handle, hash_before);
+legends_save_state(handle, buffer, size, &size);
+legends_step_cycles(handle, 50000, NULL);  // Mutate
+legends_load_state(handle, buffer, size);
+legends_get_state_hash(handle, hash_after);
+
+assert(memcmp(hash_before, hash_after, 32) == 0);
+```
+
+**Test:** `ContractGate_Determinism::SaveLoadRoundTripPreservesState`
+**TLA+:** `SaveStateTest.tla` - `ObservationPreserved` invariant
+
+---
+
+## Gate 5: Capture Correctness Gates
+
+### 5a) Text Capture Returns Consistent Dimensions
+
+```c
+legends_text_info_t info1, info2;
+legends_capture_text(handle, NULL, 0, &count1, &info1);
+legends_step_ms(handle, 100, NULL);
+legends_capture_text(handle, NULL, 0, &count2, &info2);
+
+assert(info1.columns == info2.columns);
+assert(info1.rows == info2.rows);
+```
+
+**Test:** `ContractGate_Capture::TextCaptureConsistentDimensions`
+
+### 5b) RGB Capture Has Fixed Pixel Format
+
+RGB24: 3 bytes per pixel (R, G, B), no padding.
+
+```c
+legends_capture_rgb(handle, NULL, 0, &size, &width, &height);
+assert(size == width * height * 3);
+assert(width == 640 && height == 400);  // Text mode default
+```
+
+**Test:** `ContractGate_Capture::RGBCaptureFixedFormat`
+
+### 5c) Capture is Backend Independent
+
+Same capture results regardless of PAL backend (Headless, SDL2, SDL3).
+
+**Test:** `ContractGate_Capture::CaptureBackendIndependent`
+
+---
+
+## Gate 6: Input Correctness Gates
+
+### 6a) Scancode Encoding is AT Set 1
+
+Standard keys use AT scancode set 1:
+
+| Key | Scancode | API Call |
+|-----|----------|----------|
+| A | 0x1E | `legends_key_event(h, 0x1E, 1/0)` |
+| B | 0x30 | `legends_key_event(h, 0x30, 1/0)` |
+| Enter | 0x1C | `legends_key_event(h, 0x1C, 1/0)` |
+| Esc | 0x01 | `legends_key_event(h, 0x01, 1/0)` |
+
+Extended keys use E0 prefix:
+
+| Key | Base | API Call |
+|-----|------|----------|
+| Right Arrow | 0x4D | `legends_key_event_ext(h, 0x4D, 1/0)` |
+| Left Arrow | 0x4B | `legends_key_event_ext(h, 0x4B, 1/0)` |
+| Insert | 0x52 | `legends_key_event_ext(h, 0x52, 1/0)` |
+| Delete | 0x53 | `legends_key_event_ext(h, 0x53, 1/0)` |
+
+**Test:** `ContractGate_Input::ScancodeEncodingAT`
+
+### 6b) Input Replay Produces Identical Hash
+
+```c
+auto run_trace = []() {
+    legends_create(&config, &h);
+    legends_step_cycles(h, 5000, NULL);
+    legends_key_event(h, 0x1E, 1);
+    legends_step_cycles(h, 1000, NULL);
+    legends_key_event(h, 0x1E, 0);
+    legends_step_cycles(h, 5000, NULL);
+    legends_get_state_hash(h, hash);
+    legends_destroy(h);
+    return hash;
+};
+
+assert(run_trace() == run_trace());
+```
+
+**Test:** `ContractGate_Input::InputReplayProducesIdenticalHash`
+
+---
+
+## Gate 7: Audio Gates
+
+### 7a) Core Never Invoked from Audio Callback Thread
+
+**The Audio Push Model:**
+
+```
+Emulation -> MIXER -> ring buffer -> IAudioSink::pushSamples() -> device
+```
+
+Audio callbacks (SDL2) only read from ring buffer. They never call `legends_*()`.
+SDL3 has no callbacks at all (uses `SDL_AudioStream`).
+
+**TLA+:** `PALMinimal.tla` - `AudioPushModel` invariant:
+```
+currentThread = "AudioCallback" => lastCaller # "Core"
+```
+
+### 7b) Audio Queue is Queryable
+
+```c
+auto sink = pal::Platform::createAudioSink();
+sink->open(config);
+uint32_t queued = sink->getQueuedFrames();
+```
+
+**Test:** `ContractGate_Audio::AudioQueueQueryable`
+**TLA+:** `PALMinimal.tla` - `AudioQueueBounded` invariant
+
+### 7c) Push Model Only
+
+```c
+std::vector<int16_t> samples(882, 0);
+sink->pushSamples(samples.data(), 441);  // Push is the only API
+```
+
+No callback registration. Emulation drives audio timing.
+
+**Test:** `ContractGate_Audio::PushModelNoCallback`
+
+---
+
+## Gate 8: Threading Model Gates
+
+### 8a) Core is Single-Threaded
+
+```
+┌─────────────────┐
+│  Application    │  <- Single thread owns legends_handle
+│  Thread         │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  legends_*()    │  <- All API calls from same thread
+│  Functions      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Core Emulation │  <- Single-threaded execution
+└─────────────────┘
+```
+
+Concurrent access to `legends_handle` is undefined behavior.
+
+**Test:** `ContractGate_Threading::CoreIsSingleThreaded`
+**TLA+:** `ThreadingMinimal.tla` - `CoreSingleThreaded` invariant:
+```
+coreOwner \in {"None", "Main"}
+```
+
+### 8b) PAL Threads Never Call Core
+
+```
+         ┌─────────────────┐
+         │  PAL Backends   │
+         │  (may spawn     │
+         │   threads)      │
+         └────────┬────────┘
+                  │
+                  ▼
+         ┌─────────────────┐
+         │  Audio Callback │  <- Never calls core
+         │  (SDL2 only)    │     Only reads ring buffer
+         └─────────────────┘
+```
+
+PAL backend threads (audio callbacks, event loops) never invoke `legends_*()` functions.
+
+**TLA+:** `ThreadingMinimal.tla` - `PALIsolation` invariant:
+```
+\A t \in palThreads : t # coreOwner
+```
 
 ---
 
@@ -40,87 +443,6 @@ Core never calls `getenv()`, `chdir()`, or reads argv.
 
 ---
 
-## Threading Model
-
-**Core is single-threaded. PAL may have threads, but they never call core.**
-
-```
-┌─────────────────┐
-│  Application    │  ← Single thread owns legends_handle
-│  Thread         │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  legends_*()    │  ← All API calls from same thread
-│  Functions      │
-└────────┬────────┘
-         │
-         ├───────────────────┐
-         ▼                   ▼
-┌─────────────────┐  ┌─────────────────┐
-│  Core Emulation │  │  PAL Backends   │
-│  (single-thread)│  │  (may spawn     │
-│                 │  │   threads)      │
-└─────────────────┘  └────────┬────────┘
-                              │
-                              ▼
-                     ┌─────────────────┐
-                     │  Audio Callback │  ← Never calls core
-                     │  (SDL2 only)    │     Only reads ring buffer
-                     └─────────────────┘
-```
-
-### Rules
-
-1. All `legends_*()` functions must be called from the same thread
-2. Concurrent access to `legends_handle` is undefined behavior
-3. PAL backend threads (audio callbacks, event loops) never invoke `legends_*()` functions
-4. Audio uses push model: core pushes samples → PAL drains to device
-
----
-
-## Input Encoding
-
-**AT Scancode Set 1 with E0 prefix for extended keys.**
-
-### Standard Keys
-
-| Key | Scancode | Press | Release |
-|-----|----------|-------|---------|
-| A | 0x1E | `legends_key_event(h, 0x1E, 1)` | `legends_key_event(h, 0x1E, 0)` |
-| B | 0x30 | `legends_key_event(h, 0x30, 1)` | `legends_key_event(h, 0x30, 0)` |
-| Enter | 0x1C | `legends_key_event(h, 0x1C, 1)` | `legends_key_event(h, 0x1C, 0)` |
-| Esc | 0x01 | `legends_key_event(h, 0x01, 1)` | `legends_key_event(h, 0x01, 0)` |
-
-### Extended Keys (E0 prefix)
-
-| Key | Base Code | Press | Release |
-|-----|-----------|-------|---------|
-| Right Arrow | 0x4D | `legends_key_event_ext(h, 0x4D, 1)` | `legends_key_event_ext(h, 0x4D, 0)` |
-| Left Arrow | 0x4B | `legends_key_event_ext(h, 0x4B, 1)` | `legends_key_event_ext(h, 0x4B, 0)` |
-| Up Arrow | 0x48 | `legends_key_event_ext(h, 0x48, 1)` | `legends_key_event_ext(h, 0x48, 0)` |
-| Down Arrow | 0x50 | `legends_key_event_ext(h, 0x50, 1)` | `legends_key_event_ext(h, 0x50, 0)` |
-| Insert | 0x52 | `legends_key_event_ext(h, 0x52, 1)` | `legends_key_event_ext(h, 0x52, 0)` |
-| Delete | 0x53 | `legends_key_event_ext(h, 0x53, 1)` | `legends_key_event_ext(h, 0x53, 0)` |
-| Home | 0x47 | `legends_key_event_ext(h, 0x47, 1)` | `legends_key_event_ext(h, 0x47, 0)` |
-| End | 0x4F | `legends_key_event_ext(h, 0x4F, 1)` | `legends_key_event_ext(h, 0x4F, 0)` |
-
-### Text Input
-
-`legends_text_input()` handles UTF-8 → scancode translation:
-
-```c
-legends_text_input(handle, "Hello\n");  // Types "Hello" + Enter
-```
-
-Supported:
-- ASCII printable characters (0x20-0x7E)
-- Newline (\n) → Enter key
-- Tab (\t) → Tab key
-
----
-
 ## Text Capture Specification
 
 ### Format
@@ -140,35 +462,11 @@ Bits 6-4: Background color (0-7)
 Bits 3-0: Foreground color (0-15)
 ```
 
-Color palette:
-```
-0 = Black       8 = Dark Gray
-1 = Blue        9 = Light Blue
-2 = Green      10 = Light Green
-3 = Cyan       11 = Light Cyan
-4 = Red        12 = Light Red
-5 = Magenta    13 = Light Magenta
-6 = Brown      14 = Yellow
-7 = Light Gray 15 = White
-```
-
 ### Codepage
 
 Always CP437 (DOS Latin US). No codepage selection in v1.
 
-### Page Selection
-
-Always captures active page. No explicit page selection in v1.
-
 ### Dimensions
-
-Text mode dimensions are reported via `legends_text_info_t`:
-
-```c
-legends_text_info_t info;
-legends_capture_text(handle, NULL, 0, &count, &info);
-// info.columns = 80, info.rows = 25 (default)
-```
 
 Standard modes:
 - 80x25 (default)
@@ -191,13 +489,9 @@ legends_capture_rgb(handle, NULL, 0, &size, &width, &height);
 // size = width * height * 3
 ```
 
-### Pitch
-
-Pitch equals `width * 3`. No row padding.
-
 ### Resolution
 
-Pre-scaler resolution. Text mode 80x25 renders as 640x400.
+Pre-scaler resolution:
 
 | Video Mode | Capture Resolution |
 |------------|-------------------|
@@ -205,10 +499,6 @@ Pre-scaler resolution. Text mode 80x25 renders as 640x400.
 | Text 80x50 | 640x400 |
 | Mode 13h (320x200) | 320x200 |
 | Mode 12h (640x480) | 640x480 |
-
-### Palette
-
-VGA palette is applied. Output is true-color RGB24.
 
 ---
 
@@ -224,31 +514,6 @@ struct SaveStateHeader {
     uint32_t flags;        // Reserved
     uint8_t  hash[32];     // SHA-256 of payload
 };
-```
-
-### Versioning
-
-Version is incremented when:
-- Field layout changes
-- New required sections added
-- Semantic changes to existing fields
-
-Version check on load:
-```c
-if (header.version > SUPPORTED_VERSION)
-    return LEGENDS_ERR_VERSION_MISMATCH;
-```
-
-### Buffer Sizing
-
-Query required size before allocation:
-
-```c
-size_t required;
-legends_save_state(handle, NULL, 0, &required);
-
-uint8_t* buffer = malloc(required);
-legends_save_state(handle, buffer, required, &actual);
 ```
 
 ### Completeness Guarantee
@@ -270,39 +535,7 @@ Save state includes all observable state:
 Obs(Deserialize(Serialize(S))) = Obs(S)
 ```
 
-Observable state after load equals observable state before save.
-
----
-
-## Determinism Specification
-
-### Guarantee
-
-```
-f(config, input_trace, step_schedule) → state_hash
-```
-
-Given identical:
-- Configuration (`legends_config_t`)
-- Input trace (sequence of `legends_key_event`, `legends_mouse_event`, etc.)
-- Step schedule (sequence of `legends_step_ms`/`legends_step_cycles` calls)
-
-The resulting state hash is identical.
-
-### Requirements
-
-1. `config.deterministic = 1`
-2. No host time queries
-3. No random number generation from host
-4. Fixed CPU cycle timing
-
-### Verification API
-
-```c
-int is_deterministic;
-legends_verify_determinism(handle, 10000, &is_deterministic);
-// Runs 10000 cycles twice, compares hashes
-```
+Verified by `SaveStateTest.tla` with TLC model checking.
 
 ---
 
@@ -327,14 +560,6 @@ legends_verify_determinism(handle, 10000, &is_deterministic);
 | `LEGENDS_ERR_NOT_SUPPORTED` | -12 | Operation not supported |
 | `LEGENDS_ERR_INTERNAL` | -13 | Internal error |
 
-### Error Messages
-
-```c
-char buffer[256];
-size_t length;
-legends_get_last_error(handle, buffer, sizeof(buffer), &length);
-```
-
 ### No Exceptions
 
 Core never throws C++ exceptions across the C API boundary. All errors
@@ -347,37 +572,43 @@ All error conditions return error codes.
 
 ---
 
-## Audio Contract
+## CI Enforcement
 
-### Push Model
+### Contract Gate Jobs
 
-Emulation produces samples. PAL consumes them.
+| Job | Enforcement |
+|-----|-------------|
+| `contract-gates` | Run all 22 gate tests |
+| `asan-lifecycle` | 100x create/destroy under ASan |
+| `abi-c-compile` | C11 compilation verification |
+| `sdl-firewall` | No SDL headers outside `src/pal/` |
 
+### Symbol Verification
+
+```yaml
+- name: Verify no SDL symbols in core
+  run: |
+    nm -g build/lib/libprojectlegends_core.a | grep "SDL_" && exit 1 || true
+
+- name: Verify no main in core
+  run: |
+    nm -g build/lib/libprojectlegends_core.a | grep " T main" && exit 1 || true
 ```
-Emulation → MIXER → ring buffer → IAudioSink::pushSamples() → device
-```
 
-### No Callback-Driven Emulation
+---
 
-SDL2 backend has audio callback, but it:
-1. Only reads from ring buffer
-2. Never calls any `legends_*()` function
-3. Never advances emulation time
+## TLA+ Verification
 
-SDL3 backend has no callbacks at all (uses `SDL_AudioStream`).
+All contract gates with formal specifications are verified by TLC model checking:
 
-### Backpressure
+| Specification | States | Result |
+|--------------|--------|--------|
+| `LifecycleMinimal.tla` | 85 | PASSED |
+| `PALMinimal.tla` | 99 | PASSED |
+| `ThreadingMinimal.tla` | 1,474 | PASSED |
+| `SaveStateTest.tla` | 8 | PASSED |
 
-When audio queue is full:
-- `pushSamples()` blocks or drops samples (configurable)
-- Emulation timing remains authoritative
-- Host audio may glitch; emulation does not slow down
-
-### Sample Format
-
-- 16-bit signed PCM
-- Stereo interleaved (L, R, L, R, ...)
-- Sample rates: 44100 Hz (default), 48000 Hz, 22050 Hz
+See [`VERIFICATION_REPORT.md`](VERIFICATION_REPORT.md) for details.
 
 ---
 
@@ -386,4 +617,4 @@ When audio queue is full:
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2025-01 | Initial contract specification |
-
+| 1.1.0 | 2025-01 | Added 22 contract gates, TLA+ verification |

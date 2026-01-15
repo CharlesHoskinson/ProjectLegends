@@ -32,18 +32,23 @@ option(PAL_BACKEND_SDL3 "Build SDL3 PAL backend" OFF)
 set(PAL_DEFAULT_BACKEND "Headless" CACHE STRING "Default PAL backend (SDL2, SDL3, Headless)")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# C++ Standard
+# C++ Standard (per-target, not global - see target_compile_features below)
 # ─────────────────────────────────────────────────────────────────────────────
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# We set C++23 per-target below, not globally. This ensures:
+# 1. Each target explicitly declares its standard requirement
+# 2. No accidental standard leakage to consumers
+# 3. CI can verify each target compiles as C++23
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Compiler Flags
+# Compiler Flags (Two-Tier Strategy)
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Tier A (new/refactored code): strict warnings, -Werror enabled via target property
+# Tier B (legacy migration): warnings on, NOT errors (set per legacy target)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # Base warnings for all targets
     add_compile_options(-Wall -Wextra -Wpedantic)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_compile_options(-g -O0)
@@ -55,18 +60,69 @@ elseif(MSVC)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif()
 
+# Helper function to apply C++23 and strict warnings to a target (Tier A)
+function(legends_set_strict_cxx_standard target_name)
+    set_target_properties(${target_name} PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+    # MSVC: explicitly set /std:c++23preview for reliable C++23 support
+    # CMake's CXX_STANDARD 23 may map to /std:c++latest which can drift
+    if(MSVC)
+        target_compile_options(${target_name} PRIVATE /std:c++23preview /WX)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        # Tier A: warnings are errors for new/refactored code
+        target_compile_options(${target_name} PRIVATE -Werror)
+    endif()
+endfunction()
+
+# Helper function for legacy code under migration (Tier B)
+function(legends_set_legacy_cxx_standard target_name)
+    set_target_properties(${target_name} PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+    # MSVC: explicitly set /std:c++23preview
+    if(MSVC)
+        target_compile_options(${target_name} PRIVATE /std:c++23preview)
+    endif()
+    # Tier B: warnings NOT errors (migration in progress)
+endfunction()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 
-# gsl-lite for contracts
-include(FetchContent)
-FetchContent_Declare(
-    gsl-lite
-    GIT_REPOSITORY https://github.com/gsl-lite/gsl-lite.git
-    GIT_TAG v0.41.0
-)
-FetchContent_MakeAvailable(gsl-lite)
+# gsl-lite for contracts (v1.0.0 - stable v1 series)
+# See: https://github.com/gsl-lite/gsl-lite
+#
+# IMPORTANT: gsl-lite v1 uses namespace `gsl_lite` and header `<gsl-lite/gsl-lite.hpp>`
+# We create a bridge header (include/legends/gsl.hpp) with a scoped alias.
+# Do NOT expose gsl-lite types in public headers (legends_embed.h) - it affects ABI.
+#
+# FORBIDDEN PATTERNS (CI gate enforced):
+#   - <gsl/gsl-lite.hpp> (legacy header, conflicts with Microsoft GSL)
+#   - gsl_FEATURE_GSL_COMPATIBILITY_MODE (affects API/ABI, consumer's choice)
+#   - Exporting gsl-lite config macros as PUBLIC compile definitions
+
+# Try system-installed gsl-lite first (preferred for reproducible builds)
+find_package(gsl-lite 1.0 QUIET)
+
+if(NOT gsl-lite_FOUND)
+    message(STATUS "gsl-lite not found, fetching from GitHub...")
+    include(FetchContent)
+    FetchContent_Declare(
+        gsl-lite
+        GIT_REPOSITORY https://github.com/gsl-lite/gsl-lite.git
+        GIT_TAG v1.0.0
+    )
+    FetchContent_MakeAvailable(gsl-lite)
+endif()
+
+# Note: For v1, link to gsl::gsl-lite-v1 for v1 defaults.
+# We keep it PRIVATE to avoid leaking to consumers.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Legends Core Library
@@ -91,6 +147,9 @@ endif()
 
 add_library(legends_core STATIC ${LEGENDS_SOURCES})
 
+# Apply C++23 standard (Tier A - new code, strict warnings)
+legends_set_strict_cxx_standard(legends_core)
+
 target_include_directories(legends_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -98,15 +157,22 @@ target_include_directories(legends_core
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+# IMPORTANT: gsl-lite is PRIVATE - do NOT expose to consumers
+# Consumers include legends_embed.h (pure C ABI), not gsl-lite types
 target_link_libraries(legends_core
-    PUBLIC
-        gsl::gsl-lite
+    PRIVATE
+        gsl::gsl-lite-v1
 )
 
 target_compile_definitions(legends_core
     PRIVATE
         $<$<BOOL:${LEGENDS_HEADLESS}>:LEGENDS_HEADLESS=1>
         $<$<BOOL:${LEGENDS_LIBRARY_MODE}>:LEGENDS_LIBRARY_MODE=1>
+        # gsl-lite contract violation behavior:
+        # Library mode: throw (caught at FFI boundary)
+        # Standalone mode: terminate (fail-fast)
+        $<$<BOOL:${LEGENDS_LIBRARY_MODE}>:gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1>
+        $<$<NOT:$<BOOL:${LEGENDS_LIBRARY_MODE}>>:gsl_CONFIG_CONTRACT_VIOLATION_TERMINATES=1>
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +234,9 @@ if(PAL_BACKEND_SDL3)
 endif()
 
 add_library(legends_pal STATIC ${PAL_SOURCES})
+
+# Apply C++23 standard (Tier A - new code, strict warnings)
+legends_set_strict_cxx_standard(legends_pal)
 
 target_include_directories(legends_pal
     PUBLIC
@@ -257,11 +326,15 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_contract_gates.cpp
     )
 
+    # Apply C++23 standard (Tier A - tests should be strict too)
+    legends_set_strict_cxx_standard(legends_unit_tests)
+
     target_link_libraries(legends_unit_tests PRIVATE
         legends_core
         legends_pal
         GTest::gtest_main
         GTest::gmock
+        gsl::gsl-lite-v1  # Tests may use gsl-lite directly for testing
     )
 
     target_compile_definitions(legends_unit_tests PRIVATE
@@ -326,6 +399,36 @@ if(LEGENDS_BUILD_TESTS)
         COMMENT "Running ABI verification tests"
     )
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Toolchain Verification Tests
+    # ─────────────────────────────────────────────────────────────────────────
+
+    add_executable(legends_toolchain_tests
+        tests/toolchain/test_cpp_standard.cpp
+    )
+
+    # Apply C++23 standard (this IS the gate test - must be strict)
+    legends_set_strict_cxx_standard(legends_toolchain_tests)
+
+    target_link_libraries(legends_toolchain_tests PRIVATE
+        GTest::gtest_main
+    )
+
+    target_compile_definitions(legends_toolchain_tests PRIVATE
+        LEGENDS_LIBRARY_MODE=1
+    )
+
+    gtest_discover_tests(legends_toolchain_tests
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        PROPERTIES LABELS "toolchain"
+    )
+
+    add_custom_target(test-toolchain
+        COMMAND ${CMAKE_CTEST_COMMAND} -L toolchain --output-on-failure
+        DEPENDS legends_toolchain_tests
+        COMMENT "Running toolchain verification tests"
+    )
+
 endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -346,6 +449,9 @@ if(LEGENDS_BUILD_BENCHMARKS)
     add_executable(pal_benchmarks
         benchmarks/bench_pal.cpp
     )
+
+    # Apply C++23 standard (Tier A - benchmarks should be strict)
+    legends_set_strict_cxx_standard(pal_benchmarks)
 
     target_link_libraries(pal_benchmarks PRIVATE
         legends_pal
