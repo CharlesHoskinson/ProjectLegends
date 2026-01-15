@@ -26,7 +26,7 @@ a modernized, embeddable x86 emulation framework.
 │                                                                                                                  │
 │    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐                 │
 │    │   LLM Agent      │    │   Game Bot       │    │  Testing Harness │    │   Rust/Python    │                 │
-│    │   (GPT/Claude)   │    │   (Speedrun)     │    │   (CI/CD)        │    │   FFI Wrapper    │                 │
+│    │   Controller    │    │   (Speedrun)     │    │   (CI/CD)        │    │   FFI Wrapper    │                 │
 │    └────────┬─────────┘    └────────┬─────────┘    └────────┬─────────┘    └────────┬─────────┘                 │
 │             │                       │                       │                       │                            │
 │             └───────────────────────┴───────────────────────┴───────────────────────┘                            │
