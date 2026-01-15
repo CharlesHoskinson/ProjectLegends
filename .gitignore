@@ -39,3 +39,9 @@ Thumbs.db
 
 # Dependencies
 _deps/
+
+# TLC model checker artifacts
+spec/tla/*.bin
+spec/tla/*.zip
+spec/tla/states/
+*_TTrace_*.tla
