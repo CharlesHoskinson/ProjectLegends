@@ -1,0 +1,117 @@
+name: PAL CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  headless-tests:
+    name: Headless Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DPAL_BACKEND_HEADLESS=ON \
+            -DPAL_BACKEND_SDL2=OFF \
+            -DPAL_BACKEND_SDL3=OFF
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sdl2-tests:
+    name: SDL2 Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SDL2
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DPAL_BACKEND_SDL2=ON \
+            -DPAL_BACKEND_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sdl3-tests:
+    name: SDL3 Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake
+
+      - name: Build SDL3 from source
+        run: |
+          git clone --depth 1 https://github.com/libsdl-org/SDL.git -b main SDL3-src
+          cmake -B SDL3-src/build -S SDL3-src -DCMAKE_BUILD_TYPE=Release
+          cmake --build SDL3-src/build -j$(nproc)
+          sudo cmake --install SDL3-src/build
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DPAL_BACKEND_SDL3=ON \
+            -DPAL_BACKEND_HEADLESS=ON \
+            -DPAL_DEFAULT_BACKEND=SDL3
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sdl-firewall:
+    name: SDL Header Firewall
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for SDL leakage
+        run: |
+          echo "Checking for SDL includes outside src/pal/..."
+          if grep -r '#include.*SDL' src/ include/ \
+             --include='*.cpp' --include='*.h' \
+             | grep -v 'src/pal/'; then
+            echo "ERROR: SDL headers found outside src/pal/"
+            exit 1
+          fi
+          echo "SDL header firewall: PASS"
+
+  windows-build:
+    name: Windows Build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (Headless only)
+        run: |
+          cmake -B build `
+            -DLEGENDS_BUILD_TESTS=ON `
+            -DPAL_BACKEND_HEADLESS=ON `
+            -DPAL_BACKEND_SDL2=OFF `
+            -DPAL_BACKEND_SDL3=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -C Release

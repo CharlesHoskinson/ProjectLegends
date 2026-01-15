@@ -25,6 +25,12 @@ option(LEGENDS_BUILD_TESTS "Build unit tests" OFF)
 option(LEGENDS_HEADLESS "Build in headless mode (no GUI)" OFF)
 option(LEGENDS_LIBRARY_MODE "Build as static library" OFF)
 
+# PAL Backend Options
+option(PAL_BACKEND_HEADLESS "Build headless PAL backend" ON)
+option(PAL_BACKEND_SDL2 "Build SDL2 PAL backend" OFF)
+option(PAL_BACKEND_SDL3 "Build SDL3 PAL backend" OFF)
+set(PAL_DEFAULT_BACKEND "Headless" CACHE STRING "Default PAL backend (SDL2, SDL3, Headless)")
+
 # ─────────────────────────────────────────────────────────────────────────────
 # C++ Standard
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +110,89 @@ target_compile_definitions(legends_core
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Platform Abstraction Layer (PAL)
+# ─────────────────────────────────────────────────────────────────────────────
+
+set(PAL_HEADERS
+    include/pal/types.h
+    include/pal/window.h
+    include/pal/context.h
+    include/pal/audio_sink.h
+    include/pal/host_clock.h
+    include/pal/input_source.h
+    include/pal/platform.h
+)
+
+set(PAL_SOURCES "")
+
+# Headless backend (always available)
+if(PAL_BACKEND_HEADLESS)
+    list(APPEND PAL_SOURCES
+        src/pal/headless/window_headless.cpp
+        src/pal/headless/context_headless.cpp
+        src/pal/headless/audio_sink_headless.cpp
+        src/pal/headless/host_clock_headless.cpp
+        src/pal/headless/input_source_headless.cpp
+        src/pal/headless/platform_headless.cpp
+    )
+endif()
+
+# SDL2 backend
+if(PAL_BACKEND_SDL2)
+    find_package(SDL2 REQUIRED)
+    list(APPEND PAL_SOURCES
+        src/pal/sdl2/window_sdl2.cpp
+        src/pal/sdl2/context_sdl2.cpp
+        src/pal/sdl2/audio_sink_sdl2.cpp
+        src/pal/sdl2/host_clock_sdl2.cpp
+        src/pal/sdl2/input_source_sdl2.cpp
+        src/pal/sdl2/platform_sdl2.cpp
+    )
+endif()
+
+# SDL3 backend
+if(PAL_BACKEND_SDL3)
+    # Include SDL3's CPU detection before find_package
+    if(EXISTS "${SDL3_DIR}/sdlcpu.cmake")
+        include("${SDL3_DIR}/sdlcpu.cmake")
+    endif()
+    find_package(SDL3 REQUIRED)
+    list(APPEND PAL_SOURCES
+        src/pal/sdl3/window_sdl3.cpp
+        src/pal/sdl3/context_sdl3.cpp
+        src/pal/sdl3/audio_sink_sdl3.cpp
+        src/pal/sdl3/host_clock_sdl3.cpp
+        src/pal/sdl3/input_source_sdl3.cpp
+        src/pal/sdl3/platform_sdl3.cpp
+    )
+endif()
+
+add_library(legends_pal STATIC ${PAL_SOURCES})
+
+target_include_directories(legends_pal
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_definitions(legends_pal
+    PUBLIC
+        $<$<BOOL:${PAL_BACKEND_HEADLESS}>:PAL_HAS_HEADLESS=1>
+        $<$<BOOL:${PAL_BACKEND_SDL2}>:PAL_HAS_SDL2=1>
+        $<$<BOOL:${PAL_BACKEND_SDL3}>:PAL_HAS_SDL3=1>
+        PAL_DEFAULT_BACKEND="${PAL_DEFAULT_BACKEND}"
+)
+
+if(PAL_BACKEND_SDL2)
+    target_link_libraries(legends_pal PRIVATE SDL2::SDL2)
+    target_include_directories(legends_pal PRIVATE ${SDL2_INCLUDE_DIRS})
+endif()
+
+if(PAL_BACKEND_SDL3)
+    target_link_libraries(legends_pal PRIVATE SDL3::SDL3-shared)
+    target_include_directories(legends_pal PRIVATE ${SDL3_INCLUDE_DIRS})
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -154,10 +243,21 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_vision_overlay.cpp
         tests/unit/test_vision_annotations.cpp
         tests/unit/test_legends_embed.cpp
+        # PAL Tests
+        tests/unit/test_pal_types.cpp
+        tests/unit/test_pal_window.cpp
+        tests/unit/test_pal_context.cpp
+        tests/unit/test_pal_audio_sink.cpp
+        tests/unit/test_pal_host_clock.cpp
+        tests/unit/test_pal_input_source.cpp
+        tests/unit/test_pal_platform.cpp
+        tests/unit/test_pal_sdl2_backend.cpp
+        tests/unit/test_pal_sdl3_backend.cpp
     )
 
     target_link_libraries(legends_unit_tests PRIVATE
         legends_core
+        legends_pal
         GTest::gtest_main
         GTest::gmock
     )
@@ -227,17 +327,46 @@ if(LEGENDS_BUILD_TESTS)
 endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Benchmarks
+# ─────────────────────────────────────────────────────────────────────────────
+
+option(LEGENDS_BUILD_BENCHMARKS "Build performance benchmarks" OFF)
+
+if(LEGENDS_BUILD_BENCHMARKS)
+    FetchContent_Declare(
+        benchmark
+        GIT_REPOSITORY https://github.com/google/benchmark.git
+        GIT_TAG v1.8.3
+    )
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(benchmark)
+
+    add_executable(pal_benchmarks
+        benchmarks/bench_pal.cpp
+    )
+
+    target_link_libraries(pal_benchmarks PRIVATE
+        legends_pal
+        benchmark::benchmark
+    )
+
+    target_compile_definitions(pal_benchmarks PRIVATE
+        LEGENDS_LIBRARY_MODE=1
+    )
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Installation
 # ─────────────────────────────────────────────────────────────────────────────
 
 include(GNUInstallDirs)
 
-install(TARGETS legends_core
+install(TARGETS legends_core legends_pal
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-install(DIRECTORY include/legends
+install(DIRECTORY include/legends include/pal
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
