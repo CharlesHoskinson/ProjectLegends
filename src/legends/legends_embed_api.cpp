@@ -6,11 +6,20 @@
  * Phase 2: Deterministic stepping (step_ms, step_cycles, time queries)
  * Phase 3: Frame capture (text, RGB, dirty tracking, cursor)
  * Phase 4+: Input, save/load (stubs)
+ *
+ * NOTE: This implementation bridges to the DOSBox-X engine library
+ * (engine/include/dosbox/dosbox_library.h) for core emulation.
+ * The legends_* functions delegate to dosbox_lib_* functions.
  */
 
 #include "legends/legends_embed.h"
 #include "legends/machine_context.h"
 #include "legends/vision_framebuffer.h"
+
+// DOSBox-X Engine Bridge (PR #22)
+#include "dosbox/dosbox_library.h"
+#include "dosbox/error_mapping.h"
+
 #include <atomic>
 #include <cstring>
 #include <memory>
@@ -34,6 +43,10 @@ std::thread::id g_owner_thread_id{};
 
 // The actual machine instance
 std::unique_ptr<legends::MachineContext> g_instance;
+
+// DOSBox-X Engine Bridge Handle (PR #22)
+// This handle is used for delegating to the DOSBox-X library API
+dosbox_lib_handle_t g_engine_handle{nullptr};
 
 // Configuration stored from create
 legends_config_t g_config;
@@ -919,6 +932,31 @@ legends_error_t legends_create(
             return LEGENDS_ERR_INTERNAL;
         }
 
+        // Initialize DOSBox-X Engine Bridge (PR #22)
+        // Create engine config from legends config
+        dosbox_lib_config_t engine_config = DOSBOX_LIB_CONFIG_INIT;
+        engine_config.memory_kb = g_config.memory_kb;
+        engine_config.cpu_cycles = g_config.cpu_cycles;
+        engine_config.deterministic = g_config.deterministic;
+
+        auto engine_err = dosbox_lib_create(&engine_config, &g_engine_handle);
+        if (engine_err != DOSBOX_LIB_OK) {
+            g_last_error = "Failed to create DOSBox-X engine";
+            g_instance.reset();
+            g_instance_exists = false;
+            return dosbox_to_legends_error(engine_err);
+        }
+
+        engine_err = dosbox_lib_init(g_engine_handle);
+        if (engine_err != DOSBOX_LIB_OK) {
+            dosbox_lib_destroy(g_engine_handle);
+            g_engine_handle = nullptr;
+            g_last_error = "Failed to initialize DOSBox-X engine";
+            g_instance.reset();
+            g_instance_exists = false;
+            return dosbox_to_legends_error(engine_err);
+        }
+
         // Initialize time state
         g_time_state.reset();
         g_time_state.cycles_per_ms = mc.cpu_cycles;
@@ -934,7 +972,7 @@ legends_error_t legends_create(
         *handle_out = reinterpret_cast<legends_handle>(static_cast<uintptr_t>(1));
         g_last_error.clear();
 
-        LEGENDS_LOG_INFO("DOSBox-X instance created successfully");
+        LEGENDS_LOG_INFO("DOSBox-X instance created successfully (with engine bridge)");
         return LEGENDS_OK;
 
     } catch (const std::exception& e) {
@@ -957,6 +995,12 @@ legends_error_t legends_destroy(legends_handle handle) {
     if (g_instance) {
         g_instance->shutdown();
         g_instance.reset();
+    }
+
+    // Destroy DOSBox-X Engine Bridge (PR #22)
+    if (g_engine_handle != nullptr) {
+        dosbox_lib_destroy(g_engine_handle);
+        g_engine_handle = nullptr;
     }
 
     // Reset time state

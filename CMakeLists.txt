@@ -125,6 +125,26 @@ endif()
 # We keep it PRIVATE to avoid leaking to consumers.
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DOSBox-X Engine (AIBox Library)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# The engine/ directory contains the refactored DOSBox-X library providing:
+# - Platform abstraction (headless timing, display, input, audio)
+# - Embeddable library API (dosbox_library.h)
+# - State hash API for determinism verification
+# - Error model (FAIL/PANIC/TRAP taxonomy)
+#
+# See engine/LIBRARY_CONTRACT.md for API documentation.
+#
+
+# Configure engine options before adding subdirectory
+set(AIBOX_BUILD_TESTS OFF CACHE BOOL "Disable engine tests (use legends tests)" FORCE)
+set(AIBOX_HEADLESS ON CACHE BOOL "Build engine in headless mode" FORCE)
+set(AIBOX_LIBRARY_MODE ON CACHE BOOL "Build engine as library" FORCE)
+
+add_subdirectory(engine)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Legends Core Library
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -155,6 +175,7 @@ target_include_directories(legends_core
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine/include  # DOSBox-X headers
 )
 
 # IMPORTANT: gsl-lite is PRIVATE - do NOT expose to consumers
@@ -162,6 +183,7 @@ target_include_directories(legends_core
 target_link_libraries(legends_core
     PRIVATE
         gsl::gsl-lite-v1
+        aibox_core  # DOSBox-X engine library
 )
 
 target_compile_definitions(legends_core

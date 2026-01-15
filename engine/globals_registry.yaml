@@ -1,0 +1,916 @@
+# DOSBox-X Global State Registry
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This file tracks all global/static variables that need migration to
+# DOSBoxContext for library mode multi-instance support.
+#
+# CI enforces:
+# - No new entries without review (baseline comparison)
+# - migration_status only improves (pending → in_progress → migrated)
+# - No regressions (migrated → pending)
+#
+# Version: 1.0
+# Last updated: 2025-01-15
+# ═══════════════════════════════════════════════════════════════════════════════
+
+metadata:
+  version: "1.0"
+  baseline_date: "2025-01-15"
+  total_tracked: 45  # Update when adding entries
+
+# Migration status values:
+# - pending: Not yet migrated
+# - in_progress: Migration started
+# - migrated: Fully moved to DOSBoxContext
+# - deferred: Intentionally left as global (e.g., config-time only)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TIMING & CYCLE MANAGEMENT (Determinism-Critical)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+globals:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CPU Cycle Counters
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  - name: CPU_Cycles
+    type: cpu_cycles_count_t
+    file: src/cpu/cpu.cpp
+    line: 205
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.cycles
+    migration_status: migrated
+    migration_pr: 11
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+    notes: "Migrated to DOSBoxContext.cpu_state.cycles (PR #11)"
+
+  - name: CPU_CycleLeft
+    type: cpu_cycles_count_t
+    file: src/cpu/cpu.cpp
+    line: 206
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.cycle_left
+    migration_status: migrated
+    migration_pr: 11
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+    notes: "Migrated to DOSBoxContext.cpu_state.cycle_left (PR #11)"
+
+  - name: CPU_CycleMax
+    type: cpu_cycles_count_t
+    file: src/cpu/cpu.cpp
+    line: 207
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.cycle_max
+    migration_status: migrated
+    migration_pr: 11
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+    notes: "Migrated to DOSBoxContext.cpu_state.cycle_max (PR #11)"
+
+  - name: CPU_CycleUp
+    type: cpu_cycles_count_t
+    file: src/cpu/cpu.cpp
+    line: 211
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.cycle_up
+    migration_status: migrated
+    migration_pr: 11
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Migrated to DOSBoxContext.cpu_state.cycle_up (PR #11)"
+
+  - name: CPU_CycleDown
+    type: cpu_cycles_count_t
+    file: src/cpu/cpu.cpp
+    line: 212
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.cycle_down
+    migration_status: migrated
+    migration_pr: 11
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Migrated to DOSBoxContext.cpu_state.cycle_down (PR #11)"
+
+  - name: CPU_CycleAutoAdjust
+    type: bool
+    file: src/cpu/cpu.cpp
+    line: 217
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.cycle_auto_adjust
+    migration_status: migrated
+    migration_pr: 11
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Migrated to DOSBoxContext.cpu_state.cycle_auto_adjust (PR #11)"
+
+  - name: CPU_NMI_gate
+    type: bool
+    file: src/cpu/cpu.cpp
+    line: 75
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.nmi_gate
+    migration_status: migrated
+    migration_pr: 11
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Migrated to DOSBoxContext.cpu_state.nmi_gate (PR #11)"
+
+  - name: CPU_NMI_active
+    type: bool
+    file: src/cpu/cpu.cpp
+    line: 76
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.nmi_active
+    migration_status: migrated
+    migration_pr: 11
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Migrated to DOSBoxContext.cpu_state.nmi_active (PR #11)"
+
+  - name: CPU_NMI_pending
+    type: bool
+    file: src/cpu/cpu.cpp
+    line: 77
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.nmi_pending
+    migration_status: migrated
+    migration_pr: 11
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Migrated to DOSBoxContext.cpu_state.nmi_pending (PR #11)"
+
+  - name: cycle_count
+    type: Bitu
+    file: src/cpu/core_normal.cpp
+    line: 57
+    subsystem: cpu
+    target_context: DOSBoxContext.cpu_state.cycles
+    migration_status: deferred
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Core-local counter, deferred - maps to cpu_state.cycles"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # SDL Timing
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  - name: SDL_ticks_last
+    type: Uint32
+    file: src/dosbox.cpp
+    line: 425
+    subsystem: timing
+    target_context: DOSBoxContext.timing.sdl_ticks_last
+    migration_status: migrated
+    migration_pr: 10
+    thread_safety: main_thread_only
+    determinism_relevant: false  # Wall-clock, not included in state hash
+    priority: high
+    notes: "Migrated to DOSBoxContext.timing.sdl_ticks_last (PR #10)"
+
+  - name: SDL_ticks_next
+    type: Uint32
+    file: src/dosbox.cpp
+    line: 425
+    subsystem: timing
+    target_context: DOSBoxContext.timing.sdl_ticks_next
+    migration_status: migrated
+    migration_pr: 10
+    thread_safety: main_thread_only
+    determinism_relevant: false  # Wall-clock, not included in state hash
+    priority: high
+    notes: "Migrated to DOSBoxContext.timing.sdl_ticks_next (PR #10)"
+
+  - name: ticksDone
+    type: int32_t
+    file: src/dosbox.cpp
+    line: 289
+    subsystem: timing
+    target_context: DOSBoxContext.timing.ticks_done
+    migration_status: migrated
+    migration_pr: 10
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Migrated to DOSBoxContext.timing.ticks_done (PR #10)"
+
+  - name: ticksScheduled
+    type: uint32_t
+    file: src/dosbox.cpp
+    line: 290
+    subsystem: timing
+    target_context: DOSBoxContext.timing.ticks_scheduled
+    migration_status: migrated
+    migration_pr: 10
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Migrated to DOSBoxContext.timing.ticks_scheduled (PR #10)"
+
+  - name: ticksLocked
+    type: bool
+    file: src/dosbox.cpp
+    line: 291
+    subsystem: timing
+    target_context: DOSBoxContext.timing.locked
+    migration_status: migrated
+    migration_pr: 10
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Migrated to DOSBoxContext.timing.locked (PR #10)"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PIC (Programmable Interrupt Controller)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: pics
+    type: PIC_Controller[2]
+    file: src/hardware/pic.cpp
+    line: 113
+    subsystem: pic
+    target_context: DOSBoxContext.pic
+    migration_status: partial
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+    notes: "PR #14: Key fields migrated to PicState. Full register state pending."
+
+  - name: PIC_Ticks
+    type: Bitu
+    file: src/hardware/pic.cpp
+    line: 116
+    subsystem: pic
+    target_context: DOSBoxContext.pic.ticks
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+
+  - name: PIC_IRQCheck
+    type: Bitu
+    file: src/hardware/pic.cpp
+    line: 117
+    subsystem: pic
+    target_context: DOSBoxContext.pic.irq_check
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+
+  - name: PIC_IRQCheckPending
+    type: Bitu
+    file: src/hardware/pic.cpp
+    line: 118
+    subsystem: pic
+    target_context: DOSBoxContext.pic.irq_check_pending
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: master_cascade_irq
+    type: int
+    file: src/hardware/pic.cpp
+    line: 112
+    subsystem: pic
+    target_context: DOSBoxContext.pic.master_cascade_irq
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+
+  - name: firstticker
+    type: TickerBlock*
+    file: src/hardware/pic.cpp
+    line: 810
+    subsystem: pic
+    target_context: DOSBoxContext.pic.ticker_list
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+    notes: "PIC event queue head - linked list, requires special handling"
+
+  - name: InEventService
+    type: bool
+    file: src/hardware/pic.cpp
+    line: 654
+    subsystem: pic
+    target_context: DOSBoxContext.pic.in_event_service
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+
+  - name: srv_lag
+    type: pic_tickindex_t
+    file: src/hardware/pic.cpp
+    line: 655
+    subsystem: pic
+    target_context: DOSBoxContext.pic.srv_lag
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+
+  - name: PIC_irq_delay_ns
+    type: unsigned long
+    file: src/hardware/pic.cpp
+    line: 37
+    subsystem: pic
+    target_context: DOSBoxContext.pic.irq_delay_ns
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VGA / DISPLAY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: vga
+    type: VGA_Type
+    file: src/hardware/vga.cpp
+    line: 205
+    subsystem: vga
+    target_context: DOSBoxContext.vga
+    migration_status: partial
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+    notes: "PR #13: Core display config migrated to VgaState. Full register state pending."
+
+  - name: vga_render_on_demand
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 193
+    subsystem: vga
+    target_context: DOSBoxContext.vga.render_on_demand
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: vga_render_wait_for_changes
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 195
+    subsystem: vga
+    target_context: DOSBoxContext.vga.render_wait_for_changes
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: vga_8bit_dac
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 188
+    subsystem: vga
+    target_context: DOSBoxContext.vga.dac_8bit
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: enable_pci_vga
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 203
+    subsystem: vga
+    target_context: DOSBoxContext.vga.pci_enabled
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+  - name: vga_force_refresh_rate
+    type: double
+    file: src/hardware/vga.cpp
+    line: 272
+    subsystem: vga
+    target_context: DOSBoxContext.vga.refresh_rate
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: vga_page_flip_occurred
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 214
+    subsystem: vga
+    target_context: DOSBoxContext.vga.page_flip_occurred
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+  - name: allow_vesa_32bpp
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 251
+    subsystem: vga
+    target_context: DOSBoxContext.vga.vesa_32bpp
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+  - name: allow_vesa_24bpp
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 252
+    subsystem: vga
+    target_context: DOSBoxContext.vga.vesa_24bpp
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+  - name: allow_vesa_16bpp
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 253
+    subsystem: vga
+    target_context: DOSBoxContext.vga.vesa_16bpp
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+  - name: allow_vesa_15bpp
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 254
+    subsystem: vga
+    target_context: DOSBoxContext.vga.vesa_15bpp
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+  - name: allow_vesa_8bpp
+    type: bool
+    file: src/hardware/vga.cpp
+    line: 255
+    subsystem: vga
+    target_context: DOSBoxContext.vga.vesa_8bpp
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+  - name: enableCGASnow
+    type: int
+    file: src/hardware/vga.cpp
+    line: 208
+    subsystem: vga
+    target_context: DOSBoxContext.vga.cga_snow
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: low
+
+  - name: CurMode
+    type: VideoModeBlock*
+    file: src/hardware/vga.cpp
+    line: 1819
+    subsystem: vga
+    target_context: DOSBoxContext.vga.cur_mode
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Mode block pointer - requires VideoModeBlock migration"
+
+  - name: vsync
+    type: vsync_state
+    file: include/vga.h
+    line: 78
+    subsystem: vga
+    target_context: DOSBoxContext.vga.vsync
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: assigned_lfb
+    type: uint32_t
+    file: src/hardware/vga.cpp
+    line: 175
+    subsystem: vga
+    target_context: DOSBoxContext.vga.assigned_lfb
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: medium
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AUDIO / MIXER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: mixer
+    type: struct (anonymous)
+    file: src/hardware/mixer.cpp
+    line: 87
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer
+    migration_status: migrated
+    thread_safety: audio_callback_access
+    determinism_relevant: true
+    priority: critical
+    notes: "Audio mixing state - PR #12: Migrated to MixerState struct"
+
+  - name: mixer.freq
+    type: uint32_t
+    file: src/hardware/mixer.cpp
+    line: 94
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.freq
+    migration_status: migrated
+    thread_safety: audio_callback_access
+    determinism_relevant: true
+    priority: critical
+    notes: "Sample rate - read by audio callback"
+
+  - name: mixer.blocksize
+    type: uint32_t
+    file: src/hardware/mixer.cpp
+    line: 95
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.blocksize
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: mixer.mastervol
+    type: float[2]
+    file: src/hardware/mixer.cpp
+    line: 91
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.mastervol
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: mixer.work_in
+    type: Bitu
+    file: src/hardware/mixer.cpp
+    line: 89
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.work_in
+    migration_status: migrated
+    thread_safety: audio_callback_access
+    determinism_relevant: true
+    priority: critical
+    notes: "Ring buffer write position - read by audio callback"
+
+  - name: mixer.work_out
+    type: Bitu
+    file: src/hardware/mixer.cpp
+    line: 89
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.work_out
+    migration_status: migrated
+    thread_safety: audio_callback_access
+    determinism_relevant: true
+    priority: critical
+    notes: "Ring buffer read position - written by audio callback"
+
+  - name: mixer.nosound
+    type: bool
+    file: src/hardware/mixer.cpp
+    line: 99
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.nosound
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: mixer.swapstereo
+    type: bool
+    file: src/hardware/mixer.cpp
+    line: 100
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.swapstereo
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+  - name: mixer.sampleaccurate
+    type: bool
+    file: src/hardware/mixer.cpp
+    line: 101
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.sampleaccurate
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+  - name: mixer.mute
+    type: bool
+    file: src/hardware/mixer.cpp
+    line: 104
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.mute
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+  - name: mixer_sample_counter
+    type: unsigned long long
+    file: src/hardware/mixer.cpp
+    line: 666
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.sample_counter
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "Total samples rendered - used for timing verification"
+
+  - name: mixer_start_pic_time
+    type: double
+    file: src/hardware/mixer.cpp
+    line: 667
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.start_pic_time
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: medium
+    notes: "Wall-clock reference - excluded from state hash"
+
+  - name: SDL2_AudioDevice
+    type: SDL_AudioDeviceID
+    file: src/hardware/mixer.cpp
+    line: 68
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.audio_device_id
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: high
+    notes: "SDL resource - recreate on deserialize, not migrated to context"
+
+  - name: MixTemp
+    type: uint8_t[MIXER_BUFSIZE]
+    file: src/hardware/mixer.cpp
+    line: 115
+    subsystem: mixer
+    target_context: DOSBoxContext.mixer.temp_buffer
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: medium
+    notes: "Temporary buffer - will be dynamically allocated"
+
+  - name: ticksLocked
+    type: bool
+    file: src/hardware/mixer.cpp
+    line: 656
+    subsystem: mixer
+    target_context: DOSBoxContext.timing.locked
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+    notes: "Already migrated to TimingState in PR #10"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SDL / GRAPHICS BLOCK
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: sdl
+    type: SDL_Block
+    file: src/gui/sdlmain.cpp
+    line: 346
+    subsystem: display
+    target_context: DOSBoxContext.sdl
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: high
+    notes: "Largest single struct - contains window, renderer, draw state"
+
+  - name: frames
+    type: Bitu
+    file: src/gui/sdlmain.cpp
+    line: 347
+    subsystem: display
+    target_context: DOSBoxContext.display.frame_count
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: low
+
+  - name: currentWindowWidth
+    type: Bitu
+    file: src/gui/sdlmain.cpp
+    line: 705
+    subsystem: display
+    target_context: DOSBoxContext.display.window_width
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: low
+
+  - name: currentWindowHeight
+    type: Bitu
+    file: src/gui/sdlmain.cpp
+    line: 705
+    subsystem: display
+    target_context: DOSBoxContext.display.window_height
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: low
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MEMORY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: MemBase
+    type: uint8_t*
+    file: src/hardware/memory.cpp
+    line: 60
+    subsystem: memory
+    target_context: DOSBoxContext.memory.base
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+    notes: "Base pointer to emulated memory"
+
+  - name: memory
+    type: struct MemoryBlock
+    file: src/hardware/memory.cpp
+    line: 62
+    subsystem: memory
+    target_context: DOSBoxContext.memory
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DMA
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: DmaControllers
+    type: DmaController*[2]
+    file: src/hardware/dma.cpp
+    line: 45
+    subsystem: dma
+    target_context: DOSBoxContext.dma.controllers
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KEYBOARD / INPUT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: keyb
+    type: struct (keyboard state)
+    file: src/hardware/keyboard.cpp
+    line: 50
+    subsystem: keyboard
+    target_context: DOSBoxContext.keyboard
+    migration_status: partial
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+    notes: "PR #14: Key fields migrated to KeyboardState. Full buffer state pending."
+
+  - name: on_capture_num_lock_was_on
+    type: bool
+    file: src/gui/sdlmain.cpp
+    line: 2299
+    subsystem: input
+    target_context: DOSBoxContext.input.captured_num_lock
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: low
+
+  - name: on_capture_caps_lock_was_on
+    type: bool
+    file: src/gui/sdlmain.cpp
+    line: 2301
+    subsystem: input
+    target_context: DOSBoxContext.input.captured_caps_lock
+    migration_status: migrated
+    thread_safety: main_thread_only
+    determinism_relevant: false
+    priority: low
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DOS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: dos
+    type: DOS_Block
+    file: src/dos/dos.cpp
+    line: 50
+    subsystem: dos
+    target_context: DOSBoxContext.dos
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: critical
+    notes: "DOS system state"
+
+  - name: dos_kernel_disabled
+    type: bool
+    file: src/dos/dos.cpp
+    line: 45
+    subsystem: dos
+    target_context: DOSBoxContext.dos.kernel_disabled
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: high
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BIOS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: BIOS_drive_signature
+    type: struct
+    file: src/ints/bios.cpp
+    line: 100
+    subsystem: bios
+    target_context: DOSBoxContext.bios.drive_signature
+    migration_status: pending
+    thread_safety: main_thread_only
+    determinism_relevant: true
+    priority: medium
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ERROR HANDLING (Library Mode - Already Migrated)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+  - name: g_last_error
+    type: dosbox_error
+    file: src/misc/error_model.cpp
+    line: 15
+    subsystem: error
+    target_context: thread_local
+    migration_status: migrated
+    thread_safety: thread_local
+    determinism_relevant: false
+    priority: low
+    notes: "PR #2 - thread-local, already correct"
+
+  - name: g_log_callback
+    type: dosbox_log_callback
+    file: src/misc/logging.cpp
+    line: 18
+    subsystem: logging
+    target_context: DOSBoxContext.logging.callback
+    migration_status: pending
+    thread_safety: mutex_protected
+    determinism_relevant: false
+    priority: low
+    notes: "PR #3 - needs context migration in PR #9"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Summary Statistics (for CI tracking)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+statistics:
+  total_globals: 45
+  by_status:
+    pending: 43
+    in_progress: 0
+    migrated: 1
+    deferred: 1
+  by_priority:
+    critical: 15
+    high: 16
+    medium: 6
+    low: 8
+  by_determinism:
+    relevant: 35
+    not_relevant: 10
