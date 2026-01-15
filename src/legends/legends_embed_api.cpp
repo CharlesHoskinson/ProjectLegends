@@ -1023,6 +1023,7 @@ legends_error_t legends_get_config(
     legends_config_t* config_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(config_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1120,6 +1121,7 @@ legends_error_t legends_step_ms(
     legends_step_result_t* result_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
     // Convert milliseconds to cycles using fixed ratio for determinism
@@ -1134,6 +1136,7 @@ legends_error_t legends_get_emu_time(
     uint64_t* time_us_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(time_us_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1146,6 +1149,7 @@ legends_error_t legends_get_total_cycles(
     uint64_t* cycles_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(cycles_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1165,6 +1169,7 @@ legends_error_t legends_capture_text(
     legends_text_info_t* info_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(cells_count_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1218,6 +1223,7 @@ legends_error_t legends_capture_rgb(
     uint16_t* height_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(size_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1333,6 +1339,7 @@ legends_error_t legends_is_frame_dirty(
     int* dirty_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(dirty_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1347,6 +1354,7 @@ legends_error_t legends_get_cursor(
     int* visible_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
     if (x_out != nullptr) {
@@ -1372,6 +1380,7 @@ legends_error_t legends_key_event(
     int is_down
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
     // Queue the key event (non-extended)
@@ -1391,6 +1400,7 @@ legends_error_t legends_key_event_ext(
     int is_down
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
     // Queue the extended key event (E0-prefixed)
@@ -1409,6 +1419,7 @@ legends_error_t legends_text_input(
     const char* utf8_text
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(utf8_text != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1478,6 +1489,7 @@ legends_error_t legends_mouse_event(
     uint8_t buttons
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
     // Queue the mouse event
@@ -1532,6 +1544,7 @@ legends_error_t legends_save_state(
     size_t* size_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(size_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1672,6 +1685,7 @@ legends_error_t legends_load_state(
     size_t buffer_size
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(buffer != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1798,6 +1812,7 @@ legends_error_t legends_get_state_hash(
     uint8_t hash_out[32]
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(hash_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1847,6 +1862,7 @@ legends_error_t legends_verify_determinism(
     int* is_deterministic_out
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(is_deterministic_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
@@ -1939,6 +1955,7 @@ legends_error_t legends_set_log_callback(
     void* userdata
 ) {
     LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
     // Set or clear the log callback

@@ -137,7 +137,7 @@ The topmost layer is the user's application that embeds Project Legends.
 
 ### Layer 2: C API Boundary (`legends_embed.h`)
 
-The stable ABI layer enforced by 22 contract gates.
+The stable ABI layer enforced by 23 contract gates.
 
 **Key Properties:**
 - Pure C interface (no C++ types exposed)
@@ -583,7 +583,7 @@ ProjectLegends/
 │
 ├── tests/
 │   └── unit/
-│       ├── test_contract_gates.cpp # 22 contract gate tests
+│       ├── test_contract_gates.cpp # 23 contract gate tests
 │       ├── test_legends_abi.c      # Pure C compilation
 │       ├── test_lifecycle.cpp      # Lifecycle tests
 │       ├── test_stepping.cpp       # Stepping tests
@@ -624,7 +624,7 @@ ProjectLegends/
 Project Legends provides:
 
 1. **Clean Architecture**: 5-layer design with clear responsibilities
-2. **Stable ABI**: 22 contract gates enforce correctness
+2. **Stable ABI**: 23 contract gates enforce correctness
 3. **Platform Independence**: PAL enables SDL2/SDL3/Headless
 4. **Formal Verification**: TLA+ specifications with TLC model checking
 5. **Determinism**: Bit-perfect reproducibility guaranteed

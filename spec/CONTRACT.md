@@ -742,3 +742,4 @@ See [`VERIFICATION_REPORT.md`](VERIFICATION_REPORT.md) for details.
 |---------|------|---------|
 | 1.0.0 | 2025-01 | Initial contract specification |
 | 1.1.0 | 2025-01 | Added 22 contract gates, TLA+ verification |
+| 1.2.0 | 2026-01 | Added Gate 8c (WrongThreadReturnsError), now 23 gates |

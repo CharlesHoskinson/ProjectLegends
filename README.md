@@ -362,7 +362,7 @@ The PAL provides platform services (NOT rendering primitives):
 ProjectLegends/
 ├── include/
 │   ├── legends/                # Embeddable API headers
-│   │   ├── legends_embed.h     # Main C API (22 contract gates)
+│   │   ├── legends_embed.h     # Main C API (23 contract gates)
 │   │   ├── llm_frame.h         # LLM-optimized output
 │   │   ├── llm_actions.h       # Semantic action descriptors
 │   │   ├── vision_capture.h    # Screen capture
@@ -385,7 +385,7 @@ ProjectLegends/
 │
 ├── tests/
 │   └── unit/                   # 1345+ unit tests
-│       ├── test_contract_gates.cpp  # 22 contract gate tests
+│       ├── test_contract_gates.cpp  # 23 contract gate tests
 │       ├── test_legends_abi.c       # Pure C compilation
 │       └── ...
 │
