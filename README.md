@@ -215,6 +215,31 @@ cmake --build build
 java -jar tla2tools.jar -config spec/tla/LifecycleMinimal.cfg spec/tla/LifecycleMinimal.tla
 ```
 
+### Developer Build Acceleration
+
+For fast iteration during development:
+
+```bash
+# Use Ninja + compiler cache (fastest)
+cmake -B build -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+cmake --build build -j$(nproc)
+
+# CMake presets (if CMakePresets.json exists)
+cmake --preset headless-dev
+cmake --build --preset headless-dev
+
+# Unity build for legacy core (reduces compile units)
+cmake -B build -DCMAKE_UNITY_BUILD=ON
+
+# Precompiled headers
+cmake -B build -DLEGENDS_USE_PCH=ON
+```
+
+**Recommended setup:**
+1. Install Ninja: `apt install ninja-build` / `brew install ninja`
+2. Install ccache: `apt install ccache` / `brew install ccache`
+3. Configure once, rebuild fast: `cmake --build build` after changes
+
 ---
 
 ## Platform Abstraction Layer (PAL)
@@ -407,9 +432,10 @@ ProjectLegends/
 ### Code Style
 
 - C++23 with modern idioms
-- `gsl-lite` for contracts
+- `gsl-lite` for contracts (violations return errors, never terminate host)
 - TLA+ specs for critical invariants
 - No singletons (explicit ownership)
+- Function names in diagrams are abbreviated (e.g., `create()` = `legends_create()`)
 
 ---
 

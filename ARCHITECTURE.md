@@ -288,6 +288,19 @@ Note: Audio callback (SDL2) only reads from ring buffer. It never calls into cor
    - Emulated time: Advanced ONLY by stepping
    - Never confused
 
+4. **Compile Firewall (SDL Isolation)**
+   - SDL headers only included in `src/pal/sdl2/` and `src/pal/sdl3/`
+   - Core library contains no SDL symbols
+   - **CI Enforcement:** `sdl-firewall` job verifies:
+     ```bash
+     # No SDL includes outside PAL
+     grep -r "SDL\.h\|SDL2\|SDL3" src/ include/ --include="*.cpp" --include="*.h" \
+       | grep -v "src/pal/" && exit 1
+
+     # No SDL symbols in core library
+     nm -g build/lib/libprojectlegends_core.a | grep "SDL_" && exit 1
+     ```
+
 ### Interfaces
 
 ```cpp
@@ -367,8 +380,8 @@ class IInputSource {
 │    │legends_create│───►│legends_step  │───►│legends_capture───►│legends_destroy│
 │    └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘ │
 │                                                                                  │
-│    All API calls must be from the SAME thread                                    │
-│    Concurrent access is UNDEFINED BEHAVIOR                                       │
+│    All API calls must be from the SAME thread (the "owner thread")               │
+│    Wrong-thread calls return LEGENDS_ERR_WRONG_THREAD (not UB)                   │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
                                        │
@@ -436,6 +449,28 @@ Obs(Deserialize(Serialize(S))) = Obs(S)
 ```
 
 Observable state after load equals observable state before save.
+
+### Observable State Definition
+
+The `get_state_hash()` function computes SHA-256 over **observable state**, defined as:
+
+**Included (affects emulation behavior):**
+- CPU: All registers, flags, mode, instruction pointer, segment descriptors
+- Memory: Conventional RAM, EMS pages, XMS blocks, UMB regions
+- Paging: Page tables, CR3, if protected mode
+- PIC: IRR, IMR, ISR for master and slave 8259
+- PIT: All channel counters, modes, latches, output states
+- DMA: Channel state, masks, page registers
+- VGA: All registers, VRAM, DAC palette, timing state
+- Keyboard: Buffer contents, LED state, controller mode
+- Event Queue: All pending timer/interrupt events with deadlines
+
+**Excluded (host-only, no emulation effect):**
+- PAL state: Window handles, audio device handles
+- Host clock values
+- Performance counters
+- Log buffers
+- Capture buffers (derived from VRAM)
 
 ### Verified By
 

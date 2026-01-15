@@ -351,6 +351,34 @@ No callback registration. Emulation drives audio timing.
 
 **Test:** `ContractGate_Audio::PushModelNoCallback`
 
+### 7d) Audio Backpressure Policy
+
+When the audio queue is full, `pushSamples()` behavior:
+
+| Policy | Behavior | Risk |
+|--------|----------|------|
+| **Drop (default)** | Discard oldest samples, count drops | Audio glitches |
+| Block | Wait for space | Stalls emulation |
+| Grow | Expand buffer | Memory growth |
+
+**Contract:**
+- Default: Drop with metrics (`getDroppedFrames()`)
+- Emulation timing is NEVER affected by audio backpressure
+- Queue capacity is queryable via `getBufferCapacity()`
+
+```c
+// Query backpressure status
+uint32_t queued = sink->getQueuedFrames();
+uint32_t capacity = sink->getBufferCapacity();
+uint32_t dropped = sink->getDroppedFrames();
+
+if (queued > capacity * 0.8) {
+    // Host is falling behind, consider throttling
+}
+```
+
+This prevents "hidden wall-clock coupling" where audio device speed affects emulation.
+
 ---
 
 ## Gate 8: Threading Model Gates
@@ -359,14 +387,14 @@ No callback registration. Emulation drives audio timing.
 
 ```
 ┌─────────────────┐
-│  Application    │  <- Single thread owns legends_handle
+│  Application    │  <- Single thread owns legends_handle (the "owner thread")
 │  Thread         │
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  legends_*()    │  <- All API calls from same thread
-│  Functions      │
+│  legends_*()    │  <- All API calls from owner thread
+│  Functions      │     Wrong-thread calls return LEGENDS_ERR_WRONG_THREAD
 └────────┬────────┘
          │
          ▼
@@ -375,7 +403,20 @@ No callback registration. Emulation drives audio timing.
 └─────────────────┘
 ```
 
-Concurrent access to `legends_handle` is undefined behavior.
+**Wrong-thread detection:**
+- The owner thread is recorded at `legends_create()` time
+- Subsequent API calls check thread ID and return `LEGENDS_ERR_WRONG_THREAD` if mismatched
+- This is a **deterministic error**, not undefined behavior
+
+```c
+// Thread A
+legends_create(NULL, &handle);  // Thread A becomes owner
+
+// Thread B (wrong thread)
+legends_step_ms(handle, 10, &result);  // Returns LEGENDS_ERR_WRONG_THREAD
+```
+
+**Contract gate:** `ContractGate_Threading::WrongThreadReturnsError`
 
 **Test:** `ContractGate_Threading::CoreIsSingleThreaded`
 **TLA+:** `ThreadingMinimal.tla` - `CoreSingleThreaded` invariant:
@@ -445,6 +486,8 @@ Core never calls `getenv()`, `chdir()`, or reads argv.
 
 ## Text Capture Specification
 
+**Purpose:** Enable deterministic golden-file testing across backends.
+
 ### Format
 
 ```c
@@ -454,51 +497,131 @@ typedef struct {
 } legends_text_cell_t;
 ```
 
-### Attribute Byte
+### Cell Layout
+
+- **Rows x Columns**: Source of truth is VGA CRTC registers
+- **Active Page**: Always captures the currently displayed page (no page selection API in v1)
+- **Cell Order**: Row-major, top-left origin (cell 0 = row 0, col 0)
+
+### Attribute Byte Layout
 
 ```
-Bit 7: Blink (if enabled) or high-intensity background
-Bits 6-4: Background color (0-7)
-Bits 3-0: Foreground color (0-15)
+┌───┬───────────┬───────────────┐
+│ 7 │  6  5  4  │  3  2  1  0   │
+├───┼───────────┼───────────────┤
+│ B │    BG     │      FG       │
+└───┴───────────┴───────────────┘
+
+B  = Blink enable (or high-intensity BG if blink disabled)
+BG = Background color (0-7)
+FG = Foreground color (0-15)
 ```
+
+### Color Palette
+
+| Index | Color | Index | Color |
+|-------|-------|-------|-------|
+| 0 | Black | 8 | Dark Gray |
+| 1 | Blue | 9 | Light Blue |
+| 2 | Green | 10 | Light Green |
+| 3 | Cyan | 11 | Light Cyan |
+| 4 | Red | 12 | Light Red |
+| 5 | Magenta | 13 | Light Magenta |
+| 6 | Brown | 14 | Yellow |
+| 7 | Light Gray | 15 | White |
 
 ### Codepage
 
 Always CP437 (DOS Latin US). No codepage selection in v1.
 
+### Blink vs Intensity
+
+Default: Blink enabled (bit 7 = blink). DOS programs may disable blink via
+INT 10h AH=10h AL=03h, making bit 7 = high-intensity background.
+
+The capture returns the raw attribute byte. Interpretation is caller's responsibility.
+
 ### Dimensions
 
-Standard modes:
-- 80x25 (default)
-- 80x43 (EGA)
-- 80x50 (VGA)
-- 40x25 (CGA)
+Source of truth: CRTC registers. Standard modes:
+
+| Mode | Columns | Rows | Notes |
+|------|---------|------|-------|
+| Text 80x25 | 80 | 25 | Default |
+| Text 80x43 | 80 | 43 | EGA |
+| Text 80x50 | 80 | 50 | VGA |
+| Text 40x25 | 40 | 25 | CGA |
+
+### Determinism Guarantee
+
+For identical emulator state, `capture_text()` returns identical bytes regardless
+of PAL backend (Headless, SDL2, SDL3).
 
 ---
 
 ## RGB Capture Specification
 
-### Format
+**Purpose:** Enable vision model input and screenshot comparison.
 
-RGB24: 3 bytes per pixel (R, G, B), no padding.
+### Pixel Format
+
+**RGB24**: 3 bytes per pixel, no alpha, no padding.
+
+```c
+// Byte layout per pixel:
+pixel[0] = R;  // Red   (0-255)
+pixel[1] = G;  // Green (0-255)
+pixel[2] = B;  // Blue  (0-255)
+```
+
+### Memory Layout
 
 ```c
 size_t size;
 uint16_t width, height;
 legends_capture_rgb(handle, NULL, 0, &size, &width, &height);
-// size = width * height * 3
+
+// Size calculation:
+assert(size == (size_t)width * height * 3);
+
+// Pitch (bytes per row):
+size_t pitch = width * 3;  // No padding between rows
+
+// Pixel access:
+uint8_t* pixel = buffer + (y * pitch) + (x * 3);
+uint8_t r = pixel[0], g = pixel[1], b = pixel[2];
 ```
 
-### Resolution
+### Origin and Order
 
-Pre-scaler resolution:
+- **Origin**: Top-left corner (0, 0)
+- **Order**: Row-major, left-to-right, top-to-bottom
+- **First pixel**: Top-left
+- **Last pixel**: Bottom-right
 
-| Video Mode | Capture Resolution |
-|------------|-------------------|
-| Text 80x25 | 640x400 |
-| Text 80x50 | 640x400 |
-| Mode 13h (320x200) | 320x200 |
-| Mode 12h (640x480) | 640x480 |
+### Resolution (Pre-Scaler)
+
+Captures the **pre-scaler** framebuffer (native VGA resolution before any
+host display scaling). The scaler is a PAL/presentation concern.
+
+| Video Mode | Capture Resolution | Notes |
+|------------|-------------------|-------|
+| Text 80x25 | 640x400 | 8x16 font |
+| Text 80x50 | 640x400 | 8x8 font |
+| Text 40x25 | 320x400 | 8x16 font |
+| Mode 13h | 320x200 | VGA 256-color |
+| Mode 12h | 640x480 | VGA 16-color |
+| Mode 03h (graphics) | 640x200 | CGA |
+
+### Palette Application
+
+VGA DAC palette is applied. Output is true-color RGB24 regardless of
+the VGA mode's color depth (16-color or 256-color modes are expanded).
+
+### Determinism Guarantee
+
+For identical emulator state, `capture_rgb()` returns identical bytes regardless
+of PAL backend (Headless, SDL2, SDL3).
 
 ---
 
@@ -559,6 +682,7 @@ Verified by `SaveStateTest.tla` with TLC model checking.
 | `LEGENDS_ERR_OUT_OF_MEMORY` | -11 | Memory allocation failed |
 | `LEGENDS_ERR_NOT_SUPPORTED` | -12 | Operation not supported |
 | `LEGENDS_ERR_INTERNAL` | -13 | Internal error |
+| `LEGENDS_ERR_WRONG_THREAD` | -14 | Called from non-owner thread |
 
 ### No Exceptions
 
