@@ -5,7 +5,7 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue)]()
 [![C++ Standard](https://img.shields.io/badge/C%2B%2B-23-blue)]()
-[![Tests](https://img.shields.io/badge/tests-120%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-1300%2B%20passing-brightgreen)]()
 
 ---
 
@@ -16,32 +16,75 @@ Project Legends is a modernized, embeddable x86 emulation framework designed for
 - **Deterministic Execution**: Bit-perfect reproducibility across runs
 - **LLM Integration**: Structured I/O optimized for language model interaction
 - **Vision Model Support**: Screen capture with semantic annotations
+- **Platform Abstraction**: Clean separation from SDL2/SDL3 via PAL layer
 - **Formal Verification**: TLA+ specifications for critical subsystems
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Host Application (Rust/Python/C++)           │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ (Stable C ABI)
-┌─────────────────────────────────────────────────────────────────┐
-│                    legends_embed.h (C API)                      │
-│   legends_step(), legends_capture_text(), legends_key_event()   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                 Legends Core (Modern C++23)                     │
-│   MachineContext, LLM Serializer, Vision Capture, Event Bus    │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ (Compile Firewall)
-┌─────────────────────────────────────────────────────────────────┐
-│               Legacy DOSBox-X Core (Minimal Patches)            │
-│                    CPU, Memory, Devices                         │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Host Application (Rust/Python/C++)                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ (Stable C ABI)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         legends_embed.h (C API)                              │
+│        legends_step(), legends_capture_text(), legends_key_event()           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+            ┌───────────────────────┴───────────────────────┐
+            ▼                                               ▼
+┌───────────────────────────────┐           ┌───────────────────────────────┐
+│   Legends Core (Modern C++23) │           │  Platform Abstraction Layer   │
+│  MachineContext, LLM Frame,   │           │           (PAL)               │
+│  Vision Capture, Event Bus    │           │  IWindow, IContext, IAudio,   │
+└───────────────────────────────┘           │  IHostClock, IInputSource     │
+            │                               └───────────────────────────────┘
+            │                                               │
+            │                               ┌───────────────┼───────────────┐
+            │                               ▼               ▼               ▼
+            │                         ┌──────────┐   ┌──────────┐   ┌──────────┐
+            │                         │ Headless │   │   SDL2   │   │   SDL3   │
+            │                         │ Backend  │   │ Backend  │   │ Backend  │
+            │                         └──────────┘   └──────────┘   └──────────┘
+            ▼ (Compile Firewall)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                  Legacy DOSBox-X Core (Minimal Patches)                      │
+│                         CPU, Memory, Devices                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Platform Abstraction Layer (PAL)
+
+The PAL provides a clean interface between the emulator and platform-specific code, enabling:
+
+- **SDL3 Migration**: Switch from SDL2 to SDL3 without touching core emulation
+- **Headless Operation**: Run without any display for testing and automation
+- **Multiple Backends**: Same code runs on SDL2, SDL3, or headless
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      PAL Interfaces (include/pal/)                           │
+├─────────────────┬─────────────────┬─────────────────┬───────────────────────┤
+│    IWindow      │    IContext     │   IAudioSink    │     IHostClock        │
+│  create/resize  │  software/GL    │   push samples  │   timing/sleep        │
+│  fullscreen     │  lock/unlock    │   pause/volume  │   (not emu time)      │
+│  display enum   │  swap buffers   │   queue status  │                       │
+├─────────────────┴─────────────────┴─────────────────┴───────────────────────┤
+│                            IInputSource                                      │
+│              poll events, mouse capture, relative mode                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        ▼                           ▼                           ▼
+┌───────────────────┐     ┌───────────────────┐     ┌───────────────────┐
+│     Headless      │     │       SDL2        │     │       SDL3        │
+├───────────────────┤     ├───────────────────┤     ├───────────────────┤
+│ In-memory buffers │     │ SDL_Window        │     │ SDL_Window (new)  │
+│ Virtual clock     │     │ SDL_Surface       │     │ SDL_Texture       │
+│ Event injection   │     │ SDL_AudioCallback │     │ SDL_AudioStream   │
+│ No dependencies   │     │ SDL_Event         │     │ SDL_EVENT_*       │
+└───────────────────┘     └───────────────────┘     └───────────────────┘
 ```
 
 ## Key Features
@@ -128,19 +171,28 @@ Full state serialization per TLA+ specification:
 - CMake 3.20+
 - C++23 compiler (GCC 13+, Clang 16+, MSVC 2022)
 - GoogleTest (fetched automatically)
+- SDL2 or SDL3 (optional, for GUI backends)
 
 ### Build Commands
 
 ```bash
-# Configure
-cmake -B build -DLEGENDS_BUILD_TESTS=ON -DLEGENDS_HEADLESS=ON
+# Headless only (no SDL required)
+cmake -B build -DLEGENDS_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build
 
-# Build
+# With SDL2 backend
+cmake -B build -DLEGENDS_BUILD_TESTS=ON -DPAL_BACKEND_SDL2=ON
 cmake --build build
 
-# Run tests
-./build/tests/legends_unit_tests
-./build/tests/legends_abi_test
+# With SDL3 backend
+cmake -B build -DLEGENDS_BUILD_TESTS=ON -DPAL_BACKEND_SDL3=ON
+cmake --build build
+
+# With benchmarks
+cmake -B build -DLEGENDS_BUILD_BENCHMARKS=ON
+cmake --build build
+./build/pal_benchmarks
 ```
 
 ### Build Options
@@ -148,8 +200,25 @@ cmake --build build
 | Option | Default | Description |
 |--------|---------|-------------|
 | `LEGENDS_BUILD_TESTS` | OFF | Build unit tests |
+| `LEGENDS_BUILD_BENCHMARKS` | OFF | Build performance benchmarks |
 | `LEGENDS_HEADLESS` | OFF | Headless mode (no GUI) |
 | `LEGENDS_LIBRARY_MODE` | OFF | Build as static library |
+| `PAL_BACKEND_HEADLESS` | ON | Build headless PAL backend |
+| `PAL_BACKEND_SDL2` | OFF | Build SDL2 PAL backend |
+| `PAL_BACKEND_SDL3` | OFF | Build SDL3 PAL backend |
+| `PAL_DEFAULT_BACKEND` | Headless | Default backend at runtime |
+
+### Backend Selection
+
+Only one SDL backend can be enabled per build (SDL2 or SDL3, not both). The headless backend is always available and can coexist with either SDL backend.
+
+```bash
+# SDL2 + Headless
+cmake -B build -DPAL_BACKEND_SDL2=ON -DPAL_BACKEND_HEADLESS=ON
+
+# SDL3 + Headless
+cmake -B build -DPAL_BACKEND_SDL3=ON -DPAL_BACKEND_HEADLESS=ON
+```
 
 ## API Reference
 
@@ -199,12 +268,16 @@ cmake --build build
 | `legends_get_state_hash()` | SHA-256 of observable state |
 | `legends_verify_determinism()` | Round-trip determinism test |
 
-### Introspection Functions
+### PAL Functions
 
 | Function | Description |
 |----------|-------------|
-| `legends_get_last_error()` | Get human-readable error message |
-| `legends_set_log_callback()` | Register log callback |
+| `pal::Platform::initialize()` | Initialize platform backend |
+| `pal::Platform::createWindow()` | Create platform window |
+| `pal::Platform::createContext()` | Create rendering context |
+| `pal::Platform::createAudioSink()` | Create audio output |
+| `pal::Platform::createHostClock()` | Create host timing source |
+| `pal::Platform::createInputSource()` | Create input handler |
 
 ## Error Codes
 
@@ -247,10 +320,10 @@ Obs(Deserialize(Serialize(S))) = Obs(S)
 
 ### Test Suites
 
-- **Unit Tests**: 120+ tests covering all API functions
+- **Unit Tests**: 1300+ tests covering all API functions
+- **PAL Tests**: Backend-specific integration tests
 - **ABI Tests**: Pure C compilation verification
 - **Fuzz Tests**: Random input stability testing
-- **Property Tests**: Invariant verification
 
 ### Running Tests
 
@@ -259,36 +332,48 @@ Obs(Deserialize(Serialize(S))) = Obs(S)
 ctest --test-dir build --output-on-failure
 
 # Unit tests only
-./build/tests/legends_unit_tests
+./build/legends_unit_tests
 
-# Specific test suite
-./build/tests/legends_unit_tests --gtest_filter="LegendsSaveStateTest*"
+# Specific backend tests
+./build/legends_unit_tests --gtest_filter="SDL2BackendTest*"
+./build/legends_unit_tests --gtest_filter="SDL3BackendTest*"
+
+# PAL tests only
+./build/legends_unit_tests --gtest_filter="Pal*"
 ```
 
 ### CI Pipeline
 
-- **fast-tests**: Unit tests on every PR
-- **asan-tests**: AddressSanitizer memory checking
-- **ubsan-tests**: UndefinedBehaviorSanitizer
-- **firewall-check**: Compile isolation verification
+- **headless-tests**: Headless backend on Ubuntu
+- **sdl2-tests**: SDL2 backend on Ubuntu
+- **sdl3-tests**: SDL3 backend (built from source)
+- **sdl-firewall**: Verify SDL headers isolated to PAL
+- **windows-build**: Windows headless build
 
 ## Project Structure
 
 ```
 ProjectLegends/
-├── include/legends/       # Public headers
-│   ├── legends_embed.h    # Main embeddable API
-│   ├── llm_frame.h        # LLM I/O structures
-│   ├── vision_*.h         # Vision capture
-│   └── ...
-├── src/legends/           # Implementation
-│   ├── legends_embed_api.cpp
-│   ├── llm_*.cpp
-│   ├── vision_*.cpp
-│   └── ...
-├── tests/                 # Test suite
-│   ├── unit/
-│   └── fixtures/
+├── include/
+│   ├── legends/           # Embeddable API headers
+│   │   ├── legends_embed.h
+│   │   ├── llm_frame.h
+│   │   └── vision_*.h
+│   └── pal/               # Platform Abstraction Layer
+│       ├── platform.h     # Backend factory
+│       ├── window.h       # Window interface
+│       ├── context.h      # Rendering context
+│       ├── audio_sink.h   # Audio output
+│       ├── host_clock.h   # Host timing
+│       └── input_source.h # Input events
+├── src/
+│   ├── legends/           # Core implementation
+│   └── pal/               # PAL backends
+│       ├── headless/      # In-memory backend
+│       ├── sdl2/          # SDL2 backend
+│       └── sdl3/          # SDL3 backend
+├── tests/unit/            # Unit tests
+├── benchmarks/            # Performance benchmarks
 ├── spec/tla/              # TLA+ specifications
 └── .github/workflows/     # CI configuration
 ```
@@ -309,6 +394,14 @@ We welcome contributions! Please see our contribution guidelines:
 - `gsl-lite` for contracts
 - Comprehensive documentation
 - TLA+ specs for critical changes
+
+### Adding a PAL Backend
+
+1. Create `src/pal/<backend>/` directory
+2. Implement all 5 interfaces + platform init
+3. Add CMake option `PAL_BACKEND_<NAME>`
+4. Add tests in `tests/unit/test_pal_<backend>_*.cpp`
+5. Update CI workflow
 
 ## License
 
