@@ -533,6 +533,45 @@ if(LEGENDS_BUILD_BENCHMARKS)
 endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Main Executable
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Build the interactive emulator executable when SDL2 is available
+if(PAL_BACKEND_SDL2)
+    add_executable(project_legends
+        src/main.cpp
+    )
+
+    legends_set_strict_cxx_standard(project_legends)
+
+    target_include_directories(project_legends PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/include
+    )
+
+    target_link_directories(project_legends PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/lib
+    )
+
+    target_link_libraries(project_legends PRIVATE
+        legends_core
+        legends_pal
+        mingw32
+        SDL2main
+        SDL2
+    )
+
+    # Copy SDL2.dll to output directory
+    add_custom_command(TARGET project_legends POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/bin/SDL2.dll"
+            "$<TARGET_FILE_DIR:project_legends>"
+    )
+
+    message(STATUS "Building project_legends executable with SDL2")
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Installation
 # ─────────────────────────────────────────────────────────────────────────────
 

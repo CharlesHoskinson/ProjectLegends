@@ -505,7 +505,7 @@ Result<void> DOSBoxContext::initialize() {
     input.reset();
 
     // Apply configuration
-    cpu_state.cycles_limit = config_.cpu_cycles;
+    cpu_state.cycle_limit = config_.cpu_cycles;
     mixer.enabled = config_.sound_enabled;
 
     // TODO: In future PRs, this will initialize actual DOSBox subsystems
@@ -523,7 +523,7 @@ Result<uint32_t> DOSBoxContext::step(uint32_t ms) {
     }
 
     if (stop_requested_.load(std::memory_order_acquire)) {
-        return Err(Error(ErrorCode::Cancelled, "Stop requested"));
+        return Err(Error(ErrorCode::InvalidState, "Stop requested"));
     }
 
     // Calculate cycles for this step
@@ -588,7 +588,7 @@ Result<void> DOSBoxContext::reset() {
     input.reset();
 
     // Reapply configuration
-    cpu_state.cycles_limit = config_.cpu_cycles;
+    cpu_state.cycle_limit = config_.cpu_cycles;
     mixer.enabled = config_.sound_enabled;
 
     stop_requested_ = false;

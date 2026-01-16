@@ -428,9 +428,11 @@ void MAPPER_Check() {
  * Returns virtual ticks instead of wall-clock time.
  * This makes emulation fully deterministic.
  *
+ * Note: Marked weak so real SDL2 symbols override when linked.
+ *
  * @return Current virtual tick count (milliseconds)
  */
-uint32_t SDL_GetTicks() {
+__attribute__((weak)) uint32_t SDL_GetTicks() {
     uint64_t ticks = aibox::headless::GetTicks();
     // Wrap at 32-bit boundary like real SDL_GetTicks
     return static_cast<uint32_t>(ticks & 0xFFFFFFFF);
@@ -442,9 +444,11 @@ uint32_t SDL_GetTicks() {
  * In deterministic mode (default), this is a no-op.
  * If a non-deterministic timing provider is set, it will actually delay.
  *
+ * Note: Marked weak so real SDL2 symbols override when linked.
+ *
  * @param ms Milliseconds to delay
  */
-void SDL_Delay(uint32_t ms) {
+__attribute__((weak)) void SDL_Delay(uint32_t ms) {
     auto* provider = aibox::headless::GetTimingProvider();
     if (provider && !provider->is_deterministic()) {
         // Non-deterministic timing - actually delay

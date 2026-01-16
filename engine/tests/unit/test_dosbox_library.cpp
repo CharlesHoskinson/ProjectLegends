@@ -366,3 +366,155 @@ TEST(DOSBoxLibrarySingleInstanceTest, CanCreateAfterDestroy) {
     // Cleanup
     dosbox_lib_destroy(handle);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Sprint 2 Phase 1: Context-Free Operation Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#include "dosbox/dosbox_context.h"
+#include "dosbox/state_hash.h"
+
+class Sprint2Phase1Test : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Ensure no thread-local context leaks from previous tests
+        dosbox::set_current_context(nullptr);
+
+        auto err = dosbox_lib_create(nullptr, &handle_);
+        ASSERT_EQ(err, DOSBOX_LIB_OK);
+        err = dosbox_lib_init(handle_);
+        ASSERT_EQ(err, DOSBOX_LIB_OK);
+    }
+
+    void TearDown() override {
+        if (handle_) {
+            dosbox_lib_destroy(handle_);
+            handle_ = nullptr;
+        }
+        // Clean up thread-local context
+        dosbox::set_current_context(nullptr);
+    }
+
+    dosbox_lib_handle_t handle_ = nullptr;
+};
+
+TEST_F(Sprint2Phase1Test, StepWithoutThreadLocalContext) {
+    // Verify no thread-local context is set
+    ASSERT_FALSE(dosbox::has_current_context());
+
+    // Step should work without thread-local context
+    dosbox_lib_step_result_t result = {};
+    auto err = dosbox_lib_step_cycles(handle_, 1000, &result);
+
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+    EXPECT_GT(result.cycles_executed, 0u);
+
+    // Thread-local context should still be empty after step
+    EXPECT_FALSE(dosbox::has_current_context());
+}
+
+TEST_F(Sprint2Phase1Test, GetHashWithoutThreadLocalContext) {
+    // Verify no thread-local context is set
+    ASSERT_FALSE(dosbox::has_current_context());
+
+    // Hash should work without thread-local context
+    uint8_t hash[32] = {0};
+    auto err = dosbox_lib_get_state_hash(handle_, hash);
+
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+
+    // Verify non-zero hash
+    bool all_zero = true;
+    for (int i = 0; i < 32; ++i) {
+        if (hash[i] != 0) {
+            all_zero = false;
+            break;
+        }
+    }
+    EXPECT_FALSE(all_zero);
+}
+
+TEST_F(Sprint2Phase1Test, StepThenHashWithoutThreadLocalContext) {
+    ASSERT_FALSE(dosbox::has_current_context());
+
+    // Get initial hash
+    uint8_t hash1[32] = {0};
+    dosbox_lib_get_state_hash(handle_, hash1);
+
+    // Step
+    dosbox_lib_step_cycles(handle_, 5000, nullptr);
+
+    // Get hash after step
+    uint8_t hash2[32] = {0};
+    dosbox_lib_get_state_hash(handle_, hash2);
+
+    // Hashes should differ (state changed)
+    bool same = true;
+    for (int i = 0; i < 32; ++i) {
+        if (hash1[i] != hash2[i]) {
+            same = false;
+            break;
+        }
+    }
+    EXPECT_FALSE(same);
+
+    // Thread-local context should remain empty
+    EXPECT_FALSE(dosbox::has_current_context());
+}
+
+TEST_F(Sprint2Phase1Test, MultipleStepsWithoutThreadLocalContext) {
+    ASSERT_FALSE(dosbox::has_current_context());
+
+    uint64_t total_cycles = 0;
+
+    // Multiple steps should all work
+    for (int i = 0; i < 10; ++i) {
+        dosbox_lib_step_result_t result = {};
+        auto err = dosbox_lib_step_cycles(handle_, 1000, &result);
+        EXPECT_EQ(err, DOSBOX_LIB_OK);
+        total_cycles += result.cycles_executed;
+    }
+
+    EXPECT_EQ(total_cycles, 10000u);
+
+    // Thread-local context should remain empty throughout
+    EXPECT_FALSE(dosbox::has_current_context());
+}
+
+TEST_F(Sprint2Phase1Test, DeterministicHashingWithoutThreadLocalContext) {
+    ASSERT_FALSE(dosbox::has_current_context());
+
+    // Get hash twice in a row without stepping
+    uint8_t hash1[32] = {0};
+    uint8_t hash2[32] = {0};
+
+    dosbox_lib_get_state_hash(handle_, hash1);
+    dosbox_lib_get_state_hash(handle_, hash2);
+
+    // Should be identical (deterministic)
+    for (int i = 0; i < 32; ++i) {
+        EXPECT_EQ(hash1[i], hash2[i]);
+    }
+}
+
+TEST_F(Sprint2Phase1Test, InitDestroyWithoutThreadLocalContextLeak) {
+    // Destroy current handle
+    dosbox_lib_destroy(handle_);
+    handle_ = nullptr;
+
+    // Thread-local context should not be set after destroy
+    EXPECT_FALSE(dosbox::has_current_context());
+
+    // Create new instance
+    auto err = dosbox_lib_create(nullptr, &handle_);
+    ASSERT_EQ(err, DOSBOX_LIB_OK);
+
+    // Thread-local context should not be set after create
+    EXPECT_FALSE(dosbox::has_current_context());
+
+    err = dosbox_lib_init(handle_);
+    ASSERT_EQ(err, DOSBOX_LIB_OK);
+
+    // Thread-local context should not be set after init (Sprint 2 Phase 1)
+    EXPECT_FALSE(dosbox::has_current_context());
+}

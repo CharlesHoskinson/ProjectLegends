@@ -30,6 +30,7 @@
 
 #include <cstdint>
 #include <chrono>
+#include <thread>
 
 namespace dosbox {
 namespace platform {

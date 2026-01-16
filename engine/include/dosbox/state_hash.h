@@ -118,11 +118,31 @@ enum class HashMode {
  */
 using StateHash = std::array<uint8_t, DOSBOX_HASH_SIZE>;
 
+// Forward declaration
+class DOSBoxContext;
+
 /**
- * @brief Compute hash of current emulator state.
+ * @brief Compute hash of emulator state from explicit context.
+ *
+ * This is the preferred API - takes context explicitly rather than
+ * using thread-local current_context().
+ *
+ * @param ctx   DOSBox context to hash (must not be null)
+ * @param mode  Hash mode
+ * @return      Result containing hash or error
+ */
+[[nodiscard]] Result<StateHash> get_state_hash(DOSBoxContext* ctx, HashMode mode = HashMode::Fast);
+
+/**
+ * @brief Compute hash of current emulator state (transitional API).
+ *
+ * Uses thread-local current_context(). Prefer get_state_hash(ctx, mode)
+ * for new code. This overload is retained for test compatibility.
  *
  * @param mode  Hash mode
  * @return      Result containing hash or error
+ *
+ * @deprecated Use get_state_hash(DOSBoxContext*, HashMode) instead
  */
 [[nodiscard]] Result<StateHash> get_state_hash(HashMode mode = HashMode::Fast);
 

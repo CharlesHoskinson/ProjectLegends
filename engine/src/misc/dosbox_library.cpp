@@ -201,8 +201,8 @@ dosbox_lib_error_t dosbox_lib_init(dosbox_lib_handle_t handle) {
         // Initialize the context
         g_context->initialize();
 
-        // Set as current context to wire up platform providers
-        dosbox::set_current_context(g_context.get());
+        // Sprint 2 Phase 1: No longer set thread-local context
+        // Platform providers are wired directly through the context
 
         LIB_LOG_INFO("DOSBox-X library instance initialized");
         return DOSBOX_LIB_OK;
@@ -221,10 +221,8 @@ dosbox_lib_error_t dosbox_lib_destroy(dosbox_lib_handle_t handle) {
 
     LIB_LOG_INFO("Destroying DOSBox-X library instance");
 
-    // Clear current context
-    dosbox::set_current_context(nullptr);
-
-    // Shutdown and destroy
+    // Sprint 2 Phase 1: No thread-local context to clear
+    // Shutdown and destroy context directly
     if (g_context) {
         g_context->shutdown();
         g_context.reset();
@@ -273,8 +271,9 @@ dosbox_lib_error_t dosbox_lib_step_cycles(
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
     try {
-        // Ensure context is current for platform providers
-        dosbox::ContextGuard guard(*g_context);
+        // Sprint 2 Phase 1: Operate directly on context without thread-local state
+        // No ContextGuard needed - platform providers accessed via context directly
+        auto* ctx = g_context.get();
 
         uint64_t cycles_executed = 0;
         uint32_t events_processed = 0;
@@ -288,12 +287,12 @@ dosbox_lib_error_t dosbox_lib_step_cycles(
             uint64_t batch = remaining < batch_size ? remaining : batch_size;
 
             // Check for stop conditions
-            if (g_context->is_halted()) {
+            if (ctx->cpu_state.halted) {
                 stop_reason = DOSBOX_LIB_STOP_HALT;
                 break;
             }
 
-            if (g_context->stop_requested()) {
+            if (ctx->stop_requested()) {
                 stop_reason = DOSBOX_LIB_STOP_COMPLETED;
                 break;
             }
@@ -390,9 +389,13 @@ dosbox_lib_error_t dosbox_lib_get_state_hash(
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
     try {
-        // Use the state hash API from PR #7
-        auto hash = dosbox::compute_state_hash(*g_context);
-        std::copy(hash.bytes.begin(), hash.bytes.end(), hash_out);
+        // Sprint 2 Phase 1: Use explicit context API
+        auto result = dosbox::get_state_hash(g_context.get(), dosbox::HashMode::Fast);
+        if (!result.has_value()) {
+            g_last_error = result.error().message();
+            return DOSBOX_LIB_ERR_INTERNAL;
+        }
+        std::copy(result.value().begin(), result.value().end(), hash_out);
         return DOSBOX_LIB_OK;
 
     } catch (const std::exception& e) {

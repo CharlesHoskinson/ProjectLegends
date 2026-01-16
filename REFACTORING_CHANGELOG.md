@@ -455,3 +455,56 @@ Same binary + same OS + same CPU + same inputs = **identical state hashes**
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+---
+
+## Sprint 2: Instance Reality
+
+### PR #24: Sprint 2 Phase 1 - Eliminate current_context() from Production
+**Commit:** `pending`
+**Date:** 2026-01-15
+**Files:**
+- `include/dosbox/state_hash.h` - Added explicit context API
+- `src/misc/state_hash.cpp` - Implemented context-aware hashing
+- `src/misc/dosbox_library.cpp` - Removed thread-local context usage
+- `include/dosbox/error_model.h` - Added `ErrorCode::Cancelled`, fixed declarations
+- `include/dosbox/platform/timing.h` - Added missing `#include <thread>`
+- `include/dosbox/platform/headless.h` - Fixed PlatformBackend include, BufferAudio assignment
+- `cmake/CompileFirewall.cmake` - Created SDL compile firewall module
+- `tests/unit/test_dosbox_state_hash.cpp` - Added explicit context API tests
+- `tests/unit/test_dosbox_library.cpp` - Added context-free operation E2E tests
+
+**Key Changes:**
+
+| Component | Before | After |
+|-----------|--------|-------|
+| `get_state_hash()` | Uses `current_context()` | Takes explicit `DOSBoxContext*` parameter |
+| `dosbox_lib_init()` | Sets thread-local context | No thread-local manipulation |
+| `dosbox_lib_destroy()` | Clears thread-local context | No thread-local manipulation |
+| `dosbox_lib_step_cycles()` | Uses `ContextGuard` | Operates on context directly |
+| `dosbox_lib_get_state_hash()` | Called undefined function | Uses new explicit API |
+
+**New APIs:**
+```cpp
+// Primary API - explicit context (preferred)
+Result<StateHash> get_state_hash(DOSBoxContext* ctx, HashMode mode = HashMode::Fast);
+
+// Transitional API - uses thread-local (deprecated, for test compatibility)
+Result<StateHash> get_state_hash(HashMode mode = HashMode::Fast);
+```
+
+**Test Coverage Added:**
+- 9 unit tests for explicit context state hashing
+- 6 E2E tests for context-free library operation
+
+**Bug Fixes:**
+- Added missing `#include <thread>` in `timing.h`
+- Added missing `#include "platform.h"` in `headless.h`
+- Fixed `BufferAudio` copy assignment (made non-copyable, added constructor)
+- Fixed `current_context()` declaration conflict between `error_model.h` and `dosbox_context.h`
+- Added `ErrorCode::Cancelled` (was referenced but not defined)
+- Created missing `cmake/CompileFirewall.cmake`
+
+**Contract Progression:**
+- V1 single-instance: ✅ Production code no longer relies on thread-local context
+- V2 sequential instances: 🔜 Next phases will complete global migration
+

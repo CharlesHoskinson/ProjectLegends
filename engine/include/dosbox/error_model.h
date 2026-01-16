@@ -86,6 +86,7 @@ typedef enum dosbox_error_code {
     DOSBOX_ERR_INVALID_HANDLE = 501,
     DOSBOX_ERR_BUFFER_TOO_SMALL = 502,
     DOSBOX_ERR_EXCEPTION = 503,
+    DOSBOX_ERR_CANCELLED = 504,
 
     /* Fatal errors (900-999) */
     DOSBOX_ERR_PANIC = 900,
@@ -180,6 +181,7 @@ enum class ErrorCode : int {
     InvalidHandle = DOSBOX_ERR_INVALID_HANDLE,
     BufferTooSmall = DOSBOX_ERR_BUFFER_TOO_SMALL,
     Exception = DOSBOX_ERR_EXCEPTION,
+    Cancelled = DOSBOX_ERR_CANCELLED,
 
     Panic = DOSBOX_ERR_PANIC,
     Trap = DOSBOX_ERR_TRAP,
@@ -301,7 +303,9 @@ enum class ContextState {
 
 // Forward declaration - implemented in context module
 class DOSBoxContext;
-DOSBoxContext* current_context() noexcept;
+// Note: current_context() returns reference, see dosbox_context.h
+// Use current_context_ptr() for nullable pointer access
+DOSBoxContext* current_context_ptr() noexcept;
 void set_context_state(DOSBoxContext* ctx, ContextState state) noexcept;
 ContextState get_context_state(DOSBoxContext* ctx) noexcept;
 

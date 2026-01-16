@@ -217,7 +217,16 @@ StateHash HashBuilder::finalize() {
 // State Hashing Functions
 // ═══════════════════════════════════════════════════════════════════════════════
 
-Result<StateHash> get_state_hash(HashMode mode) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Primary API: Explicit context parameter (Sprint 2 Phase 1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+Result<StateHash> get_state_hash(DOSBoxContext* ctx, HashMode mode) {
+    // Validate context
+    if (!ctx) {
+        return Err(Error(ErrorCode::InvalidArgument, "get_state_hash: null context"));
+    }
+
     HashBuilder builder;
 
     // Version marker for hash stability
@@ -229,58 +238,50 @@ Result<StateHash> get_state_hash(HashMode mode) {
     const uint32_t mode_marker = static_cast<uint32_t>(mode);
     builder.update(mode_marker);
 
-    // If we have a current context, hash its state
-    if (has_current_context()) {
-        auto& ctx = current_context();
+    // Hash context state
+    // ─────────────────────────────────────────────────────────────────────
+    // Timing State (PR #10)
+    // ─────────────────────────────────────────────────────────────────────
+    ctx->timing.hash_into(builder);
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Timing State (PR #10)
-        // ─────────────────────────────────────────────────────────────────────
-        ctx.timing.hash_into(builder);
+    // ─────────────────────────────────────────────────────────────────────
+    // CPU State (PR #11)
+    // ─────────────────────────────────────────────────────────────────────
+    ctx->cpu_state.hash_into(builder);
 
-        // ─────────────────────────────────────────────────────────────────────
-        // CPU State (PR #11)
-        // ─────────────────────────────────────────────────────────────────────
-        ctx.cpu_state.hash_into(builder);
+    // ─────────────────────────────────────────────────────────────────────
+    // Mixer State (PR #12)
+    // ─────────────────────────────────────────────────────────────────────
+    ctx->mixer.hash_into(builder);
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Mixer State (PR #12)
-        // ─────────────────────────────────────────────────────────────────────
-        ctx.mixer.hash_into(builder);
+    // ─────────────────────────────────────────────────────────────────────
+    // VGA State (PR #13)
+    // ─────────────────────────────────────────────────────────────────────
+    ctx->vga.hash_into(builder);
 
-        // ─────────────────────────────────────────────────────────────────────
-        // VGA State (PR #13)
-        // ─────────────────────────────────────────────────────────────────────
-        ctx.vga.hash_into(builder);
+    // ─────────────────────────────────────────────────────────────────────
+    // PIC State (PR #14)
+    // ─────────────────────────────────────────────────────────────────────
+    ctx->pic.hash_into(builder);
 
-        // ─────────────────────────────────────────────────────────────────────
-        // PIC State (PR #14)
-        // ─────────────────────────────────────────────────────────────────────
-        ctx.pic.hash_into(builder);
+    // ─────────────────────────────────────────────────────────────────────
+    // Keyboard State (PR #14)
+    // ─────────────────────────────────────────────────────────────────────
+    ctx->keyboard.hash_into(builder);
 
-        // ─────────────────────────────────────────────────────────────────────
-        // Keyboard State (PR #14)
-        // ─────────────────────────────────────────────────────────────────────
-        ctx.keyboard.hash_into(builder);
-
-        // ─────────────────────────────────────────────────────────────────────
-        // Input Capture State (PR #14)
-        // ─────────────────────────────────────────────────────────────────────
-        ctx.input.hash_into(builder);
-
-    } else {
-        // No context available - use placeholder
-        const char* no_ctx = "NO_CONTEXT";
-        builder.update(no_ctx, std::strlen(no_ctx));
-    }
+    // ─────────────────────────────────────────────────────────────────────
+    // Input Capture State (PR #14)
+    // ─────────────────────────────────────────────────────────────────────
+    ctx->input.hash_into(builder);
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Placeholder for Future State (PIC, Memory, etc.)
+    // Placeholder for Future State (Memory, DOS, etc.)
     // ─────────────────────────────────────────────────────────────────────────
 
     // Fast mode will hash (future PRs):
-    // - PIC state (IRQ masks, pending interrupts)
-    // - PIT counters
+    // - Memory state
+    // - DOS state
+    // - DMA controllers
 
     // Placeholder marker for state not yet migrated
     const char* placeholder = "STATE_HASH_V6";
@@ -290,6 +291,41 @@ Result<StateHash> get_state_hash(HashMode mode) {
     // - All conventional memory
     // - VGA registers and VRAM
     // - All device states
+    if (mode == HashMode::Full) {
+        const char* full_marker = "FULL_MODE";
+        builder.update(full_marker, std::strlen(full_marker));
+    }
+
+    return Ok(builder.finalize());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Transitional API: Uses thread-local current_context() (deprecated)
+// Retained for test compatibility during migration
+// ─────────────────────────────────────────────────────────────────────────────
+
+Result<StateHash> get_state_hash(HashMode mode) {
+    // Use current context if available
+    if (has_current_context()) {
+        return get_state_hash(&current_context(), mode);
+    }
+
+    // No context - return placeholder hash for backward compatibility
+    HashBuilder builder;
+
+    const uint32_t hash_version = 6;
+    builder.update(hash_version);
+
+    const uint32_t mode_marker = static_cast<uint32_t>(mode);
+    builder.update(mode_marker);
+
+    // No context available - use placeholder
+    const char* no_ctx = "NO_CONTEXT";
+    builder.update(no_ctx, std::strlen(no_ctx));
+
+    const char* placeholder = "STATE_HASH_V6";
+    builder.update(placeholder, std::strlen(placeholder));
+
     if (mode == HashMode::Full) {
         const char* full_marker = "FULL_MODE";
         builder.update(full_marker, std::strlen(full_marker));

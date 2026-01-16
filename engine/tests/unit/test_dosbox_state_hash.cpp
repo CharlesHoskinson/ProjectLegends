@@ -241,3 +241,121 @@ TEST(HashToHexTest, MixedBytes) {
     std::string hex = hash_to_hex(hash);
     EXPECT_TRUE(hex.starts_with("0123456789abcdef"));
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Sprint 2 Phase 1: Explicit Context API Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#include "dosbox/dosbox_context.h"
+
+class ExplicitContextHashTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        ctx_ = std::make_unique<DOSBoxContext>();
+    }
+
+    void TearDown() override {
+        ctx_.reset();
+    }
+
+    std::unique_ptr<DOSBoxContext> ctx_;
+};
+
+TEST_F(ExplicitContextHashTest, NullContextReturnsError) {
+    auto result = get_state_hash(nullptr, HashMode::Fast);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().code(), ErrorCode::InvalidArgument);
+}
+
+TEST_F(ExplicitContextHashTest, ValidContextProducesHash) {
+    auto result = get_state_hash(ctx_.get(), HashMode::Fast);
+
+    ASSERT_TRUE(result.has_value());
+    std::string hex = hash_to_hex(result.value());
+    EXPECT_EQ(hex.size(), 64u);
+}
+
+TEST_F(ExplicitContextHashTest, ExplicitContextMatchesTransitionalApi) {
+    // Set up thread-local context for transitional API
+    set_current_context(ctx_.get());
+
+    auto explicit_result = get_state_hash(ctx_.get(), HashMode::Fast);
+    auto transitional_result = get_state_hash(HashMode::Fast);
+
+    set_current_context(nullptr);
+
+    ASSERT_TRUE(explicit_result.has_value());
+    ASSERT_TRUE(transitional_result.has_value());
+
+    // Both should produce identical hashes for the same context
+    EXPECT_EQ(explicit_result.value(), transitional_result.value());
+}
+
+TEST_F(ExplicitContextHashTest, DifferentContextsProduceDifferentHashes) {
+    auto ctx2 = std::make_unique<DOSBoxContext>();
+
+    // Modify one context to ensure different state
+    ctx_->timing.total_cycles = 1000;
+    ctx2->timing.total_cycles = 2000;
+
+    auto hash1 = get_state_hash(ctx_.get(), HashMode::Fast);
+    auto hash2 = get_state_hash(ctx2.get(), HashMode::Fast);
+
+    ASSERT_TRUE(hash1.has_value());
+    ASSERT_TRUE(hash2.has_value());
+
+    // Different state should produce different hashes
+    EXPECT_NE(hash1.value(), hash2.value());
+}
+
+TEST_F(ExplicitContextHashTest, SameStateSameHash) {
+    auto ctx2 = std::make_unique<DOSBoxContext>();
+
+    // Both contexts start with identical default state
+    auto hash1 = get_state_hash(ctx_.get(), HashMode::Fast);
+    auto hash2 = get_state_hash(ctx2.get(), HashMode::Fast);
+
+    ASSERT_TRUE(hash1.has_value());
+    ASSERT_TRUE(hash2.has_value());
+
+    // Same state should produce same hash (determinism)
+    EXPECT_EQ(hash1.value(), hash2.value());
+}
+
+TEST_F(ExplicitContextHashTest, FastAndFullModesDifferWithExplicitContext) {
+    auto fast = get_state_hash(ctx_.get(), HashMode::Fast);
+    auto full = get_state_hash(ctx_.get(), HashMode::Full);
+
+    ASSERT_TRUE(fast.has_value());
+    ASSERT_TRUE(full.has_value());
+
+    EXPECT_NE(fast.value(), full.value());
+}
+
+TEST_F(ExplicitContextHashTest, StateChangeChangesHash) {
+    auto hash_before = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_before.has_value());
+
+    // Modify state
+    ctx_->cpu_state.cycles = 12345;
+
+    auto hash_after = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_after.has_value());
+
+    EXPECT_NE(hash_before.value(), hash_after.value());
+}
+
+// Test that explicit context API works without thread-local context set
+TEST_F(ExplicitContextHashTest, WorksWithoutThreadLocalContext) {
+    // Ensure no thread-local context is set
+    set_current_context(nullptr);
+    ASSERT_FALSE(has_current_context());
+
+    // Explicit API should still work
+    auto result = get_state_hash(ctx_.get(), HashMode::Fast);
+
+    ASSERT_TRUE(result.has_value());
+    std::string hex = hash_to_hex(result.value());
+    EXPECT_EQ(hex.size(), 64u);
+}

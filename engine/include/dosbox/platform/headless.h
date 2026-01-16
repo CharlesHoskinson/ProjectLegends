@@ -23,6 +23,7 @@
 #include "dosbox/platform/audio.h"
 #include "dosbox/platform/input.h"
 #include "dosbox/platform/timing.h"
+#include "dosbox/platform/platform.h"
 
 #include <vector>
 #include <mutex>
@@ -291,6 +292,24 @@ struct HeadlessBackend {
     VirtualTiming timing;
 
     /**
+     * @brief Construct with specified audio buffer duration.
+     */
+    explicit HeadlessBackend(float audio_buffer_seconds = 1.0f)
+        : display()
+        , audio(audio_buffer_seconds)
+        , input()
+        , timing()
+    {}
+
+    // Non-copyable due to mutex/atomic in BufferAudio
+    HeadlessBackend(const HeadlessBackend&) = delete;
+    HeadlessBackend& operator=(const HeadlessBackend&) = delete;
+
+    // Movable
+    HeadlessBackend(HeadlessBackend&&) = default;
+    HeadlessBackend& operator=(HeadlessBackend&&) = default;
+
+    /**
      * @brief Get as PlatformBackend for use with DOSBox.
      */
     PlatformBackend as_platform_backend() {
@@ -322,9 +341,7 @@ struct HeadlessBackend {
 inline std::unique_ptr<HeadlessBackend> make_headless_backend(
     float audio_buffer_seconds = 1.0f)
 {
-    auto backend = std::make_unique<HeadlessBackend>();
-    backend->audio = BufferAudio(audio_buffer_seconds);
-    return backend;
+    return std::make_unique<HeadlessBackend>(audio_buffer_seconds);
 }
 
 } // namespace platform
