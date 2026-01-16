@@ -1,0 +1,32 @@
+{
+  "phase_id": "SPRINT2-P07",
+  "phase_name": "Memory Completion Migration",
+  "dependencies": ["SPRINT2-P06"],
+
+  "structures": {
+    "MemoryState": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "members": {
+        "base": {"type": "uint8_t*", "required": true}
+      }
+    }
+  },
+
+  "globals_to_remove": [
+    {
+      "name": "MemBase",
+      "file": "engine/src/hardware/memory.cpp",
+      "line_pattern": "HostPt MemBase"
+    },
+    {
+      "name": "memory",
+      "file": "engine/src/hardware/memory.cpp",
+      "line_pattern": "static struct MemoryBlock memory"
+    }
+  ],
+
+  "tests": {
+    "unit": ["TEST-P07-U01", "TEST-P07-U02", "TEST-P07-U03", "TEST-P07-U04", "TEST-P07-U05"],
+    "integration": ["TEST-P07-I01", "TEST-P07-I02"]
+  }
+}

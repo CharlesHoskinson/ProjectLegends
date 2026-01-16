@@ -216,6 +216,16 @@ extern bool force_conversion;
 extern bool VIDEO_BIOS_always_carry_14_high_font;
 extern bool VIDEO_BIOS_always_carry_16_high_font;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Memory Block Structure (Sprint 2 Phase 7)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// In library mode, the memory struct is file-local. The canonical state lives in
+// DOSBoxContext.memory. Functions use MEM_SyncFromContext/MEM_SyncToContext
+// for multi-instance support.
+//
+// In non-library mode, the memory struct is a traditional global.
+
 static struct MemoryBlock {
     Bitu pages = 0;
     Bitu handler_pages = 0;
@@ -279,8 +289,12 @@ uint32_t MEM_get_address_bits4GB(dosbox::DOSBoxContext* ctx) {
  *          is a different block. The reason for this is that the gap that needs to be left open for PCI devices and the ROM BIOS is
  *          large enough that such an arrangement would lead to the waste of about 64MB of emulator memory, which is significant, while
  *          the 384KB wasted at the 8086 1MB limit is too small to worry about. */
+#ifndef DOSBOX_LIBRARY_MODE
+// Non-library mode: traditional globals
 HostPt MemBase = NULL;
 size_t MemSize = 0;
+#endif
+// Library mode: MemBase/MemSize are macros in mem.h accessing context
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Library Mode Memory Management (Sprint 2 Phase 2)
@@ -348,18 +362,6 @@ bool MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t size_kb) {
     ctx->memory.phandlers = phandlers;
     ctx->memory.mhandles = mhandles;
 
-    // Update globals for backward compatibility
-    MemBase = mem;
-    MemSize = alloc_size;
-
-    // Sync global memory struct with context
-    memory.pages = pages;
-    memory.handler_pages = handler_pages;
-    memory.reported_pages = pages;
-    memory.address_bits = ctx->memory.address_bits;
-    memory.a20.enabled = ctx->memory.a20.enabled;
-    memory.a20.controlport = ctx->memory.a20.controlport;
-
     return true;
 }
 
@@ -383,12 +385,6 @@ void MEM_FreeForContext(dosbox::DOSBoxContext* ctx) {
     if (ctx->memory.mhandles) {
         delete[] ctx->memory.mhandles;
         ctx->memory.mhandles = nullptr;
-    }
-
-    // Clear globals if they pointed to this context's memory
-    if (MemBase == ctx->memory.base) {
-        MemBase = nullptr;
-        MemSize = 0;
     }
 
     // Free main memory last
