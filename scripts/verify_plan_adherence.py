@@ -80,7 +80,8 @@ class PlanVerifier:
 
         # Look for the member (variable or method)
         # Match: type member_name; or type member_name(...) or type member_name[...]
-        pattern = rf'\b{member_name}\s*[\[\(;]'
+        # Also match: type member_name = value; (default initializers)
+        pattern = rf'\b{member_name}\s*[\[\(;=]'
         return re.search(pattern, struct_body)
 
     def _find_global(self, content: str, pattern: str) -> Optional[re.Match]:

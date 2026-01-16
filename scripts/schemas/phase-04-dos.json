@@ -1,0 +1,50 @@
+{
+  "phase_id": "SPRINT2-P04",
+  "phase_name": "DOS Block Migration",
+  "dependencies": ["SPRINT2-P02", "SPRINT2-P03"],
+
+  "structures": {
+    "DosState": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "type": "struct",
+      "members": {
+        "kernel_disabled": {"type": "bool", "required": true},
+        "kernel_running": {"type": "bool", "required": true},
+        "psp_segment": {"type": "uint16_t", "required": true},
+        "dta_segment": {"type": "uint16_t", "required": true},
+        "dta_offset": {"type": "uint16_t", "required": true},
+        "version": {"type": "struct", "required": true},
+        "current_drive": {"type": "uint8_t", "required": true},
+        "verify": {"type": "uint8_t", "required": true},
+        "return_code": {"type": "uint8_t", "required": true},
+        "return_mode": {"type": "bool", "required": true},
+        "country": {"type": "uint16_t", "required": true},
+        "codepage": {"type": "uint16_t", "required": true},
+        "psp_address": {"type": "method", "returns": "uint32_t", "const": true},
+        "dta_address": {"type": "method", "returns": "uint32_t", "const": true},
+        "reset": {"type": "method", "returns": "void", "noexcept": true},
+        "hash_into": {"type": "method", "args": ["HashBuilder&"], "returns": "void", "const": true}
+      }
+    }
+  },
+
+  "context_additions": {
+    "DOSBoxContext": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "new_members": {
+        "dos": {"type": "DosState", "required": true}
+      }
+    }
+  },
+
+  "state_hash_additions": {
+    "file": "engine/src/misc/state_hash.cpp",
+    "required_call": "ctx->dos.hash_into(builder)"
+  },
+
+  "tests": {
+    "unit": ["TEST-P04-U01", "TEST-P04-U02", "TEST-P04-U03", "TEST-P04-U04", "TEST-P04-U05", "TEST-P04-U06"],
+    "integration": ["TEST-P04-I01", "TEST-P04-I02", "TEST-P04-I03"],
+    "determinism": ["TEST-P04-D01", "TEST-P04-D02"]
+  }
+}

@@ -284,15 +284,13 @@ Result<StateHash> get_state_hash(DOSBoxContext* ctx, HashMode mode) {
     // ─────────────────────────────────────────────────────────────────────
     ctx->dma.hash_into(builder);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Placeholder for Future State (DOS, etc.)
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // Fast mode will hash (future PRs):
-    // - DOS state
+    // ─────────────────────────────────────────────────────────────────────
+    // DOS State (Sprint 2 Phase 4)
+    // ─────────────────────────────────────────────────────────────────────
+    ctx->dos.hash_into(builder);
 
     // Placeholder marker for state not yet migrated
-    const char* placeholder = "STATE_HASH_V8";
+    const char* placeholder = "STATE_HASH_V9";
     builder.update(placeholder, std::strlen(placeholder));
 
     // Full mode adds (future PRs):

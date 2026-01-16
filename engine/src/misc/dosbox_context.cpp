@@ -411,6 +411,43 @@ void DmaState::hash_into(HashBuilder& builder) const {
 
 #endif // AIBOX_HEADLESS
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DosState Implementation (Sprint 2 Phase 4)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void DosState::reset() noexcept {
+    kernel_disabled = true;
+    kernel_running = false;
+    psp_segment = 0;
+    dta_segment = 0;
+    dta_offset = 0;
+    version.major = 5;
+    version.minor = 0;
+    current_drive = 2;  // C:
+    verify = 0;
+    return_code = 0;
+    return_mode = false;
+    country = 1;
+    codepage = 437;
+}
+
+void DosState::hash_into(HashBuilder& builder) const {
+    // Hash all determinism-relevant DOS state
+    builder.update(static_cast<uint8_t>(kernel_disabled ? 1 : 0));
+    builder.update(static_cast<uint8_t>(kernel_running ? 1 : 0));
+    builder.update(psp_segment);
+    builder.update(dta_segment);
+    builder.update(dta_offset);
+    builder.update(version.major);
+    builder.update(version.minor);
+    builder.update(current_drive);
+    builder.update(verify);
+    builder.update(return_code);
+    builder.update(static_cast<uint8_t>(return_mode ? 1 : 0));
+    builder.update(country);
+    builder.update(codepage);
+}
+
 } // namespace dosbox
 
 // ═══════════════════════════════════════════════════════════════════════════════

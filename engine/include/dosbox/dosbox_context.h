@@ -1035,6 +1035,98 @@ struct DmaState {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DOS State (Sprint 2 Phase 4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief DOS subsystem state for context-based architecture.
+ *
+ * Contains the DOS kernel state that was previously in the global
+ * `dos` (DOS_Block) and `dos_kernel_disabled` variables.
+ *
+ * ## Key State
+ * - kernel_disabled/kernel_running: DOS kernel status
+ * - psp_segment: Current Program Segment Prefix
+ * - dta_segment/dta_offset: Disk Transfer Area location
+ * - version: Reported DOS version (default 5.0)
+ * - current_drive: Active drive letter (0=A, 1=B, 2=C, etc.)
+ *
+ * ## Address Calculation
+ * Real-mode addresses are segment:offset pairs converted to physical:
+ * - PSP address = psp_segment * 16
+ * - DTA address = dta_segment * 16 + dta_offset
+ *
+ * ## Thread Safety
+ * Not thread-safe. Use from emulation thread only.
+ */
+struct DosState {
+    /** @brief DOS kernel is disabled (not yet initialized) */
+    bool kernel_disabled = true;
+
+    /** @brief DOS kernel is actively running */
+    bool kernel_running = false;
+
+    /** @brief Current Program Segment Prefix segment */
+    uint16_t psp_segment = 0;
+
+    /** @brief Disk Transfer Area segment */
+    uint16_t dta_segment = 0;
+
+    /** @brief Disk Transfer Area offset */
+    uint16_t dta_offset = 0;
+
+    /** @brief Reported DOS version */
+    struct Version {
+        uint8_t major = 5;
+        uint8_t minor = 0;
+    } version;
+
+    /** @brief Current drive (0=A, 1=B, 2=C, etc.) */
+    uint8_t current_drive = 2;  // Default: C:
+
+    /** @brief Verify flag for file operations */
+    uint8_t verify = 0;
+
+    /** @brief Program return code (ERRORLEVEL) */
+    uint8_t return_code = 0;
+
+    /** @brief Return mode flag */
+    bool return_mode = false;
+
+    /** @brief Country code */
+    uint16_t country = 1;
+
+    /** @brief Code page (437 = US, 850 = Multilingual, etc.) */
+    uint16_t codepage = 437;
+
+    /**
+     * @brief Get PSP physical address.
+     * @return PSP segment * 16
+     */
+    [[nodiscard]] uint32_t psp_address() const noexcept {
+        return static_cast<uint32_t>(psp_segment) * 16;
+    }
+
+    /**
+     * @brief Get DTA physical address.
+     * @return DTA segment * 16 + offset
+     */
+    [[nodiscard]] uint32_t dta_address() const noexcept {
+        return static_cast<uint32_t>(dta_segment) * 16 + dta_offset;
+    }
+
+    /**
+     * @brief Reset DOS state to initial values.
+     */
+    void reset() noexcept;
+
+    /**
+     * @brief Hash DOS state for determinism verification.
+     */
+    void hash_into(HashBuilder& builder) const;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DOSBox Context
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1159,6 +1251,12 @@ public:
     // ─────────────────────────────────────────────────────────────────────────
 
     DmaState dma;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DOS State (Sprint 2 Phase 4)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    DosState dos;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Platform Timing (PR #17)
