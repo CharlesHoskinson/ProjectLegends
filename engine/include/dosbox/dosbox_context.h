@@ -825,11 +825,13 @@ struct LfbRegion {
     uint32_t start_page = 0;     ///< Starting page number
     uint32_t end_page = 0;       ///< Ending page number (exclusive)
     uint32_t pages = 0;          ///< Number of pages in region
+    class PageHandler* handler = nullptr;  ///< Page handler for this region
 
     void reset() noexcept {
         start_page = 0;
         end_page = 0;
         pages = 0;
+        handler = nullptr;
     }
 };
 
@@ -909,6 +911,17 @@ struct MemoryState {
     uint32_t address_bits = 20;              ///< Address bus width (default 20 for 8086)
     uint32_t hw_next_assign = 0;             ///< Next hardware assignment address
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Page Handlers and Memory Handles (Sprint 2 Phase 2 extension)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Note: For full multi-instance support, each context needs its own page
+    // handler and memory handle arrays. These are initialized in
+    // MEM_AllocateForContext() and freed in MEM_FreeForContext().
+
+    class PageHandler** phandlers = nullptr;  ///< Page handler array (one per page)
+    int32_t* mhandles = nullptr;              ///< Memory handles array for EMS/XMS
+
     /**
      * @brief Reset to initial state.
      *
@@ -927,6 +940,7 @@ struct MemoryState {
         mem_alias_pagemask_active = 0;
         address_bits = 20;
         hw_next_assign = 0;
+        // Don't reset phandlers/mhandles - managed by init/cleanup
     }
 
     /**

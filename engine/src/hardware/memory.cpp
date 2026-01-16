@@ -245,6 +245,7 @@ static struct MemoryBlock {
     uint32_t hw_next_assign = 0;
 } memory;
 
+// Legacy global versions (for non-library mode compatibility)
 uint32_t MEM_get_address_bits() {
     return memory.address_bits;
 }
@@ -255,6 +256,22 @@ uint32_t MEM_get_address_bits4GB() { /* some code cannot yet handle values large
     else
         return memory.address_bits;
 }
+
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware versions for library mode (Sprint 2 Phase 2)
+uint32_t MEM_get_address_bits(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return 20; // Default 8086 address bits
+    return ctx->memory.address_bits;
+}
+
+uint32_t MEM_get_address_bits4GB(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return 20;
+    if (ctx->memory.address_bits > 32u)
+        return 32u;
+    else
+        return ctx->memory.address_bits;
+}
+#endif
 
 /* WARNING: When DOSBox-X enables emulation of more than 4GB of RAM, this MemBase and MemSize will only reflect the memory below 4GB.
  *          Which means phys_readx/writex(), which are limited to the first 4GB anyway (32-bit addresses), cannot be used to poke at
@@ -297,12 +314,39 @@ bool MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t size_kb) {
     // Zero the memory
     memset(mem, 0, alloc_size);
 
+    // Calculate handler pages (for 32-bit addressing, up to 1MB pages)
+    size_t handler_pages = pages;
+    if (handler_pages > 0x100000) handler_pages = 0x100000;
+
+    // Allocate page handlers array
+    PageHandler** phandlers = new(std::nothrow) PageHandler*[handler_pages];
+    if (!phandlers) {
+        delete[] mem;
+        return false;
+    }
+    memset(phandlers, 0, handler_pages * sizeof(PageHandler*));
+
+    // Allocate memory handles array (one per page)
+    MemHandle* mhandles = new(std::nothrow) MemHandle[pages];
+    if (!mhandles) {
+        delete[] phandlers;
+        delete[] mem;
+        return false;
+    }
+    // Initialize mhandles: 0 = unused
+    for (size_t i = 0; i < pages; i++) {
+        mhandles[i] = 0;
+    }
+
     // Store in context
     ctx->memory.base = mem;
     ctx->memory.size = alloc_size;
     ctx->memory.pages = static_cast<uint32_t>(pages);
+    ctx->memory.handler_pages = static_cast<uint32_t>(handler_pages);
     ctx->memory.reported_pages = static_cast<uint32_t>(pages);
     ctx->memory.address_bits = 32;  // Default 32-bit addressing
+    ctx->memory.phandlers = phandlers;
+    ctx->memory.mhandles = mhandles;
 
     // Update globals for backward compatibility
     MemBase = mem;
@@ -310,6 +354,7 @@ bool MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t size_kb) {
 
     // Sync global memory struct with context
     memory.pages = pages;
+    memory.handler_pages = handler_pages;
     memory.reported_pages = pages;
     memory.address_bits = ctx->memory.address_bits;
     memory.a20.enabled = ctx->memory.a20.enabled;
@@ -328,16 +373,29 @@ bool MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t size_kb) {
 void MEM_FreeForContext(dosbox::DOSBoxContext* ctx) {
     if (!ctx) return;
 
-    if (ctx->memory.base) {
-        delete[] ctx->memory.base;
-        ctx->memory.base = nullptr;
-        ctx->memory.size = 0;
+    // Free page handlers array
+    if (ctx->memory.phandlers) {
+        delete[] ctx->memory.phandlers;
+        ctx->memory.phandlers = nullptr;
+    }
+
+    // Free memory handles array
+    if (ctx->memory.mhandles) {
+        delete[] ctx->memory.mhandles;
+        ctx->memory.mhandles = nullptr;
     }
 
     // Clear globals if they pointed to this context's memory
     if (MemBase == ctx->memory.base) {
         MemBase = nullptr;
         MemSize = 0;
+    }
+
+    // Free main memory last
+    if (ctx->memory.base) {
+        delete[] ctx->memory.base;
+        ctx->memory.base = nullptr;
+        ctx->memory.size = 0;
     }
 
     ctx->memory.reset();
@@ -635,6 +693,31 @@ void MEM_InvalidateCachedHandler(Bitu phys_page,Bitu range) {
 void MEM_FreeHandler(Bitu phys_page,Bitu page_range) {
     MEM_InvalidateCachedHandler(phys_page,page_range);
 }
+
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware page handler registration (Sprint 2 Phase 2)
+void MEM_RegisterHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page, PageHandler* handler, Bitu page_range) {
+    if (!ctx || !ctx->memory.phandlers) return;
+    if ((phys_page + page_range) > ctx->memory.handler_pages) return;
+    while (page_range--) ctx->memory.phandlers[phys_page++] = handler;
+}
+
+void MEM_InvalidateCachedHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu range) {
+    if (!ctx || !ctx->memory.phandlers) return;
+    if ((phys_page + range) > ctx->memory.handler_pages) return;
+    while (range--) ctx->memory.phandlers[phys_page++] = nullptr;
+}
+
+void MEM_FreeHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu page_range) {
+    MEM_InvalidateCachedHandler(ctx, phys_page, page_range);
+}
+
+PageHandler* MEM_GetPageHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page) {
+    if (!ctx || !ctx->memory.phandlers) return nullptr;
+    if (phys_page >= ctx->memory.handler_pages) return nullptr;
+    return ctx->memory.phandlers[phys_page];
+}
+#endif
 
 void MEM_CalloutObject::InvalidateCachedHandlers(void) {
     Bitu p;
@@ -980,6 +1063,25 @@ void MEM_SetLFB(Bitu page, Bitu pages, PageHandler *handler, PageHandler *mmioha
     PAGING_ClearTLB();
 }
 
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware LFB setup (Sprint 2 Phase 2)
+// Simplified version that just sets LFB region info without callback setup
+void MEM_SetLFB(dosbox::DOSBoxContext* ctx, Bitu page, Bitu pages, PageHandler* handler) {
+    if (!ctx) return;
+
+    ctx->memory.lfb.handler = handler;
+    if (handler != nullptr && pages > 0) {
+        ctx->memory.lfb.start_page = static_cast<uint32_t>(page);
+        ctx->memory.lfb.end_page = static_cast<uint32_t>(page + pages);
+        ctx->memory.lfb.pages = static_cast<uint32_t>(pages);
+    } else {
+        ctx->memory.lfb.start_page = 0;
+        ctx->memory.lfb.end_page = 0;
+        ctx->memory.lfb.pages = 0;
+    }
+}
+#endif
+
 class Mem4GBPageHandler : public PageHandler {
 	public:
 		Mem4GBPageHandler() : PageHandler(PFLAG_READABLE|PFLAG_WRITEABLE) {}
@@ -1040,6 +1142,30 @@ void MEM_ResetPageHandler_Unmapped(Bitu phys_page, Bitu pages) {
         phys_page++;
     }
 }
+
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware page handler setters (Sprint 2 Phase 2)
+void MEM_SetPageHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu pages, PageHandler* handler) {
+    if (!ctx || !ctx->memory.phandlers) return;
+    for (; pages > 0 && phys_page < ctx->memory.handler_pages; pages--) {
+        ctx->memory.phandlers[phys_page++] = handler;
+    }
+}
+
+void MEM_ResetPageHandler_RAM(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu pages) {
+    if (!ctx || !ctx->memory.phandlers) return;
+    for (; pages > 0 && phys_page < ctx->memory.handler_pages; pages--) {
+        ctx->memory.phandlers[phys_page++] = &ram_page_handler;
+    }
+}
+
+void MEM_ResetPageHandler_Unmapped(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu pages) {
+    if (!ctx || !ctx->memory.phandlers) return;
+    for (; pages > 0 && phys_page < ctx->memory.handler_pages; pages--) {
+        ctx->memory.phandlers[phys_page++] = &unmapped_page_handler;
+    }
+}
+#endif
 
 Bitu mem_strlen(LinearPt pt) {
     uint16_t x=0;
@@ -1129,6 +1255,179 @@ void MEM_StrCopy(LinearPt pt,char * data,Bitu size) {
     *data=0;
 }
 
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware block read/write for library mode (Sprint 2 Phase 2)
+// These perform direct physical memory access to the context's memory buffer
+// without going through the paging system (appropriate for library mode)
+
+void MEM_BlockRead(dosbox::DOSBoxContext* ctx, PhysPt pt, void* data, Bitu size) {
+    if (!ctx || !ctx->memory.base || !data) return;
+
+    uint8_t* dest = static_cast<uint8_t*>(data);
+    const size_t mem_size = ctx->memory.size;
+
+    while (size--) {
+        if (pt < mem_size) {
+            *dest++ = ctx->memory.base[pt++];
+        } else {
+            *dest++ = 0xFF; // Unmapped memory reads as 0xFF
+            pt++;
+        }
+    }
+}
+
+void MEM_BlockWrite(dosbox::DOSBoxContext* ctx, PhysPt pt, const void* data, Bitu size) {
+    if (!ctx || !ctx->memory.base || !data) return;
+
+    const uint8_t* src = static_cast<const uint8_t*>(data);
+    const size_t mem_size = ctx->memory.size;
+
+    while (size--) {
+        if (pt < mem_size) {
+            ctx->memory.base[pt++] = *src++;
+        } else {
+            // Writes to unmapped memory are discarded
+            pt++;
+            src++;
+        }
+    }
+}
+
+void MEM_BlockRead32(dosbox::DOSBoxContext* ctx, PhysPt pt, void* data, Bitu size) {
+    if (!ctx || !ctx->memory.base || !data) return;
+
+    uint32_t* dest = static_cast<uint32_t*>(data);
+    const size_t mem_size = ctx->memory.size;
+    size >>= 2;
+
+    while (size--) {
+        if (pt + 3 < mem_size) {
+            // Little-endian read
+            *dest++ = ctx->memory.base[pt] |
+                     (ctx->memory.base[pt+1] << 8) |
+                     (ctx->memory.base[pt+2] << 16) |
+                     (ctx->memory.base[pt+3] << 24);
+        } else {
+            *dest++ = 0xFFFFFFFF;
+        }
+        pt += 4;
+    }
+}
+
+void MEM_BlockWrite32(dosbox::DOSBoxContext* ctx, PhysPt pt, const void* data, Bitu size) {
+    if (!ctx || !ctx->memory.base || !data) return;
+
+    const uint32_t* src = static_cast<const uint32_t*>(data);
+    const size_t mem_size = ctx->memory.size;
+    size >>= 2;
+
+    while (size--) {
+        if (pt + 3 < mem_size) {
+            uint32_t val = *src++;
+            // Little-endian write
+            ctx->memory.base[pt] = val & 0xFF;
+            ctx->memory.base[pt+1] = (val >> 8) & 0xFF;
+            ctx->memory.base[pt+2] = (val >> 16) & 0xFF;
+            ctx->memory.base[pt+3] = (val >> 24) & 0xFF;
+        } else {
+            src++;
+        }
+        pt += 4;
+    }
+}
+
+void MEM_BlockCopy(dosbox::DOSBoxContext* ctx, PhysPt dest, PhysPt src, Bitu size) {
+    if (!ctx || !ctx->memory.base) return;
+
+    const size_t mem_size = ctx->memory.size;
+
+    while (size--) {
+        uint8_t val = 0xFF;
+        if (src < mem_size) {
+            val = ctx->memory.base[src];
+        }
+        if (dest < mem_size) {
+            ctx->memory.base[dest] = val;
+        }
+        src++;
+        dest++;
+    }
+}
+
+void MEM_StrCopy(dosbox::DOSBoxContext* ctx, PhysPt pt, char* data, Bitu size) {
+    if (!ctx || !ctx->memory.base || !data) {
+        if (data) *data = 0;
+        return;
+    }
+
+    const size_t mem_size = ctx->memory.size;
+
+    while (size--) {
+        uint8_t r = 0;
+        if (pt < mem_size) {
+            r = ctx->memory.base[pt++];
+        } else {
+            pt++;
+        }
+        if (!r) break;
+        *data++ = static_cast<char>(r);
+    }
+    *data = 0;
+}
+
+// Context-aware physical memory access (direct RAM, no paging)
+uint8_t phys_readb(dosbox::DOSBoxContext* ctx, PhysPt addr) {
+    if (!ctx || !ctx->memory.base) return 0xFF;
+    if (addr < ctx->memory.size)
+        return ctx->memory.base[addr];
+    return 0xFF;
+}
+
+uint16_t phys_readw(dosbox::DOSBoxContext* ctx, PhysPt addr) {
+    if (!ctx || !ctx->memory.base) return 0xFFFF;
+    if (addr < ctx->memory.size - 1u) {
+        return ctx->memory.base[addr] |
+               (static_cast<uint16_t>(ctx->memory.base[addr+1]) << 8);
+    }
+    return 0xFFFF;
+}
+
+uint32_t phys_readd(dosbox::DOSBoxContext* ctx, PhysPt addr) {
+    if (!ctx || !ctx->memory.base) return 0xFFFFFFFF;
+    if (addr < ctx->memory.size - 3u) {
+        return ctx->memory.base[addr] |
+               (static_cast<uint32_t>(ctx->memory.base[addr+1]) << 8) |
+               (static_cast<uint32_t>(ctx->memory.base[addr+2]) << 16) |
+               (static_cast<uint32_t>(ctx->memory.base[addr+3]) << 24);
+    }
+    return 0xFFFFFFFF;
+}
+
+void phys_writeb(dosbox::DOSBoxContext* ctx, PhysPt addr, uint8_t val) {
+    if (!ctx || !ctx->memory.base) return;
+    if (addr < ctx->memory.size)
+        ctx->memory.base[addr] = val;
+}
+
+void phys_writew(dosbox::DOSBoxContext* ctx, PhysPt addr, uint16_t val) {
+    if (!ctx || !ctx->memory.base) return;
+    if (addr < ctx->memory.size - 1u) {
+        ctx->memory.base[addr] = val & 0xFF;
+        ctx->memory.base[addr+1] = (val >> 8) & 0xFF;
+    }
+}
+
+void phys_writed(dosbox::DOSBoxContext* ctx, PhysPt addr, uint32_t val) {
+    if (!ctx || !ctx->memory.base) return;
+    if (addr < ctx->memory.size - 3u) {
+        ctx->memory.base[addr] = val & 0xFF;
+        ctx->memory.base[addr+1] = (val >> 8) & 0xFF;
+        ctx->memory.base[addr+2] = (val >> 16) & 0xFF;
+        ctx->memory.base[addr+3] = (val >> 24) & 0xFF;
+    }
+}
+#endif
+
 Bitu MEM_TotalPages(void) {
     return memory.reported_pages;
 }
@@ -1136,6 +1435,20 @@ Bitu MEM_TotalPages(void) {
 Bitu MEM_TotalPagesAt4GB(void) {
     return memory.reported_pages_4gb;
 }
+
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware versions for library mode (Sprint 2 Phase 2)
+Bitu MEM_TotalPages(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return 0;
+    return ctx->memory.reported_pages;
+}
+
+Bitu MEM_TotalPagesAt4GB(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return 0;
+    return ctx->memory.reported_pages_4gb;
+}
+// Note: MEM_FreeLargest, MEM_FreeTotal require mhandles migration (TODO)
+#endif
 
 Bitu MEM_FreeLargest(void) {
     Bitu size=0;Bitu largest=0;
@@ -1432,14 +1745,313 @@ MemHandle MEM_NextHandle(MemHandle handle) {
 
 MemHandle MEM_NextHandleAt(MemHandle handle,Bitu where) {
     while (where) {
-        where--;    
+        where--;
         handle=memory.mhandles[handle];
     }
     return handle;
 }
 
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware memory allocation functions (Sprint 2 Phase 2)
 
-/* 
+// Helper: Find best matching free block in context's mhandles
+static uint32_t BestMatch_ctx(dosbox::DOSBoxContext* ctx, Bitu size) {
+    if (!ctx || !ctx->memory.mhandles) return 0;
+
+    uint32_t index = XMS_START;
+    uint32_t first = 0;
+    uint32_t best = 0xfffffff;
+    uint32_t best_first = 0;
+
+    while (index < ctx->memory.reported_pages) {
+        if (!first) {
+            if (!ctx->memory.mhandles[index]) {
+                first = index;
+            }
+        } else {
+            if (ctx->memory.mhandles[index]) {
+                uint32_t pages = index - first;
+                if (pages == size) {
+                    return first;
+                } else if (pages > size && pages < best) {
+                    best = pages;
+                    best_first = first;
+                }
+                first = 0;
+            }
+        }
+        index++;
+    }
+    if (first && (index - first >= size) && (index - first < best)) {
+        return first;
+    }
+    return best_first;
+}
+
+Bitu MEM_FreeLargest(dosbox::DOSBoxContext* ctx) {
+    if (!ctx || !ctx->memory.mhandles) return 0;
+
+    Bitu size = 0, largest = 0;
+    Bitu index = XMS_START;
+
+    while (index < ctx->memory.reported_pages) {
+        if (!ctx->memory.mhandles[index]) {
+            size++;
+        } else {
+            if (size > largest) largest = size;
+            size = 0;
+        }
+        index++;
+    }
+    if (size > largest) largest = size;
+    return largest;
+}
+
+Bitu MEM_FreeTotal(dosbox::DOSBoxContext* ctx) {
+    if (!ctx || !ctx->memory.mhandles) return 0;
+
+    Bitu free = 0;
+    Bitu index = XMS_START;
+
+    while (index < ctx->memory.reported_pages) {
+        if (!ctx->memory.mhandles[index]) free++;
+        index++;
+    }
+    return free;
+}
+
+Bitu MEM_AllocatedPages(dosbox::DOSBoxContext* ctx, MemHandle handle) {
+    if (!ctx || !ctx->memory.mhandles) return 0;
+
+    Bitu pages = 0;
+    while (handle > 0 && static_cast<Bitu>(handle) < ctx->memory.pages) {
+        pages++;
+        handle = ctx->memory.mhandles[handle];
+    }
+    return pages;
+}
+
+MemHandle MEM_AllocatePages(dosbox::DOSBoxContext* ctx, Bitu pages, bool sequence) {
+    if (!ctx || !ctx->memory.mhandles) return 0;
+    if (!pages) return 0;
+
+    MemHandle ret;
+    if (sequence) {
+        uint32_t index = BestMatch_ctx(ctx, pages);
+        if (!index) return 0;
+        MemHandle* next = &ret;
+        while (pages) {
+            *next = (MemHandle)index;
+            next = &ctx->memory.mhandles[index];
+            index++;
+            pages--;
+        }
+        *next = -1;
+    } else {
+        if (MEM_FreeTotal(ctx) < pages) return 0;
+        MemHandle* next = &ret;
+        while (pages) {
+            uint32_t index = BestMatch_ctx(ctx, 1);
+            if (!index) return 0;
+            while (pages && (!ctx->memory.mhandles[index])) {
+                *next = (MemHandle)index;
+                next = &ctx->memory.mhandles[index];
+                index++;
+                pages--;
+            }
+            *next = -1;
+        }
+    }
+    return ret;
+}
+
+MemHandle MEM_GetNextFreePage(dosbox::DOSBoxContext* ctx) {
+    return (MemHandle)BestMatch_ctx(ctx, 1);
+}
+
+void MEM_ReleasePages(dosbox::DOSBoxContext* ctx, MemHandle handle) {
+    if (!ctx || !ctx->memory.mhandles) return;
+
+    while (handle > 0 && static_cast<Bitu>(handle) < ctx->memory.pages) {
+        MemHandle next = ctx->memory.mhandles[handle];
+        ctx->memory.mhandles[handle] = 0;
+        handle = next;
+    }
+}
+
+MemHandle MEM_NextHandle(dosbox::DOSBoxContext* ctx, MemHandle handle) {
+    if (!ctx || !ctx->memory.mhandles) return -1;
+    if (handle <= 0 || static_cast<Bitu>(handle) >= ctx->memory.pages) return -1;
+    return ctx->memory.mhandles[handle];
+}
+
+MemHandle MEM_NextHandleAt(dosbox::DOSBoxContext* ctx, MemHandle handle, Bitu where) {
+    if (!ctx || !ctx->memory.mhandles) return -1;
+    while (where && handle > 0 && static_cast<Bitu>(handle) < ctx->memory.pages) {
+        where--;
+        handle = ctx->memory.mhandles[handle];
+    }
+    return handle;
+}
+
+// Helper: Find A20-friendly best match (bit 20 = 0) in context's mhandles
+static uint32_t BestMatch_A20_friendly_ctx(dosbox::DOSBoxContext* ctx, Bitu size) {
+    if (!ctx || !ctx->memory.mhandles) return 0;
+    if (size > 0x100) return 0; // Can't fit in A20-friendly region
+
+    uint32_t index = XMS_START;
+    uint32_t first = 0;
+    uint32_t best = 0xfffffff;
+    uint32_t best_first = 0;
+
+    while (index < ctx->memory.reported_pages) {
+        if (!first) {
+            // Skip odd megabytes (bit 20 set)
+            if (index & 0x100) {
+                index = (index | 0xFF) + 1;
+                continue;
+            }
+            if (!ctx->memory.mhandles[index]) {
+                first = index;
+            }
+        } else {
+            if (ctx->memory.mhandles[index] || (index & 0x100)) {
+                uint32_t pages = index - first;
+                if (pages == size) {
+                    return first;
+                } else if (pages > size && pages < best) {
+                    best = pages;
+                    best_first = first;
+                }
+                first = 0;
+            }
+        }
+        index++;
+    }
+    if (first && (index - first >= size) && (index - first < best)) {
+        return first;
+    }
+    return best_first;
+}
+
+MemHandle MEM_AllocatePages_A20_friendly(dosbox::DOSBoxContext* ctx, Bitu pages, bool sequence) {
+    if (!ctx || !ctx->memory.mhandles) return 0;
+    if (!pages) return 0;
+
+    MemHandle ret;
+    if (sequence) {
+        uint32_t index = BestMatch_A20_friendly_ctx(ctx, pages);
+        if (!index) return 0;
+        MemHandle* next = &ret;
+        while (pages) {
+            *next = (MemHandle)index;
+            next = &ctx->memory.mhandles[index];
+            index++;
+            pages--;
+        }
+        *next = -1;
+    } else {
+        if (MEM_FreeTotal(ctx) < pages) return 0;
+        MemHandle* next = &ret;
+        while (pages) {
+            uint32_t index = BestMatch_A20_friendly_ctx(ctx, 1);
+            if (!index) return 0;
+            while (pages && (!ctx->memory.mhandles[index])) {
+                *next = (MemHandle)index;
+                next = &ctx->memory.mhandles[index];
+                index++;
+                pages--;
+            }
+            *next = -1;
+        }
+    }
+    return ret;
+}
+
+bool MEM_ReAllocatePages(dosbox::DOSBoxContext* ctx, MemHandle& handle, Bitu pages, bool sequence) {
+    if (!ctx || !ctx->memory.mhandles) return false;
+
+    if (handle <= 0) {
+        if (!pages) return true;
+        handle = MEM_AllocatePages(ctx, pages, sequence);
+        return (handle > 0);
+    }
+    if (!pages) {
+        MEM_ReleasePages(ctx, handle);
+        handle = -1;
+        return true;
+    }
+
+    MemHandle index = handle;
+    MemHandle last = 0;
+    Bitu old_pages = 0;
+    while (index > 0 && static_cast<Bitu>(index) < ctx->memory.pages) {
+        old_pages++;
+        last = index;
+        index = ctx->memory.mhandles[index];
+    }
+
+    if (old_pages == pages) return true;
+
+    if (old_pages > pages) {
+        // Decrease size
+        pages--;
+        index = handle;
+        old_pages--;
+        while (pages) {
+            index = ctx->memory.mhandles[index];
+            pages--;
+            old_pages--;
+        }
+        MemHandle next = ctx->memory.mhandles[index];
+        ctx->memory.mhandles[index] = -1;
+        index = next;
+        while (old_pages) {
+            next = ctx->memory.mhandles[index];
+            ctx->memory.mhandles[index] = 0;
+            index = next;
+            old_pages--;
+        }
+        return true;
+    } else {
+        // Increase size
+        Bitu need = pages - old_pages;
+        if (sequence) {
+            index = last + 1;
+            Bitu free = 0;
+            while (static_cast<Bitu>(index) < ctx->memory.reported_pages &&
+                   !ctx->memory.mhandles[index]) {
+                index++;
+                free++;
+            }
+            if (free >= need) {
+                index = last;
+                while (need) {
+                    ctx->memory.mhandles[index] = index + 1;
+                    need--;
+                    index++;
+                }
+                ctx->memory.mhandles[index] = -1;
+                return true;
+            } else {
+                MemHandle newhandle = MEM_AllocatePages(ctx, pages, true);
+                if (!newhandle) return false;
+                MEM_BlockCopy(ctx, (PhysPt)newhandle * 4096u, (PhysPt)handle * 4096u, (Bitu)old_pages * 4096u);
+                MEM_ReleasePages(ctx, handle);
+                handle = newhandle;
+                return true;
+            }
+        } else {
+            MemHandle rem = MEM_AllocatePages(ctx, need, false);
+            if (!rem) return false;
+            ctx->memory.mhandles[last] = rem;
+            return true;
+        }
+    }
+}
+#endif
+
+/*
     A20 line handling, 
     Basically maps the 4 pages at the 1mb to 0mb in the default page directory
 */
@@ -1464,6 +2076,30 @@ void MEM_A20_Enable(bool enabled) {
         PAGING_ClearTLB();
     }
 }
+
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware versions for library mode (Sprint 2 Phase 2)
+bool MEM_A20_Enabled(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return true; // Default: A20 enabled
+    return ctx->memory.a20.enabled;
+}
+
+void MEM_A20_Enable(dosbox::DOSBoxContext* ctx, bool enabled) {
+    if (!ctx) return;
+
+    // In library mode, we directly modify context state
+    // No GUI updates (mainMenu doesn't exist in library mode)
+    ctx->memory.a20.enabled = enabled;
+
+    // Update page mask if needed
+    if (ctx->memory.mem_alias_pagemask & 0x100ul) {
+        if (enabled)
+            ctx->memory.mem_alias_pagemask_active |= 0x100ul;
+        else
+            ctx->memory.mem_alias_pagemask_active &= ~0x100ul;
+    }
+}
+#endif
 
 
 /* Memory access functions */
@@ -1957,6 +2593,98 @@ bool MEM_map_ROM_alias_physmem(Bitu start,Bitu end) {
     return true;
 }
 
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware memory mapping functions (Sprint 2 Phase 2)
+// Note: These use the context's phandlers array but reference global page handler objects
+// (which are stateless singletons). PAGING_ClearTLB is skipped in library mode.
+
+bool MEM_unmap_physmem(dosbox::DOSBoxContext* ctx, Bitu start, Bitu end) {
+    if (!ctx || !ctx->memory.phandlers) return false;
+
+    start >>= 12;
+    end >>= 12;
+
+    if (start >= ctx->memory.handler_pages || end >= ctx->memory.handler_pages)
+        return false;
+
+    for (Bitu p = start; p <= end; p++)
+        ctx->memory.phandlers[p] = &unmapped_page_handler;
+
+    return true;
+}
+
+bool MEM_map_RAM_physmem(dosbox::DOSBoxContext* ctx, Bitu start, Bitu end) {
+    if (!ctx || !ctx->memory.phandlers) return false;
+
+    start >>= 12;
+    end >>= 12;
+
+    if (start >= ctx->memory.handler_pages || end >= ctx->memory.handler_pages)
+        return false;
+
+    // Check if pages can be mapped
+    for (Bitu p = start; p <= end; p++) {
+        if (ctx->memory.phandlers[p] != nullptr &&
+            ctx->memory.phandlers[p] != &illegal_page_handler &&
+            ctx->memory.phandlers[p] != &unmapped_page_handler &&
+            ctx->memory.phandlers[p] != &ram_page_handler)
+            return false;
+    }
+
+    for (Bitu p = start; p <= end; p++)
+        ctx->memory.phandlers[p] = &ram_page_handler;
+
+    return true;
+}
+
+bool MEM_map_ROM_physmem(dosbox::DOSBoxContext* ctx, Bitu start, Bitu end) {
+    if (!ctx || !ctx->memory.phandlers) return false;
+
+    start >>= 12;
+    end >>= 12;
+
+    if (start >= ctx->memory.handler_pages || end >= ctx->memory.handler_pages)
+        return false;
+
+    // Check if pages can be mapped
+    for (Bitu p = start; p <= end; p++) {
+        if (ctx->memory.phandlers[p] != nullptr &&
+            ctx->memory.phandlers[p] != &illegal_page_handler &&
+            ctx->memory.phandlers[p] != &unmapped_page_handler &&
+            ctx->memory.phandlers[p] != &rom_page_handler)
+            return false;
+    }
+
+    for (Bitu p = start; p <= end; p++)
+        ctx->memory.phandlers[p] = &rom_page_handler;
+
+    return true;
+}
+
+bool MEM_map_ROM_alias_physmem(dosbox::DOSBoxContext* ctx, Bitu start, Bitu end) {
+    if (!ctx || !ctx->memory.phandlers) return false;
+
+    start >>= 12;
+    end >>= 12;
+
+    if (start >= ctx->memory.handler_pages || end >= ctx->memory.handler_pages)
+        return false;
+
+    // Check if pages can be mapped
+    for (Bitu p = start; p <= end; p++) {
+        if (ctx->memory.phandlers[p] != nullptr &&
+            ctx->memory.phandlers[p] != &illegal_page_handler &&
+            ctx->memory.phandlers[p] != &unmapped_page_handler)
+            return false;
+    }
+
+    for (Bitu p = start; p <= end; p++)
+        ctx->memory.phandlers[p] = &rom_page_alias_handler;
+
+    return true;
+}
+#endif
+
 HostPt GetMemBase(void) { return MemBase; }
 
 /*! \brief          REDOS.COM utility command on drive Z: to trigger restart of the DOS kernel
@@ -2170,6 +2898,29 @@ uint32_t MEM_HardwareAllocate(const char *name,uint32_t sz) {
 
     return assign;
 }
+
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware version for library mode (Sprint 2 Phase 2)
+uint32_t MEM_HardwareAllocate(dosbox::DOSBoxContext* ctx, const char *name, uint32_t sz) {
+    if (!ctx) return 0;
+
+    uint32_t assign = 0;
+
+    if (sz != 0ul && bitop::ispowerof2(sz)) {
+        if (ctx->memory.hw_next_assign < 0xFE000000ul) {
+            ctx->memory.hw_next_assign += sz - 1ul;
+            ctx->memory.hw_next_assign &= ~(sz - 1ul);
+        }
+        if (ctx->memory.hw_next_assign < 0xFE000000ul) {
+            assign = ctx->memory.hw_next_assign;
+            ctx->memory.hw_next_assign += sz;
+            // Note: No LOG in library mode - minimal output
+        }
+    }
+
+    return assign;
+}
+#endif
 
 #ifdef DO_MEMORY_FILE
 # if C_HAVE_MMAP
@@ -2795,6 +3546,19 @@ Bitu MEM_PageMask(void) {
 Bitu MEM_PageMaskActive(void) {
     return memory.mem_alias_pagemask_active;
 }
+
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware versions for library mode (Sprint 2 Phase 2)
+Bitu MEM_PageMask(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return 0xFFFFFul; // Default 20-bit mask (8086)
+    return ctx->memory.mem_alias_pagemask;
+}
+
+Bitu MEM_PageMaskActive(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return 0xFFFFFul; // Default 20-bit mask (8086)
+    return ctx->memory.mem_alias_pagemask_active;
+}
+#endif
 
 // Physical DEVICE access. This is different from phys_readb/phys_writeb because
 // those functions can only access system RAM, and is not affected by any device

@@ -23,6 +23,9 @@ using namespace std;
 #  define S_ISDIR(x) (x & _S_IFDIR)
 # endif
 
+/* Windows mkdir doesn't take a mode argument - redirect to _mkdir */
+# define mkdir(path, mode) _mkdir(path)
+
 /* Windows uses \\ (though since Windows 7 or so, / is also accepted apparently) */
 # define PSEP '\\'
 

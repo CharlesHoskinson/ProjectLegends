@@ -11234,6 +11234,7 @@ startfunction:
 
         BIOS_Int10RightJustifiedPrint(x,y,msg);
 
+#if C_LIBPNG
         {
             png_bytep rows[1];
             unsigned char *row = NULL;/*png_width*/
@@ -11411,6 +11412,7 @@ startfunction:
             reg_edx = edx;
             CALLBACK_RunRealInt(0x10);
         }
+#endif /* C_LIBPNG */
 
         {
             uint64_t sz = (uint64_t)MEM_TotalPages() * (uint64_t)4096;

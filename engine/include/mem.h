@@ -62,6 +62,70 @@ bool                        MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, s
 void                        MEM_FreeForContext(dosbox::DOSBoxContext* ctx);
 void                        MEM_SyncFromContext(dosbox::DOSBoxContext* ctx);
 void                        MEM_SyncToContext(dosbox::DOSBoxContext* ctx);
+
+// Context-aware A20 functions
+bool                        MEM_A20_Enabled(dosbox::DOSBoxContext* ctx);
+void                        MEM_A20_Enable(dosbox::DOSBoxContext* ctx, bool enabled);
+
+// Context-aware page count functions
+Bitu                        MEM_TotalPages(dosbox::DOSBoxContext* ctx);
+Bitu                        MEM_TotalPagesAt4GB(dosbox::DOSBoxContext* ctx);
+
+// Context-aware page mask functions
+Bitu                        MEM_PageMask(dosbox::DOSBoxContext* ctx);
+Bitu                        MEM_PageMaskActive(dosbox::DOSBoxContext* ctx);
+
+// Context-aware hardware allocation
+uint32_t                    MEM_HardwareAllocate(dosbox::DOSBoxContext* ctx, const char *name, uint32_t sz);
+
+// Context-aware block read/write (direct physical memory access)
+void                        MEM_BlockRead(dosbox::DOSBoxContext* ctx, PhysPt pt, void* data, Bitu size);
+void                        MEM_BlockWrite(dosbox::DOSBoxContext* ctx, PhysPt pt, const void* data, Bitu size);
+void                        MEM_BlockRead32(dosbox::DOSBoxContext* ctx, PhysPt pt, void* data, Bitu size);
+void                        MEM_BlockWrite32(dosbox::DOSBoxContext* ctx, PhysPt pt, const void* data, Bitu size);
+void                        MEM_BlockCopy(dosbox::DOSBoxContext* ctx, PhysPt dest, PhysPt src, Bitu size);
+void                        MEM_StrCopy(dosbox::DOSBoxContext* ctx, PhysPt pt, char* data, Bitu size);
+
+// Context-aware physical memory access (direct RAM, no paging)
+uint8_t                     phys_readb(dosbox::DOSBoxContext* ctx, PhysPt addr);
+uint16_t                    phys_readw(dosbox::DOSBoxContext* ctx, PhysPt addr);
+uint32_t                    phys_readd(dosbox::DOSBoxContext* ctx, PhysPt addr);
+void                        phys_writeb(dosbox::DOSBoxContext* ctx, PhysPt addr, uint8_t val);
+void                        phys_writew(dosbox::DOSBoxContext* ctx, PhysPt addr, uint16_t val);
+void                        phys_writed(dosbox::DOSBoxContext* ctx, PhysPt addr, uint32_t val);
+
+// Context-aware page handler functions
+class PageHandler;
+void                        MEM_RegisterHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page, PageHandler* handler, Bitu page_range);
+void                        MEM_InvalidateCachedHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu range);
+void                        MEM_FreeHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu page_range);
+PageHandler*                MEM_GetPageHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page);
+
+// Context-aware memory allocation functions
+Bitu                        MEM_FreeLargest(dosbox::DOSBoxContext* ctx);
+Bitu                        MEM_FreeTotal(dosbox::DOSBoxContext* ctx);
+Bitu                        MEM_AllocatedPages(dosbox::DOSBoxContext* ctx, MemHandle handle);
+MemHandle                   MEM_AllocatePages(dosbox::DOSBoxContext* ctx, Bitu pages, bool sequence);
+MemHandle                   MEM_AllocatePages_A20_friendly(dosbox::DOSBoxContext* ctx, Bitu pages, bool sequence);
+MemHandle                   MEM_GetNextFreePage(dosbox::DOSBoxContext* ctx);
+void                        MEM_ReleasePages(dosbox::DOSBoxContext* ctx, MemHandle handle);
+bool                        MEM_ReAllocatePages(dosbox::DOSBoxContext* ctx, MemHandle& handle, Bitu pages, bool sequence);
+MemHandle                   MEM_NextHandle(dosbox::DOSBoxContext* ctx, MemHandle handle);
+MemHandle                   MEM_NextHandleAt(dosbox::DOSBoxContext* ctx, MemHandle handle, Bitu where);
+
+// Context-aware memory mapping functions
+bool                        MEM_unmap_physmem(dosbox::DOSBoxContext* ctx, Bitu start, Bitu end);
+bool                        MEM_map_RAM_physmem(dosbox::DOSBoxContext* ctx, Bitu start, Bitu end);
+bool                        MEM_map_ROM_physmem(dosbox::DOSBoxContext* ctx, Bitu start, Bitu end);
+bool                        MEM_map_ROM_alias_physmem(dosbox::DOSBoxContext* ctx, Bitu start, Bitu end);
+
+// Context-aware page handler setters
+void                        MEM_SetPageHandler(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu pages, PageHandler* handler);
+void                        MEM_ResetPageHandler_RAM(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu pages);
+void                        MEM_ResetPageHandler_Unmapped(dosbox::DOSBoxContext* ctx, Bitu phys_page, Bitu pages);
+
+// Context-aware LFB setup
+void                        MEM_SetLFB(dosbox::DOSBoxContext* ctx, Bitu page, Bitu pages, PageHandler* handler);
 #endif
 
 /* Memory management / EMS mapping */
@@ -81,6 +145,9 @@ MemHandle                   MEM_NextHandle(MemHandle handle);
 MemHandle                   MEM_NextHandleAt(MemHandle handle,Bitu where);
 
 uint32_t                    MEM_HardwareAllocate(const char *name,uint32_t sz);
+
+Bitu                        MEM_PageMask(void);
+Bitu                        MEM_PageMaskActive(void);
 
 static constexpr bool build_memlimit_32bit(void) {
 	return sizeof(void*) < 8;
@@ -361,6 +428,12 @@ void physdev_writed(const PhysPt64 addr,const uint32_t val);
 
 uint32_t MEM_get_address_bits();
 uint32_t MEM_get_address_bits4GB();
+
+#ifdef DOSBOX_LIBRARY_MODE
+// Context-aware versions for library mode (Sprint 2 Phase 2)
+uint32_t MEM_get_address_bits(dosbox::DOSBoxContext* ctx);
+uint32_t MEM_get_address_bits4GB(dosbox::DOSBoxContext* ctx);
+#endif
 
 void MEM_ResetPageHandler_Unmapped(Bitu phys_page, Bitu pages);
 
