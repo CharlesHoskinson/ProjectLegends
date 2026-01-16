@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "dosbox.h"
+#include "dosbox/dosbox_context.h"
 #include "logging.h"
 #include "mem.h"
 #include "inout.h"
@@ -751,7 +752,19 @@ static uint8_t vga_palette[248][3]=
   {0x10,0x0b,0x0b},{0x10,0x0c,0x0b},{0x10,0x0d,0x0b},{0x10,0x0f,0x0b},{0x10,0x10,0x0b},{0x0f,0x10,0x0b},{0x0d,0x10,0x0b},{0x0c,0x10,0x0b},
   {0x0b,0x10,0x0b},{0x0b,0x10,0x0c},{0x0b,0x10,0x0d},{0x0b,0x10,0x0f},{0x0b,0x10,0x10},{0x0b,0x0f,0x10},{0x0b,0x0d,0x10},{0x0b,0x0c,0x10}
 };
-VideoModeBlock * CurMode = NULL;
+
+// CurMode accessor functions
+
+VideoModeBlock* INT10_GetCurMode() {
+    if (!dosbox::has_current_context()) return nullptr;
+    return dosbox::current_context().vga.cur_mode;
+}
+
+void INT10_SetCurModePtr(VideoModeBlock* mode) {
+    if (dosbox::has_current_context()) {
+        dosbox::current_context().vga.cur_mode = mode;
+    }
+}
 
 static bool SetCurMode(VideoModeBlock modeblock[],uint16_t mode) {
 	Bitu i=0;
@@ -778,7 +791,7 @@ static bool SetCurMode(VideoModeBlock modeblock[],uint16_t mode) {
 		}
 		else {
 			if ((!int10.vesa_oldvbe) || (ModeList_VGA[i].mode<0x120)) {
-				CurMode=&modeblock[i];
+				INT10_SetCurModePtr(&modeblock[i]);
 #if defined(USE_TTF)
 				conf_output = static_cast<Section_prop*>(control->GetSection("sdl"))->Get_string("output");
 				if(conf_output.empty())conf_output = "default";
@@ -797,16 +810,16 @@ static void SetTextLines(void) {
 	switch (real_readb(BIOSMEM_SEG,BIOSMEM_MODESET_CTL)&0x90) {
 	case 0x80: // 200 lines emulation
 		if (CurMode->mode <= 3) {
-			CurMode = &ModeList_VGA_Text_200lines[CurMode->mode];
+			INT10_SetCurModePtr(&ModeList_VGA_Text_200lines[CurMode->mode]);
 		} else if (CurMode->mode == 7) {
-			CurMode = &ModeList_VGA_Text_350lines[4];
+			INT10_SetCurModePtr(&ModeList_VGA_Text_350lines[4]);
 		}
 		break;
 	case 0x00: // 350 lines emulation
 		if (CurMode->mode <= 3) {
-			CurMode = &ModeList_VGA_Text_350lines[CurMode->mode];
+			INT10_SetCurModePtr(&ModeList_VGA_Text_350lines[CurMode->mode]);
 		} else if (CurMode->mode == 7) {
-			CurMode = &ModeList_VGA_Text_350lines[4];
+			INT10_SetCurModePtr(&ModeList_VGA_Text_350lines[4]);
 		}
 		break;
 	}
@@ -827,7 +840,7 @@ bool INT10_SetCurMode(void) {
 #if C_DEBUG
 		if (bios_mode==7 && DISP2_Active()) {
 			if ((real_readw(BIOSMEM_SEG,BIOSMEM_INITIAL_MODE)&0x30)!=0x30) return false;
-			CurMode=&Hercules_Mode;
+			INT10_SetCurModePtr(&Hercules_Mode);
 			return true;
 		}
 #endif
@@ -865,10 +878,10 @@ bool INT10_SetCurMode(void) {
 			if (mode_changed && bios_mode<=3) {
 				switch (real_readb(BIOSMEM_SEG,BIOSMEM_MODESET_CTL)&0x90) {
 				case 0x00:
-					CurMode=&ModeList_VGA_Text_350lines[bios_mode];
+					INT10_SetCurModePtr(&ModeList_VGA_Text_350lines[bios_mode]);
 					break;
 				case 0x80:
-					CurMode=&ModeList_VGA_Text_200lines[bios_mode];
+					INT10_SetCurModePtr(&ModeList_VGA_Text_200lines[bios_mode]);
 					break;
 				}
 			}
@@ -1043,7 +1056,7 @@ bool INT10_SetVideoMode_OTHER(uint16_t mode,bool clearmem) {
 				FinishSetMode(clearmem);
 				return true;
 			}
-			CurMode=&Hercules_Mode;
+			INT10_SetCurModePtr(&Hercules_Mode);
 			mode=7; // in case the video parameter table is modified
 			break;
 		default:
@@ -1406,7 +1419,7 @@ bool INT10_SetVideoMode(uint16_t mode) {
 #if C_DEBUG
 	if (mode==7 && DISP2_Active()) {
 		if ((real_readw(BIOSMEM_SEG,BIOSMEM_INITIAL_MODE)&0x30)!=0x30) return false;
-		CurMode=&Hercules_Mode;
+		INT10_SetCurModePtr(&Hercules_Mode);
 		FinishSetMode(clearmem);
 		// EGA/VGA inactive
 		if (IS_EGAVGA_ARCH) real_writeb(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,(0x68|(clearmem?0:0x80)));

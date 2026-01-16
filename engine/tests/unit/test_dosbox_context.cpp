@@ -327,12 +327,12 @@ TEST(DOSBoxContextTest, CpuStateReset) {
 TEST(DOSBoxContextTest, MixerStateReset) {
     MixerState mixer;
     mixer.enabled = true;
-    mixer.sample_rate = 48000;
+    mixer.freq = 48000;
 
     mixer.reset();
 
     EXPECT_FALSE(mixer.enabled);
-    EXPECT_EQ(mixer.sample_rate, 44100u);
+    EXPECT_EQ(mixer.freq, 44100u);
 }
 
 TEST(DOSBoxContextTest, VgaStateReset) {

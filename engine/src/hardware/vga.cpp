@@ -149,6 +149,7 @@
 #include "jfont.h"
 #include "bitop.h"
 #include "sdlmain.h"
+#include "dosbox/dosbox_context.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -172,7 +173,15 @@ bool dosbox_int_pop_save_state(void);
 
 using namespace std;
 
-static uint32_t                     assigned_lfb = 0;
+// LFB assignment accessor via context
+static inline uint32_t& get_assigned_lfb() {
+    static uint32_t fallback_lfb = 0;  // Fallback if no context
+    if (dosbox::has_current_context()) {
+        return dosbox::current_context().vga.assigned_lfb;
+    }
+    return fallback_lfb;
+}
+#define assigned_lfb (get_assigned_lfb())
 
 bool                                VGA_PITsync = false;
 

@@ -525,6 +525,9 @@ enum class SvgaChip : uint8_t {
     Other = 255         ///< Other/unknown
 };
 
+// Forward declaration for current video mode
+struct VideoModeBlock;
+
 /**
  * @brief VGA/display subsystem state.
  *
@@ -601,6 +604,39 @@ struct VgaState {
     bool cga_snow = false;           ///< CGA snow effect enabled
     bool ega_mode = false;           ///< EGA compatibility mode
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // VSync State
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * @brief VSync timing state.
+     */
+    struct VsyncState {
+        double period = 0.0;     ///< VSync period
+        bool manual = false;     ///< Use manual vsync timing
+        bool persistent = false; ///< Use persistent timer
+        bool faithful = false;   ///< Use faithful framerate adjustment
+
+        void reset() noexcept {
+            period = 0.0;
+            manual = false;
+            persistent = false;
+            faithful = false;
+        }
+    } vsync;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LFB Assignment
+    // ─────────────────────────────────────────────────────────────────────────
+
+    uint32_t assigned_lfb = 0;  ///< Assigned Linear Frame Buffer address
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Current Video Mode
+    // ─────────────────────────────────────────────────────────────────────────
+
+    VideoModeBlock* cur_mode = nullptr;  ///< Current video mode block
+
     /**
      * @brief Reset to initial state.
      */
@@ -631,6 +667,9 @@ struct VgaState {
         retrace_poll = false;
         cga_snow = false;
         ega_mode = false;
+        vsync.reset();
+        assigned_lfb = 0;
+        cur_mode = nullptr;
     }
 
     /**

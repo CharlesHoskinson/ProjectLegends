@@ -473,7 +473,7 @@ static uint8_t * VGA_Draw_AMS_4BPP_Line(Bitu vidstart, Bitu line) {
     return TempLine;
 }
 
-struct vsync_state vsync;
+// vsync state accessed via DOSBoxContext.vga.vsync
 
 float uservsyncjolt=0.0f;
 

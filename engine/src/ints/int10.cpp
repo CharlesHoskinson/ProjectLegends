@@ -19,6 +19,7 @@
 #include <assert.h>
 
 #include "dosbox.h"
+#include "dosbox/dosbox_context.h"
 #include "control.h"
 #include "logging.h"
 #include "mem.h"
@@ -1892,7 +1893,7 @@ void INT10_Startup(Section *sec) {
             if(!sbcs_ok || !dbcs_ok) Load_JFont_As_PC98(sbcs_ok, dbcs_ok);
         }
 
-        CurMode = &PC98_Mode;
+        INT10_SetCurModePtr(&PC98_Mode);
 
         /* FIXME: This belongs in MS-DOS kernel init, because these reside in the CON driver */
         /* Some PC-98 game behavior seems to suggest the BIOS data area stretches all the way from segment 0x40:0x00 to segment 0x7F:0x0F inclusive.

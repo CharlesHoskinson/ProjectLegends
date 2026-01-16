@@ -79,6 +79,7 @@ add_executable(aibox_unit_tests
     unit/test_dma_migration.cpp
     unit/test_dos_migration.cpp
     unit/test_pic_migration.cpp
+    unit/test_vga_migration.cpp
 )
 
 target_link_libraries(aibox_unit_tests PRIVATE

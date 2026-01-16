@@ -75,7 +75,10 @@ struct vsync_state {
 	bool faithful;		// use faithful framerate adjustment
 };
 
-extern struct vsync_state vsync;
+// VSync state accessor via context
+#include "dosbox/dosbox_context.h"
+#define vsync (dosbox::current_context().vga.vsync)
+
 extern float uservsyncjolt;
 
 #define CLK_25 25175u

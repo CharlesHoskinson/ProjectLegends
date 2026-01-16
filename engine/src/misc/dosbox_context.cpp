@@ -10,6 +10,11 @@
 #include "dosbox/state_hash.h"
 #include "aibox/headless_stub.h"
 
+// VideoModeBlock for cur_mode hashing (non-headless only)
+#ifndef AIBOX_HEADLESS
+#include "../ints/int10.h"
+#endif
+
 // Note: In headless mode, we use forward declarations for DmaController/DmaChannel
 // and provide stub implementations. Full implementations require the DOSBox-X
 // build environment with config.h.
@@ -205,6 +210,27 @@ void VgaState::hash_into(HashBuilder& builder) const {
     // CGA/EGA compatibility
     builder.update(cga_snow);
     builder.update(ega_mode);
+
+    // VSync state
+    builder.update(vsync.period);
+    builder.update(vsync.manual);
+    builder.update(vsync.persistent);
+    builder.update(vsync.faithful);
+
+    // LFB assignment
+    builder.update(assigned_lfb);
+
+    // Current mode (hash mode number, not pointer)
+#ifndef AIBOX_HEADLESS
+    if (cur_mode) {
+        builder.update(cur_mode->mode);
+    } else {
+        builder.update(static_cast<uint16_t>(0xFFFF));  // Null marker
+    }
+#else
+    // In headless mode, VideoModeBlock not available - hash pointer presence only
+    builder.update(static_cast<uint16_t>(cur_mode ? 1 : 0));
+#endif
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

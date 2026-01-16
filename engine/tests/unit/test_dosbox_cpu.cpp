@@ -48,7 +48,7 @@ TEST(CpuStateTest, DefaultValues) {
     EXPECT_FALSE(cpu.halted);
 
     // Limit (for config)
-    EXPECT_EQ(cpu.cycles_limit, 3000);
+    EXPECT_EQ(cpu.cycle_limit, 3000);
 }
 
 TEST(CpuStateTest, Reset) {
@@ -338,8 +338,8 @@ TEST(ContextCpuTest, ConfigAppliesCyclesLimit) {
     DOSBoxContext ctx(config);
     ctx.initialize();
 
-    // Config should apply cycles_limit
-    EXPECT_EQ(ctx.cpu_state.cycles_limit, 5000);
+    // Config should apply cycle_limit
+    EXPECT_EQ(ctx.cpu_state.cycle_limit, 5000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include "dosbox/error_model.h"
 
+#include <cstring>
 #include <thread>
 #include <atomic>
 

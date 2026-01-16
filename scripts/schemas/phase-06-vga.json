@@ -1,0 +1,50 @@
+{
+  "phase_id": "SPRINT2-P06",
+  "phase_name": "VGA Completion Migration",
+  "dependencies": ["SPRINT2-P05"],
+
+  "structures": {
+    "VgaState": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "type": "struct",
+      "members": {
+        "vsync": {"type": "VsyncState", "required": true},
+        "assigned_lfb": {"type": "uint32_t", "required": true},
+        "cur_mode": {"type": "VideoModeBlock*", "required": true}
+      }
+    },
+    "VsyncState": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "type": "struct",
+      "members": {
+        "period": {"type": "double", "required": true},
+        "manual": {"type": "bool", "required": true},
+        "persistent": {"type": "bool", "required": true},
+        "faithful": {"type": "bool", "required": true}
+      }
+    }
+  },
+
+  "globals_to_remove": [
+    {
+      "name": "vsync",
+      "file": "engine/src/hardware/vga_draw.cpp",
+      "line_pattern": "struct vsync_state vsync"
+    },
+    {
+      "name": "assigned_lfb",
+      "file": "engine/src/hardware/vga.cpp",
+      "line_pattern": "static uint32_t.*assigned_lfb"
+    },
+    {
+      "name": "CurMode",
+      "file": "engine/src/ints/int10_modes.cpp",
+      "line_pattern": "VideoModeBlock\\s*\\*\\s*CurMode\\s*=\\s*NULL"
+    }
+  ],
+
+  "tests": {
+    "unit": ["TEST-P06-U01", "TEST-P06-U02", "TEST-P06-U03", "TEST-P06-U04", "TEST-P06-U05", "TEST-P06-U06"],
+    "integration": ["TEST-P06-I01", "TEST-P06-I02"]
+  }
+}

@@ -125,7 +125,13 @@ struct VideoModeBlock {
 	
 };
 extern VideoModeBlock ModeList_VGA[];
-extern VideoModeBlock * CurMode;
+
+// CurMode accessor functions
+VideoModeBlock* INT10_GetCurMode();
+void INT10_SetCurModePtr(VideoModeBlock* mode);
+
+// Compatibility macro
+#define CurMode (INT10_GetCurMode())
 
 typedef struct {
 	struct {
