@@ -1,0 +1,32 @@
+{
+  "phase_id": "SPRINT2-P05",
+  "phase_name": "PIC Ticker Migration",
+  "dependencies": ["SPRINT2-P04"],
+
+  "structures": {
+    "PicState": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "type": "struct",
+      "members": {
+        "ticker_list": {"type": "TickerBlock*", "required": true},
+        "add_ticker": {"type": "method", "required": true},
+        "remove_ticker": {"type": "method", "required": true},
+        "execute_tickers": {"type": "method", "required": true},
+        "shutdown_tickers": {"type": "method", "required": true}
+      }
+    }
+  },
+
+  "globals_to_remove": [
+    {
+      "name": "firstticker",
+      "file": "engine/src/hardware/pic.cpp",
+      "line_pattern": "static TickerBlock\\s*\\*\\s*firstticker"
+    }
+  ],
+
+  "tests": {
+    "unit": ["TEST-P05-U01", "TEST-P05-U02", "TEST-P05-U03", "TEST-P05-U04", "TEST-P05-U05"],
+    "integration": ["TEST-P05-I01", "TEST-P05-I02"]
+  }
+}

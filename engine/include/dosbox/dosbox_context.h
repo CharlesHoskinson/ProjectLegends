@@ -642,6 +642,21 @@ struct VgaState {
     void hash_into(class HashBuilder& builder) const;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Ticker Block (Sprint 2 Phase 5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Ticker handler node for PIC timer events.
+ *
+ * Forms a singly-linked list of timer tick handlers.
+ * Previously defined locally in pic.cpp, now part of PicState.
+ */
+struct TickerBlock {
+    void (*handler)();   ///< Tick handler function (TIMER_TickHandler)
+    TickerBlock* next;   ///< Next handler in list
+};
+
 /**
  * @brief PIC (Programmable Interrupt Controller) state.
  *
@@ -699,6 +714,34 @@ struct PicState {
     uint8_t slave_isr = 0;           ///< Slave PIC in-service register
     bool auto_eoi = false;           ///< Auto end-of-interrupt mode
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Ticker Infrastructure (Sprint 2 Phase 5)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    TickerBlock* ticker_list = nullptr;  ///< Head of ticker handler linked list
+
+    /**
+     * @brief Add a tick handler to this context's list.
+     * @param handler Function to call on each tick
+     */
+    void add_ticker(void (*handler)());
+
+    /**
+     * @brief Remove a tick handler from this context's list.
+     * @param handler Function to remove
+     */
+    void remove_ticker(void (*handler)());
+
+    /**
+     * @brief Execute all registered tick handlers.
+     */
+    void execute_tickers();
+
+    /**
+     * @brief Shutdown and deallocate all tick handlers.
+     */
+    void shutdown_tickers() noexcept;
+
     /**
      * @brief Reset to initial state.
      */
@@ -715,6 +758,7 @@ struct PicState {
         master_isr = 0;
         slave_isr = 0;
         auto_eoi = false;
+        // Note: ticker_list is NOT reset here - use shutdown_tickers() for cleanup
     }
 
     /**

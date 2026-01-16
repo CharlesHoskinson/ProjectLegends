@@ -19,6 +19,7 @@
 #include <assert.h>
 
 #include "dosbox.h"
+#include "dosbox/dosbox_context.h"
 #include "inout.h"
 #include "cpu.h"
 #include "callback.h"
@@ -800,49 +801,21 @@ bool PIC_RunQueue(void) {
     return true;
 }
 
-/* The TIMER Part */
-struct TickerBlock {
-    /* TODO: carry const char * field for name! */
-    TIMER_TickHandler handler;
-    TickerBlock * next;
-};
-
-static TickerBlock * firstticker = nullptr;
+/* The TIMER Part - Sprint 2 Phase 5: Migrated to DOSBoxContext.pic */
 
 void TIMER_ShutdownTickHandlers() {
-    unsigned int leftovers = 0;
-
-    /* pull in the singly linked list from the front, hand over hand */
-    while (firstticker != NULL) {
-        TickerBlock *n = firstticker->next;
-        delete firstticker;
-        firstticker = n;
-        leftovers++;
-    }
-
-    if (leftovers != 0)
-        LOG(LOG_MISC,LOG_DEBUG)("TIMER: %u leftover handlers (clean up!).",leftovers);
+    if (!dosbox::has_current_context()) return;
+    dosbox::current_context().pic.shutdown_tickers();
 }
 
 void TIMER_DelTickHandler(TIMER_TickHandler handler) {
-    TickerBlock * ticker=firstticker;
-    TickerBlock * * tick_where=&firstticker;
-    while (ticker) {
-        if (ticker->handler==handler) {
-            *tick_where=ticker->next;
-            delete ticker;
-            return;
-        }
-        tick_where=&ticker->next;
-        ticker=ticker->next;
-    }
+    if (!dosbox::has_current_context()) return;
+    dosbox::current_context().pic.remove_ticker(handler);
 }
 
 void TIMER_AddTickHandler(TIMER_TickHandler handler) {
-    TickerBlock * newticker=new TickerBlock;
-    newticker->next=firstticker;
-    newticker->handler=handler;
-    firstticker=newticker;
+    if (!dosbox::has_current_context()) return;
+    dosbox::current_context().pic.add_ticker(handler);
 }
 
 extern Bitu time_limit_ms;
@@ -875,12 +848,9 @@ void TIMER_AddTick(void) {
         entry=entry->next;
     }
 
-    /* Call our list of ticker handlers */
-    TickerBlock * ticker=firstticker;
-    while (ticker) {
-        TickerBlock * nextticker=ticker->next;
-        ticker->handler();
-        ticker=nextticker;
+    /* Call our list of ticker handlers - Sprint 2 Phase 5: Use context */
+    if (dosbox::has_current_context()) {
+        dosbox::current_context().pic.execute_tickers();
     }
 }
 

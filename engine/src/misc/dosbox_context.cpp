@@ -237,6 +237,46 @@ void PicState::hash_into(HashBuilder& builder) const {
     builder.update(master_isr);
     builder.update(slave_isr);
     builder.update(auto_eoi);
+
+    // Note: ticker_list is NOT hashed - function pointers are runtime-dependent
+}
+
+void PicState::add_ticker(void (*handler)()) {
+    TickerBlock* newticker = new TickerBlock;
+    newticker->next = ticker_list;
+    newticker->handler = handler;
+    ticker_list = newticker;
+}
+
+void PicState::remove_ticker(void (*handler)()) {
+    TickerBlock* ticker = ticker_list;
+    TickerBlock** tick_where = &ticker_list;
+    while (ticker) {
+        if (ticker->handler == handler) {
+            *tick_where = ticker->next;
+            delete ticker;
+            return;
+        }
+        tick_where = &ticker->next;
+        ticker = ticker->next;
+    }
+}
+
+void PicState::execute_tickers() {
+    TickerBlock* ticker = ticker_list;
+    while (ticker) {
+        TickerBlock* next = ticker->next;
+        ticker->handler();
+        ticker = next;
+    }
+}
+
+void PicState::shutdown_tickers() noexcept {
+    while (ticker_list != nullptr) {
+        TickerBlock* next = ticker_list->next;
+        delete ticker_list;
+        ticker_list = next;
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
