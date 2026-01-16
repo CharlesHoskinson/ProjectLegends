@@ -216,6 +216,17 @@ extern bool force_conversion;
 extern bool VIDEO_BIOS_always_carry_14_high_font;
 extern bool VIDEO_BIOS_always_carry_16_high_font;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Memory State - Library Mode vs Standalone
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifdef DOSBOX_LIBRARY_MODE
+// In library mode, 'memory' is a macro that accesses the current context's memory state.
+// This allows multiple instances to have independent memory states.
+// The actual MemoryState struct is defined in dosbox_context.h
+#define memory (dosbox::current_context().memory)
+#else
+// In standalone mode, use the traditional static struct
 static struct MemoryBlock {
     Bitu pages = 0;
     Bitu handler_pages = 0;
@@ -244,6 +255,7 @@ static struct MemoryBlock {
     uint32_t address_bits = 0;
     uint32_t hw_next_assign = 0;
 } memory;
+#endif
 
 uint32_t MEM_get_address_bits() {
     return memory.address_bits;
@@ -262,8 +274,15 @@ uint32_t MEM_get_address_bits4GB() { /* some code cannot yet handle values large
  *          is a different block. The reason for this is that the gap that needs to be left open for PCI devices and the ROM BIOS is
  *          large enough that such an arrangement would lead to the waste of about 64MB of emulator memory, which is significant, while
  *          the 384KB wasted at the 8086 1MB limit is too small to worry about. */
+#ifdef DOSBOX_LIBRARY_MODE
+// In library mode, MemBase and MemSize are macros accessing the current context
+#define MemBase (dosbox::current_context().memory.base)
+#define MemSize (dosbox::current_context().memory.size)
+#else
+// In standalone mode, use traditional globals
 HostPt MemBase = NULL;
 size_t MemSize = 0;
+#endif
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Library Mode Memory Management (Sprint 2 Phase 2)
@@ -275,11 +294,13 @@ size_t MemSize = 0;
  * @brief Allocate memory for a DOSBox context in library mode.
  *
  * Allocates guest RAM and stores it in the context's memory state.
- * Also updates the global MemBase for backward compatibility.
+ * The `memory` macro automatically accesses ctx->memory when ctx is current.
  *
- * @param ctx The DOSBox context
+ * @param ctx The DOSBox context (must be current context)
  * @param size_kb Memory size in KB
  * @return true on success, false on allocation failure
+ *
+ * @pre ctx must be set as current context via set_current_context()
  */
 bool MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t size_kb) {
     if (!ctx) return false;
@@ -297,23 +318,13 @@ bool MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t size_kb) {
     // Zero the memory
     memset(mem, 0, alloc_size);
 
-    // Store in context
+    // Store in context (memory macro points to current_context().memory)
+    // Since ctx should be current context, these are equivalent
     ctx->memory.base = mem;
     ctx->memory.size = alloc_size;
-    ctx->memory.pages = static_cast<uint32_t>(pages);
-    ctx->memory.reported_pages = static_cast<uint32_t>(pages);
+    ctx->memory.pages = pages;
+    ctx->memory.reported_pages = pages;
     ctx->memory.address_bits = 32;  // Default 32-bit addressing
-
-    // Update globals for backward compatibility
-    MemBase = mem;
-    MemSize = alloc_size;
-
-    // Sync global memory struct with context
-    memory.pages = pages;
-    memory.reported_pages = pages;
-    memory.address_bits = ctx->memory.address_bits;
-    memory.a20.enabled = ctx->memory.a20.enabled;
-    memory.a20.controlport = ctx->memory.a20.controlport;
 
     return true;
 }
@@ -334,80 +345,33 @@ void MEM_FreeForContext(dosbox::DOSBoxContext* ctx) {
         ctx->memory.size = 0;
     }
 
-    // Clear globals if they pointed to this context's memory
-    if (MemBase == ctx->memory.base) {
-        MemBase = nullptr;
-        MemSize = 0;
-    }
-
     ctx->memory.reset();
 }
 
 /**
  * @brief Sync global memory state with a context.
  *
- * Called when switching contexts to update globals.
+ * In the macro-based implementation, `memory` and `MemBase` automatically
+ * reference the current context, so no sync is needed. This function is
+ * retained for API compatibility but is a no-op.
  *
- * @param ctx The DOSBox context to sync from
+ * @param ctx The DOSBox context (unused - macro handles indirection)
  */
 void MEM_SyncFromContext(dosbox::DOSBoxContext* ctx) {
-    if (!ctx) return;
-
-    // Update global pointer
-    MemBase = ctx->memory.base;
-    MemSize = ctx->memory.size;
-
-    // Sync memory struct fields
-    memory.pages = ctx->memory.pages;
-    memory.reported_pages = ctx->memory.reported_pages;
-    memory.reported_pages_4gb = ctx->memory.reported_pages_4gb;
-    memory.address_bits = ctx->memory.address_bits;
-    memory.a20.enabled = ctx->memory.a20.enabled;
-    memory.a20.controlport = ctx->memory.a20.controlport;
-    memory.mem_alias_pagemask = ctx->memory.mem_alias_pagemask;
-    memory.mem_alias_pagemask_active = ctx->memory.mem_alias_pagemask_active;
-    memory.hw_next_assign = ctx->memory.hw_next_assign;
-
-    // LFB regions (page numbers only, handlers are not context-owned)
-    memory.lfb.start_page = ctx->memory.lfb.start_page;
-    memory.lfb.end_page = ctx->memory.lfb.end_page;
-    memory.lfb.pages = ctx->memory.lfb.pages;
-    memory.lfb_mmio.start_page = ctx->memory.lfb_mmio.start_page;
-    memory.lfb_mmio.end_page = ctx->memory.lfb_mmio.end_page;
-    memory.lfb_mmio.pages = ctx->memory.lfb_mmio.pages;
+    (void)ctx; // No-op: memory macro automatically uses current_context()
 }
 
 /**
  * @brief Sync context memory state from globals.
  *
- * Called to save global state back to context.
+ * In the macro-based implementation, `memory` and `MemBase` automatically
+ * reference the current context, so no sync is needed. This function is
+ * retained for API compatibility but is a no-op.
  *
- * @param ctx The DOSBox context to sync to
+ * @param ctx The DOSBox context (unused - macro handles indirection)
  */
 void MEM_SyncToContext(dosbox::DOSBoxContext* ctx) {
-    if (!ctx) return;
-
-    // Only sync if context owns this memory
-    if (ctx->memory.base != MemBase) return;
-
-    // Sync from memory struct
-    ctx->memory.pages = static_cast<uint32_t>(memory.pages);
-    ctx->memory.reported_pages = static_cast<uint32_t>(memory.reported_pages);
-    ctx->memory.reported_pages_4gb = static_cast<uint32_t>(memory.reported_pages_4gb);
-    ctx->memory.address_bits = memory.address_bits;
-    ctx->memory.a20.enabled = memory.a20.enabled;
-    ctx->memory.a20.controlport = memory.a20.controlport;
-    ctx->memory.mem_alias_pagemask = memory.mem_alias_pagemask;
-    ctx->memory.mem_alias_pagemask_active = memory.mem_alias_pagemask_active;
-    ctx->memory.hw_next_assign = memory.hw_next_assign;
-
-    // LFB regions
-    ctx->memory.lfb.start_page = static_cast<uint32_t>(memory.lfb.start_page);
-    ctx->memory.lfb.end_page = static_cast<uint32_t>(memory.lfb.end_page);
-    ctx->memory.lfb.pages = static_cast<uint32_t>(memory.lfb.pages);
-    ctx->memory.lfb_mmio.start_page = static_cast<uint32_t>(memory.lfb_mmio.start_page);
-    ctx->memory.lfb_mmio.end_page = static_cast<uint32_t>(memory.lfb_mmio.end_page);
-    ctx->memory.lfb_mmio.pages = static_cast<uint32_t>(memory.lfb_mmio.pages);
+    (void)ctx; // No-op: memory macro automatically uses current_context()
 }
 
 #endif // DOSBOX_LIBRARY_MODE
