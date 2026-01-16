@@ -1,0 +1,28 @@
+{
+  "phase_id": "SPRINT2-P09",
+  "phase_name": "DOS File/Drive/Device Registry Migration",
+  "dependencies": ["SPRINT2-P04"],
+
+  "structures": {
+    "DosFilesystemState": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "members": {
+        "files": {"type": "DOS_File*[]", "required": true},
+        "files_count": {"type": "uint32_t", "required": true},
+        "drives": {"type": "DOS_Drive*[26]", "required": true},
+        "devices": {"type": "DOS_Device*[45]", "required": true}
+      }
+    }
+  },
+
+  "globals_to_remove": [
+    {"name": "Files", "file": "engine/src/dos/dos_files.cpp", "line_pattern": "DOS_File.*Files"},
+    {"name": "Drives", "file": "engine/src/dos/dos_files.cpp", "line_pattern": "DOS_Drive.*Drives"},
+    {"name": "Devices", "file": "engine/src/dos/dos_devices.cpp", "line_pattern": "DOS_Device.*Devices"}
+  ],
+
+  "tests": {
+    "unit": ["TEST-P09-U01", "TEST-P09-U02", "TEST-P09-U03", "TEST-P09-U04", "TEST-P09-U05"],
+    "integration": ["TEST-P09-I01", "TEST-P09-I02", "TEST-P09-I03"]
+  }
+}

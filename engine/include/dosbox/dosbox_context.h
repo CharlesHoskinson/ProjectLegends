@@ -1319,6 +1319,59 @@ struct DosState {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DOS Filesystem State (Sprint 2 Phase 9)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Forward declarations for DOS filesystem types
+class DOS_File;
+class DOS_Drive;
+class DOS_Device;
+
+/**
+ * @brief DOS filesystem state for multi-instance support.
+ *
+ * Contains the file handle table, drive registry, and device registry
+ * that were previously global arrays in dos_files.cpp and dos_devices.cpp.
+ *
+ * ## File Handles
+ * - files: Array of pointers to open DOS_File objects
+ * - files_count: Maximum number of open files (default 127)
+ *
+ * ## Drive Registry
+ * - drives: Array of 26 pointers to DOS_Drive objects (A-Z)
+ *
+ * ## Device Registry
+ * - devices: Array of 45 pointers to DOS_Device objects
+ *
+ * ## Thread Safety
+ * Not thread-safe. Use from emulation thread only.
+ */
+struct DosFilesystemState {
+    static constexpr size_t MAX_DRIVES = 26;
+    static constexpr size_t MAX_DEVICES = 45;
+    static constexpr size_t DEFAULT_FILES = 127;
+
+    DOS_File** files = nullptr;
+    uint32_t files_count = DEFAULT_FILES;
+
+    DOS_Drive* drives[MAX_DRIVES] = {};
+
+    DOS_Device* devices[MAX_DEVICES] = {};
+
+    bool force_sfn = false;
+    int32_t sdrive = 0;
+    int32_t lfn_filefind_handle = -1;
+
+    void initialize();
+
+    void cleanup() noexcept;
+
+    void reset() noexcept;
+
+    void hash_into(HashBuilder& builder) const;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DOSBox Context
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1449,6 +1502,12 @@ public:
     // ─────────────────────────────────────────────────────────────────────────
 
     DosState dos;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DOS Filesystem State (Sprint 2 Phase 9)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    DosFilesystemState dos_filesystem;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Platform Timing (PR #17)

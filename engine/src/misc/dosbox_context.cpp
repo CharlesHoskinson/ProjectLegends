@@ -558,6 +558,74 @@ void DosState::hash_into(HashBuilder& builder) const {
     builder.update(codepage);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DosFilesystemState Implementation (Sprint 2 Phase 9)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void DosFilesystemState::initialize() {
+    if (files) {
+        cleanup();
+    }
+
+    files = new DOS_File*[files_count]();
+    for (uint32_t i = 0; i < files_count; ++i) {
+        files[i] = nullptr;
+    }
+}
+
+void DosFilesystemState::cleanup() noexcept {
+    delete[] files;
+    files = nullptr;
+}
+
+void DosFilesystemState::reset() noexcept {
+    // Clear file handles (but don't deallocate the array)
+    if (files) {
+        for (uint32_t i = 0; i < files_count; ++i) {
+            files[i] = nullptr;
+        }
+    }
+
+    // Clear drive pointers
+    for (size_t i = 0; i < MAX_DRIVES; ++i) {
+        drives[i] = nullptr;
+    }
+
+    // Clear device pointers
+    for (size_t i = 0; i < MAX_DEVICES; ++i) {
+        devices[i] = nullptr;
+    }
+
+    // Reset additional state
+    force_sfn = false;
+    sdrive = 0;
+    lfn_filefind_handle = -1;
+}
+
+void DosFilesystemState::hash_into(HashBuilder& builder) const {
+    builder.update(files_count);
+    builder.update(static_cast<uint8_t>(force_sfn ? 1 : 0));
+    builder.update(sdrive);
+    builder.update(lfn_filefind_handle);
+
+    // Hash which file handles are in use (not contents)
+    if (files) {
+        for (uint32_t i = 0; i < files_count; ++i) {
+            builder.update(static_cast<uint8_t>(files[i] != nullptr ? 1 : 0));
+        }
+    }
+
+    // Hash which drives are mounted
+    for (size_t i = 0; i < MAX_DRIVES; ++i) {
+        builder.update(static_cast<uint8_t>(drives[i] != nullptr ? 1 : 0));
+    }
+
+    // Hash which devices are registered
+    for (size_t i = 0; i < MAX_DEVICES; ++i) {
+        builder.update(static_cast<uint8_t>(devices[i] != nullptr ? 1 : 0));
+    }
+}
+
 } // namespace dosbox
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -873,6 +941,9 @@ void DOSBoxContext::shutdown() noexcept {
     // Free DMA controllers (Sprint 2 Phase 3)
     dma.cleanup();
 
+    // Free DOS filesystem (Sprint 2 Phase 9)
+    dos_filesystem.cleanup();
+
     // Reset all subsystem state
     timing.reset();
     cpu_state.reset();
@@ -883,6 +954,7 @@ void DOSBoxContext::shutdown() noexcept {
     input.reset();
     memory.reset();
     dma.reset();
+    dos_filesystem.reset();
 
     initialized_ = false;
     stop_requested_ = true;
@@ -901,6 +973,7 @@ Result<void> DOSBoxContext::reset() {
     pic.reset();
     keyboard.reset();
     input.reset();
+    dos_filesystem.reset();
 
     // Reapply configuration
     cpu_state.cycle_limit = config_.cpu_cycles;

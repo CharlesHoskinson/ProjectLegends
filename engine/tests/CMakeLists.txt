@@ -82,6 +82,7 @@ add_executable(aibox_unit_tests
     unit/test_vga_migration.cpp
     unit/test_memory_migration.cpp
     unit/test_keyboard_migration.cpp
+    unit/test_dos_filesystem_migration.cpp
 )
 
 target_link_libraries(aibox_unit_tests PRIVATE
