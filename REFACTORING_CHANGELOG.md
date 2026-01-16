@@ -508,3 +508,83 @@ Result<StateHash> get_state_hash(HashMode mode = HashMode::Fast);
 - V1 single-instance: ✅ Production code no longer relies on thread-local context
 - V2 sequential instances: 🔜 Next phases will complete global migration
 
+### PR #25: Sprint 2 Phase 2 - Memory State Migration (Partial)
+**Commit:** `pending`
+**Date:** 2026-01-15
+**Files:**
+- `include/dosbox/dosbox_context.h` - Added `MemoryState` struct with A20, LFB, paging config
+- `src/misc/dosbox_context.cpp` - Implemented `MemoryState::hash_into()`
+- `src/misc/state_hash.cpp` - Added memory state to hash (V7)
+- `tests/unit/test_dosbox_state_hash.cpp` - Added memory state tests
+
+**Memory State Structure:**
+```cpp
+struct LfbRegion {
+    uint32_t start_page = 0;
+    uint32_t end_page = 0;
+    uint32_t pages = 0;
+};
+
+struct A20State {
+    bool enabled = true;
+    uint8_t controlport = 0;
+};
+
+struct MemoryState {
+    // Core memory
+    uint8_t* base = nullptr;      // Guest RAM (replaces MemBase global)
+    size_t size = 0;              // Allocated size in bytes
+
+    // Page configuration
+    uint32_t pages = 0;
+    uint32_t handler_pages = 0;
+    uint32_t reported_pages = 0;
+    uint32_t reported_pages_4gb = 0;
+
+    // LFB regions
+    LfbRegion lfb;
+    LfbRegion lfb_mmio;
+
+    // A20 gate
+    A20State a20;
+
+    // Address masking
+    uint32_t mem_alias_pagemask = 0;
+    uint32_t mem_alias_pagemask_active = 0;
+    uint32_t address_bits = 20;
+    uint32_t hw_next_assign = 0;
+
+    void reset() noexcept;
+    void hash_into(HashBuilder& builder) const;
+};
+```
+
+**Key Changes:**
+
+| Component | Before | After |
+|-----------|--------|-------|
+| `MemBase` | Global pointer | `DOSBoxContext.memory.base` |
+| `MemoryBlock` | Static global struct | `DOSBoxContext.memory.*` fields |
+| A20 state | In global struct | `DOSBoxContext.memory.a20` |
+| LFB config | In global struct | `DOSBoxContext.memory.lfb*` |
+| State hash | No memory state | Includes memory config (V7) |
+
+**State Hash Version:** V7 (added memory state)
+
+**Test Coverage Added:**
+- `MemoryStateDefaultValues` - Verify default memory configuration
+- `MemoryA20StateAffectsHash` - A20 toggle changes hash
+- `MemoryConfigAffectsHash` - Page/address config changes hash
+- `MemoryLfbConfigAffectsHash` - LFB region changes hash
+- `MemoryStateReset` - Reset restores defaults
+- `DifferentMemoryConfigsDifferentHashes` - Different configs → different hashes
+- `MemoryStateIncludedInContextHash` - Memory state properly hashed
+
+**Note:** This is a partial migration. The struct is defined and included in hash,
+but `MemBase` and `memory` globals in memory.cpp are not yet removed. Caller
+migration (261 call sites) will be completed in subsequent commits.
+
+**Contract Progression:**
+- V1 single-instance: ✅ Memory state struct in context
+- V2 sequential instances: 🔜 Pending global removal and caller migration
+

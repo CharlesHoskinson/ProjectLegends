@@ -359,3 +359,117 @@ TEST_F(ExplicitContextHashTest, WorksWithoutThreadLocalContext) {
     std::string hex = hash_to_hex(result.value());
     EXPECT_EQ(hex.size(), 64u);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Sprint 2 Phase 2: Memory State Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+TEST_F(ExplicitContextHashTest, MemoryStateDefaultValues) {
+    // Verify default memory state values
+    EXPECT_EQ(ctx_->memory.base, nullptr);
+    EXPECT_EQ(ctx_->memory.size, 0u);
+    EXPECT_EQ(ctx_->memory.pages, 0u);
+    EXPECT_EQ(ctx_->memory.handler_pages, 0u);
+    EXPECT_EQ(ctx_->memory.reported_pages, 0u);
+    EXPECT_EQ(ctx_->memory.address_bits, 20u);
+    EXPECT_TRUE(ctx_->memory.a20.enabled);
+    EXPECT_EQ(ctx_->memory.a20.controlport, 0u);
+}
+
+TEST_F(ExplicitContextHashTest, MemoryA20StateAffectsHash) {
+    auto hash_enabled = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_enabled.has_value());
+
+    // Toggle A20 gate
+    ctx_->memory.a20.enabled = false;
+
+    auto hash_disabled = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_disabled.has_value());
+
+    // A20 state change should change hash
+    EXPECT_NE(hash_enabled.value(), hash_disabled.value());
+}
+
+TEST_F(ExplicitContextHashTest, MemoryConfigAffectsHash) {
+    auto hash_before = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_before.has_value());
+
+    // Change memory configuration
+    ctx_->memory.pages = 4096;  // 16MB in pages
+    ctx_->memory.address_bits = 32;
+
+    auto hash_after = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_after.has_value());
+
+    // Memory config change should change hash
+    EXPECT_NE(hash_before.value(), hash_after.value());
+}
+
+TEST_F(ExplicitContextHashTest, MemoryLfbConfigAffectsHash) {
+    auto hash_before = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_before.has_value());
+
+    // Configure LFB region
+    ctx_->memory.lfb.start_page = 0xE0000 / 4096;
+    ctx_->memory.lfb.end_page = 0x100000 / 4096;
+    ctx_->memory.lfb.pages = (0x100000 - 0xE0000) / 4096;
+
+    auto hash_after = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_after.has_value());
+
+    // LFB config change should change hash
+    EXPECT_NE(hash_before.value(), hash_after.value());
+}
+
+TEST_F(ExplicitContextHashTest, MemoryStateReset) {
+    // Modify memory state
+    ctx_->memory.pages = 4096;
+    ctx_->memory.address_bits = 32;
+    ctx_->memory.a20.enabled = false;
+    ctx_->memory.lfb.pages = 128;
+
+    // Reset should restore defaults
+    ctx_->memory.reset();
+
+    EXPECT_EQ(ctx_->memory.pages, 0u);
+    EXPECT_EQ(ctx_->memory.address_bits, 20u);
+    EXPECT_TRUE(ctx_->memory.a20.enabled);
+    EXPECT_EQ(ctx_->memory.lfb.pages, 0u);
+}
+
+TEST_F(ExplicitContextHashTest, DifferentMemoryConfigsDifferentHashes) {
+    auto ctx2 = std::make_unique<DOSBoxContext>();
+
+    // Configure different memory sizes
+    ctx_->memory.size = 1024 * 1024;      // 1MB
+    ctx_->memory.pages = 256;
+
+    ctx2->memory.size = 16 * 1024 * 1024; // 16MB
+    ctx2->memory.pages = 4096;
+
+    auto hash1 = get_state_hash(ctx_.get(), HashMode::Fast);
+    auto hash2 = get_state_hash(ctx2.get(), HashMode::Fast);
+
+    ASSERT_TRUE(hash1.has_value());
+    ASSERT_TRUE(hash2.has_value());
+
+    // Different memory configs should produce different hashes
+    EXPECT_NE(hash1.value(), hash2.value());
+}
+
+TEST_F(ExplicitContextHashTest, MemoryStateIncludedInContextHash) {
+    // Get hash with default memory state
+    auto hash_default = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_default.has_value());
+
+    // Verify that memory state changes actually affect the context hash
+    // by checking multiple memory fields
+    ctx_->memory.mem_alias_pagemask = 0xFFFFFF;
+    ctx_->memory.mem_alias_pagemask_active = 0xFFFFF;
+    ctx_->memory.hw_next_assign = 0x100000;
+
+    auto hash_modified = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_modified.has_value());
+
+    EXPECT_NE(hash_default.value(), hash_modified.value());
+}

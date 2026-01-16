@@ -231,7 +231,7 @@ Result<StateHash> get_state_hash(DOSBoxContext* ctx, HashMode mode) {
 
     // Version marker for hash stability
     // Increment when hash structure changes
-    const uint32_t hash_version = 6;  // V6: Added PIC, Keyboard, Input state (PR #14)
+    const uint32_t hash_version = 7;  // V7: Added Memory state (Sprint 2 Phase 2)
     builder.update(hash_version);
 
     // Mode marker
@@ -274,17 +274,21 @@ Result<StateHash> get_state_hash(DOSBoxContext* ctx, HashMode mode) {
     // ─────────────────────────────────────────────────────────────────────
     ctx->input.hash_into(builder);
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Memory State (Sprint 2 Phase 2)
+    // ─────────────────────────────────────────────────────────────────────
+    ctx->memory.hash_into(builder);
+
     // ─────────────────────────────────────────────────────────────────────────
-    // Placeholder for Future State (Memory, DOS, etc.)
+    // Placeholder for Future State (DOS, DMA, etc.)
     // ─────────────────────────────────────────────────────────────────────────
 
     // Fast mode will hash (future PRs):
-    // - Memory state
     // - DOS state
     // - DMA controllers
 
     // Placeholder marker for state not yet migrated
-    const char* placeholder = "STATE_HASH_V6";
+    const char* placeholder = "STATE_HASH_V7";
     builder.update(placeholder, std::strlen(placeholder));
 
     // Full mode adds (future PRs):
@@ -313,7 +317,7 @@ Result<StateHash> get_state_hash(HashMode mode) {
     // No context - return placeholder hash for backward compatibility
     HashBuilder builder;
 
-    const uint32_t hash_version = 6;
+    const uint32_t hash_version = 7;  // V7: Added Memory state (Sprint 2 Phase 2)
     builder.update(hash_version);
 
     const uint32_t mode_marker = static_cast<uint32_t>(mode);

@@ -20,7 +20,14 @@
 #define DOSBOX_TIMER_H
 
 /* underlying clock rate in HZ */
-#include <SDL.h>
+#if defined(C_HEADLESS) || defined(AIBOX_HEADLESS)
+  /* Headless mode - use stub functions */
+  #include <cstdint>
+  extern "C" uint32_t SDL_GetTicks(void);
+  extern "C" void SDL_Delay(uint32_t ms);
+#else
+  #include <SDL.h>
+#endif
 
 #define PIT_TICK_RATE_IBM 1193182
 

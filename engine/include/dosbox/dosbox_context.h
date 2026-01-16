@@ -815,6 +815,129 @@ struct InputCaptureState {
     void hash_into(class HashBuilder& builder) const;
 };
 
+/**
+ * @brief Linear framebuffer region configuration.
+ *
+ * Describes a memory region mapped for video framebuffer access.
+ * Used for VGA LFB and MMIO regions.
+ */
+struct LfbRegion {
+    uint32_t start_page = 0;     ///< Starting page number
+    uint32_t end_page = 0;       ///< Ending page number (exclusive)
+    uint32_t pages = 0;          ///< Number of pages in region
+
+    void reset() noexcept {
+        start_page = 0;
+        end_page = 0;
+        pages = 0;
+    }
+};
+
+/**
+ * @brief A20 gate state.
+ *
+ * Controls the A20 address line behavior for legacy compatibility.
+ * When disabled, addresses wrap at 1MB boundary (8086 compatibility).
+ */
+struct A20State {
+    bool enabled = true;         ///< A20 gate enabled (default: enabled)
+    uint8_t controlport = 0;     ///< Control port value (port 92h state)
+
+    void reset() noexcept {
+        enabled = true;
+        controlport = 0;
+    }
+};
+
+/**
+ * @brief Memory subsystem state.
+ *
+ * Holds migrated memory globals from src/hardware/memory.cpp.
+ * Controls guest RAM allocation, page handling, and A20 gate.
+ *
+ * Migration status: PR #24 (Sprint 2 Phase 2)
+ * Original globals: MemBase, memory struct
+ *
+ * ## Memory Layout
+ * The base pointer points to the allocated guest RAM buffer.
+ * Page handlers provide virtualized access to different memory regions.
+ * The A20 gate controls address line 20 for 8086 compatibility.
+ *
+ * ## Ownership
+ * - base: Owned, allocated/freed by context
+ * - phandlers/mhandles: Not yet migrated (Phase 2 partial)
+ *
+ * ## Thread Safety
+ * Not thread-safe. Use from emulation thread only.
+ */
+struct MemoryState {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Core Memory (from memory.cpp lines 261-262)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    uint8_t* base = nullptr;     ///< Guest RAM base pointer (replaces MemBase)
+    size_t size = 0;             ///< Allocated size in bytes (replaces MemSize)
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Page Configuration (from MemoryBlock struct, lines 216-219)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    uint32_t pages = 0;              ///< Total memory pages
+    uint32_t handler_pages = 0;      ///< Number of page handler entries
+    uint32_t reported_pages = 0;     ///< Pages reported to guest
+    uint32_t reported_pages_4gb = 0; ///< Pages reported above 4GB
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Linear Framebuffer Regions (from MemoryBlock lines 222-233)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    LfbRegion lfb;               ///< VGA linear framebuffer region
+    LfbRegion lfb_mmio;          ///< VGA MMIO region
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // A20 Gate State (from MemoryBlock lines 234-237)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    A20State a20;                ///< A20 gate state
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Address Masking (from MemoryBlock lines 238-241)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    uint32_t mem_alias_pagemask = 0;        ///< Page mask for aliasing
+    uint32_t mem_alias_pagemask_active = 0; ///< Active alias mask (A20 dependent)
+    uint32_t address_bits = 20;              ///< Address bus width (default 20 for 8086)
+    uint32_t hw_next_assign = 0;             ///< Next hardware assignment address
+
+    /**
+     * @brief Reset to initial state.
+     *
+     * Does NOT deallocate memory. Use cleanup() for full deallocation.
+     */
+    void reset() noexcept {
+        // Don't reset base/size - those are managed by init/cleanup
+        pages = 0;
+        handler_pages = 0;
+        reported_pages = 0;
+        reported_pages_4gb = 0;
+        lfb.reset();
+        lfb_mmio.reset();
+        a20.reset();
+        mem_alias_pagemask = 0;
+        mem_alias_pagemask_active = 0;
+        address_bits = 20;
+        hw_next_assign = 0;
+    }
+
+    /**
+     * @brief Hash the memory state for determinism verification.
+     *
+     * Includes configuration and A20 state (determinism-relevant).
+     * Excludes raw memory content (too large, use Full mode for content).
+     */
+    void hash_into(class HashBuilder& builder) const;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DOSBox Context
 // ─────────────────────────────────────────────────────────────────────────────
@@ -931,6 +1054,9 @@ public:
 
     /** @brief Input capture state */
     InputCaptureState input;
+
+    /** @brief Memory subsystem state (Sprint 2 Phase 2) */
+    MemoryState memory;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Platform Timing (PR #17)

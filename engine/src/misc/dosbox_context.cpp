@@ -261,6 +261,41 @@ void InputCaptureState::hash_into(HashBuilder& builder) const {
     builder.update(input_captured);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MemoryState Implementation (Sprint 2 Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void MemoryState::hash_into(HashBuilder& builder) const {
+    // Hash determinism-relevant memory configuration
+    // Note: We do NOT hash the actual memory contents in Fast mode - that's too large.
+    // The Full mode hash (when implemented) will include memory contents.
+
+    // Core configuration (affects memory layout)
+    builder.update(static_cast<uint64_t>(size));
+    builder.update(pages);
+    builder.update(handler_pages);
+    builder.update(reported_pages);
+    builder.update(reported_pages_4gb);
+
+    // LFB regions (affects video memory mapping)
+    builder.update(lfb.start_page);
+    builder.update(lfb.end_page);
+    builder.update(lfb.pages);
+    builder.update(lfb_mmio.start_page);
+    builder.update(lfb_mmio.end_page);
+    builder.update(lfb_mmio.pages);
+
+    // A20 gate state (affects address wrapping)
+    builder.update(a20.enabled);
+    builder.update(a20.controlport);
+
+    // Address masking (affects memory aliasing)
+    builder.update(mem_alias_pagemask);
+    builder.update(mem_alias_pagemask_active);
+    builder.update(address_bits);
+    builder.update(hw_next_assign);
+}
+
 } // namespace dosbox
 
 // ═══════════════════════════════════════════════════════════════════════════════
