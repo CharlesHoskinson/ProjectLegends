@@ -815,10 +815,6 @@ struct InputCaptureState {
     void hash_into(class HashBuilder& builder) const;
 };
 
-// Forward declarations for memory types (avoid circular includes)
-class PageHandler;
-using MemHandle = int32_t;
-
 /**
  * @brief Linear framebuffer region configuration.
  *
@@ -826,16 +822,14 @@ using MemHandle = int32_t;
  * Used for VGA LFB and MMIO regions.
  */
 struct LfbRegion {
-    size_t start_page = 0;       ///< Starting page number (Bitu compatible)
-    size_t end_page = 0;         ///< Ending page number (exclusive)
-    size_t pages = 0;            ///< Number of pages in region
-    PageHandler* handler = nullptr; ///< Page handler for this region
+    uint32_t start_page = 0;     ///< Starting page number
+    uint32_t end_page = 0;       ///< Ending page number (exclusive)
+    uint32_t pages = 0;          ///< Number of pages in region
 
     void reset() noexcept {
         start_page = 0;
         end_page = 0;
         pages = 0;
-        handler = nullptr;
     }
 };
 
@@ -886,20 +880,12 @@ struct MemoryState {
 
     // ─────────────────────────────────────────────────────────────────────────
     // Page Configuration (from MemoryBlock struct, lines 216-219)
-    // Using size_t (Bitu) for compatibility with existing code
     // ─────────────────────────────────────────────────────────────────────────
 
-    size_t pages = 0;              ///< Total memory pages
-    size_t handler_pages = 0;      ///< Number of page handler entries
-    size_t reported_pages = 0;     ///< Pages reported to guest
-    size_t reported_pages_4gb = 0; ///< Pages reported above 4GB
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Page Handlers and Memory Handles (from MemoryBlock lines 220-221)
-    // ─────────────────────────────────────────────────────────────────────────
-
-    PageHandler** phandlers = nullptr;  ///< Per-page handler array
-    MemHandle* mhandles = nullptr;      ///< Memory handle array for EMS/XMS
+    uint32_t pages = 0;              ///< Total memory pages
+    uint32_t handler_pages = 0;      ///< Number of page handler entries
+    uint32_t reported_pages = 0;     ///< Pages reported to guest
+    uint32_t reported_pages_4gb = 0; ///< Pages reported above 4GB
 
     // ─────────────────────────────────────────────────────────────────────────
     // Linear Framebuffer Regions (from MemoryBlock lines 222-233)
@@ -930,7 +916,6 @@ struct MemoryState {
      */
     void reset() noexcept {
         // Don't reset base/size - those are managed by init/cleanup
-        // Don't reset phandlers/mhandles - those are managed separately
         pages = 0;
         handler_pages = 0;
         reported_pages = 0;
@@ -942,26 +927,6 @@ struct MemoryState {
         mem_alias_pagemask_active = 0;
         address_bits = 20;
         hw_next_assign = 0;
-    }
-
-    /**
-     * @brief Full cleanup including dynamic allocations.
-     */
-    void cleanup() noexcept {
-        if (phandlers) {
-            delete[] phandlers;
-            phandlers = nullptr;
-        }
-        if (mhandles) {
-            delete[] mhandles;
-            mhandles = nullptr;
-        }
-        if (base) {
-            delete[] base;
-            base = nullptr;
-        }
-        size = 0;
-        reset();
     }
 
     /**

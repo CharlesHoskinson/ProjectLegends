@@ -23,10 +23,6 @@
 
 #include "byteorder.h"
 
-#ifdef DOSBOX_LIBRARY_MODE
-#include "dosbox/dosbox_context.h"
-#endif
-
 #define MEM_PAGESIZE        (4096U)
 
 /* HostPt and ConstHostPt is for holding linear addresses within this emulator i.e. a normal pointer.
@@ -52,18 +48,8 @@ typedef uint64_t              PhysPt64;           /* guest physical memory point
 
 typedef int32_t               MemHandle;
 
-/* Memory base and size - library mode vs standalone */
-#ifdef DOSBOX_LIBRARY_MODE
-/* In library mode, MemBase and MemSize are macros accessing the current context.
- * This allows multiple instances to have independent memory buffers.
- * Note: Must have a current context set via set_current_context() */
-#define MemBase (dosbox::current_context().memory.base)
-#define MemSize (dosbox::current_context().memory.size)
-#else
-/* In standalone mode, use traditional global variables */
 extern HostPt                 MemBase;
 extern size_t                 MemSize;
-#endif
 
 HostPt                      GetMemBase(void);
 bool                        MEM_A20_Enabled(void);
