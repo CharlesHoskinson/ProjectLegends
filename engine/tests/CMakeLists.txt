@@ -75,6 +75,8 @@ add_executable(aibox_unit_tests
     unit/test_vision_capture.cpp
     unit/test_vision_overlay.cpp
     unit/test_vision_annotations.cpp
+    # Sprint 2: Instance Reality
+    unit/test_dma_migration.cpp
 )
 
 target_link_libraries(aibox_unit_tests PRIVATE

@@ -180,3 +180,46 @@ jobs:
             fi
           done
           echo "Header guard check complete."
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Static Analysis (clang-tidy)
+  # ─────────────────────────────────────────────────────────────────────────────
+  static-analysis:
+    name: Static Analysis (clang-tidy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [linux]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build clang-16 clang-tidy-16
+
+      - name: Configure (generate compile_commands.json)
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_C_COMPILER=clang-16 \
+            -DCMAKE_CXX_COMPILER=clang++-16 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Run clang-tidy on new/modified engine code
+        run: |
+          echo "Running clang-tidy on engine source files..."
+          # Run on core engine files (exclude legacy DOSBox-X code for now)
+          find engine/src/misc -name '*.cpp' -print0 | \
+            xargs -0 -r clang-tidy-16 -p build \
+              --checks='modernize-*,bugprone-*,performance-*,-modernize-use-trailing-return-type' \
+              2>&1 | tee clang-tidy-output.txt
+
+          # Check for errors (warnings are allowed for now)
+          if grep -q "error:" clang-tidy-output.txt; then
+            echo "clang-tidy found errors!"
+            exit 1
+          fi
+          echo "Static analysis passed (warnings only)."

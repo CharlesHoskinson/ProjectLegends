@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "phase_id": "SPRINT2-P03",
+  "phase_name": "DMA Controllers Migration",
+  "description": "Migrate DmaControllers[2] array from global variable to DOSBoxContext",
+  "dependencies": ["SPRINT2-P02"],
+  "complexity": "Medium",
+  "estimated_effort": "1.5 days",
+
+  "structures": {
+    "DmaState": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "type": "struct",
+      "description": "DMA controller state for multi-instance support",
+      "members": {
+        "controllers": {
+          "type": "DmaController*[2]",
+          "required": true,
+          "description": "Array of two DMA controller pointers (8-bit and 16-bit)"
+        },
+        "has_second_controller": {
+          "type": "method",
+          "returns": "bool",
+          "const": true,
+          "noexcept": true,
+          "description": "Returns true if second (16-bit) DMA controller is present"
+        },
+        "get_channel": {
+          "type": "method",
+          "args": ["uint8_t chan"],
+          "returns": "DmaChannel*",
+          "const": true,
+          "noexcept": true,
+          "description": "Get DMA channel by number (0-7)"
+        },
+        "reset": {
+          "type": "method",
+          "returns": "void",
+          "noexcept": true,
+          "description": "Reset DMA state to initial values"
+        },
+        "cleanup": {
+          "type": "method",
+          "returns": "void",
+          "noexcept": true,
+          "description": "Deallocate DMA controllers"
+        },
+        "hash_into": {
+          "type": "method",
+          "args": ["HashBuilder& builder"],
+          "returns": "void",
+          "const": true,
+          "description": "Hash DMA state into builder for determinism verification"
+        }
+      }
+    }
+  },
+
+  "context_additions": {
+    "DOSBoxContext": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "new_members": {
+        "dma": {
+          "type": "DmaState",
+          "required": true,
+          "description": "DMA controller state"
+        }
+      }
+    }
+  },
+
+  "globals_to_remove": [
+    {
+      "name": "DmaControllers",
+      "file": "engine/src/hardware/dma.cpp",
+      "line_pattern": "DmaController\\*\\s+DmaControllers\\[2\\]",
+      "description": "Global DMA controller array"
+    }
+  ],
+
+  "compat_shims": {
+    "file": "engine/src/hardware/dma_compat.cpp",
+    "description": "Compatibility shims using current_context() for legacy code",
+    "functions": [
+      {
+        "name": "GetDMAChannel",
+        "signature": "DmaChannel* GetDMAChannel(uint8_t chan)",
+        "description": "Legacy API - calls ctx.dma.get_channel()"
+      },
+      {
+        "name": "CloseSecondDMAController",
+        "signature": "void CloseSecondDMAController()",
+        "description": "Legacy API - closes second controller via context"
+      }
+    ]
+  },
+
+  "state_hash_additions": {
+    "file": "engine/src/misc/state_hash.cpp",
+    "required_call": "ctx->dma.hash_into(builder)",
+    "description": "DMA state must be included in determinism hash"
+  },
+
+  "files_to_modify": [
+    "engine/include/dosbox/dosbox_context.h",
+    "engine/src/hardware/dma.cpp",
+    "engine/src/misc/dosbox_context.cpp",
+    "engine/src/misc/state_hash.cpp"
+  ],
+
+  "files_to_create": [
+    "engine/src/hardware/dma_compat.cpp",
+    "engine/tests/unit/test_dma_migration.cpp"
+  ],
+
+  "tests": {
+    "unit": [
+      {
+        "id": "TEST-P03-U01",
+        "name": "DMA State Default Initialization",
+        "description": "Verify new context has null controllers"
+      },
+      {
+        "id": "TEST-P03-U02",
+        "name": "DMA Controller Creation",
+        "description": "Verify controllers created on init"
+      },
+      {
+        "id": "TEST-P03-U03",
+        "name": "DMA Channel Access (0-3)",
+        "description": "Verify channels 0-3 accessible via first controller"
+      },
+      {
+        "id": "TEST-P03-U04",
+        "name": "DMA Channel Access (4-7)",
+        "description": "Verify channels 4-7 accessible via second controller"
+      },
+      {
+        "id": "TEST-P03-U05",
+        "name": "Close Second DMA Controller",
+        "description": "Verify second controller can be closed"
+      },
+      {
+        "id": "TEST-P03-U06",
+        "name": "DMA Cleanup on Destroy",
+        "description": "Verify controllers deallocated on context destruction"
+      }
+    ],
+    "integration": [
+      {
+        "id": "TEST-P03-I01",
+        "name": "Sound Blaster DMA Playback",
+        "description": "Verify DMA channel 1 works for Sound Blaster"
+      },
+      {
+        "id": "TEST-P03-I02",
+        "name": "Floppy Disk DMA Transfer",
+        "description": "Verify DMA channel 2 works for floppy"
+      },
+      {
+        "id": "TEST-P03-I03",
+        "name": "DMA Isolation Between Instances",
+        "description": "Verify DMA state is isolated per instance"
+      }
+    ],
+    "determinism": [
+      {
+        "id": "TEST-P03-D01",
+        "name": "DMA State In Hash",
+        "description": "Verify DMA state changes affect state hash"
+      }
+    ]
+  },
+
+  "acceptance_criteria": [
+    "DmaControllers[2] global removed from dma.cpp",
+    "DmaState struct added to DOSBoxContext",
+    "GetDMAChannel() uses context",
+    "CloseSecondDMAController() uses context",
+    "Controllers deallocated on context destruction",
+    "Sound Blaster audio works",
+    "Floppy disk operations work",
+    "DMA state included in hash"
+  ]
+}

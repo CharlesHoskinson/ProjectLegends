@@ -156,6 +156,8 @@ namespace dosbox {
 // Forward declarations
 class DOSBoxContext;
 class HashBuilder;  // from state_hash.h
+class DmaController; // from dma.h
+class DmaChannel;    // from dma.h
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuration
@@ -953,6 +955,86 @@ struct MemoryState {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DMA State (Sprint 2 Phase 3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief DMA controller state for multi-instance support.
+ *
+ * Replaces the global DmaControllers[2] array from dma.cpp.
+ * Each DOSBoxContext has its own DMA state, enabling proper
+ * isolation between emulator instances.
+ *
+ * ## DMA Channels
+ * - Channels 0-3: First controller (8-bit DMA)
+ * - Channels 4-7: Second controller (16-bit DMA, AT and later)
+ *
+ * ## Thread Safety
+ * Not thread-safe. Use from emulation thread only.
+ */
+struct DmaState {
+    /**
+     * @brief DMA controller pointers.
+     *
+     * controllers[0]: First DMA controller (8-bit, channels 0-3)
+     * controllers[1]: Second DMA controller (16-bit, channels 4-7)
+     *
+     * May be nullptr if not initialized or if machine type doesn't
+     * support the second controller (PC/XT vs AT).
+     */
+    DmaController* controllers[2] = {nullptr, nullptr};
+
+    /**
+     * @brief Check if second (16-bit) DMA controller is present.
+     */
+    [[nodiscard]] bool has_second_controller() const noexcept {
+        return controllers[1] != nullptr;
+    }
+
+    /**
+     * @brief Get DMA channel by number (0-7).
+     *
+     * @param chan Channel number (0-3 for first controller, 4-7 for second)
+     * @return Pointer to channel, or nullptr if invalid/unavailable
+     */
+    [[nodiscard]] DmaChannel* get_channel(uint8_t chan) const noexcept;
+
+    /**
+     * @brief Close the second DMA controller.
+     *
+     * Deallocates the second controller and sets pointer to null.
+     * Used for PC/XT compatibility mode.
+     */
+    void close_second_controller() noexcept;
+
+    /**
+     * @brief Reset DMA state to initial values.
+     *
+     * Sets controller pointers to null. Does NOT deallocate -
+     * use cleanup() for that.
+     */
+    void reset() noexcept {
+        controllers[0] = nullptr;
+        controllers[1] = nullptr;
+    }
+
+    /**
+     * @brief Deallocate DMA controllers.
+     *
+     * Frees both controllers and sets pointers to null.
+     * Called on context destruction.
+     */
+    void cleanup() noexcept;
+
+    /**
+     * @brief Hash DMA state for determinism verification.
+     *
+     * Includes controller presence and channel states.
+     */
+    void hash_into(HashBuilder& builder) const;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DOSBox Context
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1071,6 +1153,12 @@ public:
 
     /** @brief Memory subsystem state (Sprint 2 Phase 2) */
     MemoryState memory;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DMA Controllers (Sprint 2 Phase 3)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    DmaState dma;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Platform Timing (PR #17)

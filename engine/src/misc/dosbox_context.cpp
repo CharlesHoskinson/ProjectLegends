@@ -9,7 +9,25 @@
 #include "dosbox/safe_call.h"
 #include "dosbox/state_hash.h"
 #include "aibox/headless_stub.h"
+
+// Note: In headless mode, we use forward declarations for DmaController/DmaChannel
+// and provide stub implementations. Full implementations require the DOSBox-X
+// build environment with config.h.
+#ifndef AIBOX_HEADLESS
 #include "mem.h"
+#include "dma.h"
+#else
+// Stub memory functions for headless mode
+// In headless mode, memory is not actually allocated - we're just testing the API
+namespace {
+inline bool MEM_AllocateForContext(dosbox::DOSBoxContext* /*ctx*/, size_t /*kb*/) {
+    return true; // Always succeed in headless mode
+}
+inline void MEM_FreeForContext(dosbox::DOSBoxContext* /*ctx*/) {
+    // Nothing to free in headless mode
+}
+}
+#endif
 
 #include <cassert>
 #include <stdexcept>
@@ -296,6 +314,102 @@ void MemoryState::hash_into(HashBuilder& builder) const {
     builder.update(address_bits);
     builder.update(hw_next_assign);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DmaState Implementation (Sprint 2 Phase 3)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifdef AIBOX_HEADLESS
+// Headless mode: DMA controllers are not initialized (nullptr)
+// These stub implementations handle the null case gracefully
+
+DmaChannel* DmaState::get_channel(uint8_t /*chan*/) const noexcept {
+    // In headless mode, controllers are always nullptr
+    return nullptr;
+}
+
+void DmaState::close_second_controller() noexcept {
+    // In headless mode, controllers are nullptr - nothing to delete
+    controllers[1] = nullptr;
+}
+
+void DmaState::cleanup() noexcept {
+    // In headless mode, controllers are nullptr - just ensure they're null
+    controllers[0] = nullptr;
+    controllers[1] = nullptr;
+}
+
+void DmaState::hash_into(HashBuilder& builder) const {
+    // Hash DMA controller presence (always false in headless mode)
+    builder.update(static_cast<uint8_t>(controllers[0] != nullptr ? 1 : 0));
+    builder.update(static_cast<uint8_t>(controllers[1] != nullptr ? 1 : 0));
+    // No channel state to hash since controllers are nullptr
+}
+
+#else
+// Full mode: Use actual DMA controller implementation
+
+DmaChannel* DmaState::get_channel(uint8_t chan) const noexcept {
+    if (chan < 4) {
+        if (!controllers[0]) return nullptr;
+        return controllers[0]->GetChannel(chan);
+    } else if (chan < 8) {
+        if (!controllers[1]) return nullptr;
+        return controllers[1]->GetChannel(chan - 4);
+    }
+    return nullptr;
+}
+
+void DmaState::close_second_controller() noexcept {
+    if (controllers[1]) {
+        delete controllers[1];
+        controllers[1] = nullptr;
+    }
+}
+
+void DmaState::cleanup() noexcept {
+    if (controllers[0]) {
+        delete controllers[0];
+        controllers[0] = nullptr;
+    }
+    if (controllers[1]) {
+        delete controllers[1];
+        controllers[1] = nullptr;
+    }
+}
+
+void DmaState::hash_into(HashBuilder& builder) const {
+    // Hash DMA controller presence
+    builder.update(static_cast<uint8_t>(controllers[0] != nullptr ? 1 : 0));
+    builder.update(static_cast<uint8_t>(controllers[1] != nullptr ? 1 : 0));
+
+    // Hash channel states for each controller
+    for (int ctrl = 0; ctrl < 2; ++ctrl) {
+        if (!controllers[ctrl]) continue;
+
+        for (uint8_t ch = 0; ch < 4; ++ch) {
+            DmaChannel* channel = controllers[ctrl]->GetChannel(ch);
+            if (channel) {
+                // Hash determinism-relevant channel state
+                builder.update(channel->pagebase);
+                builder.update(channel->baseaddr);
+                builder.update(channel->curraddr);
+                builder.update(channel->basecnt);
+                builder.update(channel->currcnt);
+                builder.update(channel->channum);
+                builder.update(channel->pagenum);
+                builder.update(channel->transfer_mode);
+                builder.update(static_cast<uint8_t>(channel->increment ? 1 : 0));
+                builder.update(static_cast<uint8_t>(channel->autoinit ? 1 : 0));
+                builder.update(static_cast<uint8_t>(channel->masked ? 1 : 0));
+                builder.update(static_cast<uint8_t>(channel->tcount ? 1 : 0));
+                builder.update(static_cast<uint8_t>(channel->request ? 1 : 0));
+            }
+        }
+    }
+}
+
+#endif // AIBOX_HEADLESS
 
 } // namespace dosbox
 
@@ -609,6 +723,9 @@ void DOSBoxContext::shutdown() noexcept {
     // Free guest memory (Sprint 2 Phase 2)
     MEM_FreeForContext(this);
 
+    // Free DMA controllers (Sprint 2 Phase 3)
+    dma.cleanup();
+
     // Reset all subsystem state
     timing.reset();
     cpu_state.reset();
@@ -618,6 +735,7 @@ void DOSBoxContext::shutdown() noexcept {
     keyboard.reset();
     input.reset();
     memory.reset();
+    dma.reset();
 
     initialized_ = false;
     stop_requested_ = true;

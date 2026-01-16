@@ -173,6 +173,8 @@ set(AIBOX_CORE_SOURCES
     src/aibox/vision_capture.cpp
     src/aibox/vision_overlay.cpp
     src/aibox/vision_annotations.cpp
+    # Sprint 2 Phase 3: DMA Compatibility Shim
+    src/hardware/dma_compat.cpp
 )
 
 # Add headless stub when building without SDL
