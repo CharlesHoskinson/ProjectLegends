@@ -580,11 +580,33 @@ struct MemoryState {
 - `DifferentMemoryConfigsDifferentHashes` - Different configs → different hashes
 - `MemoryStateIncludedInContextHash` - Memory state properly hashed
 
-**Note:** This is a partial migration. The struct is defined and included in hash,
-but `MemBase` and `memory` globals in memory.cpp are not yet removed. Caller
-migration (261 call sites) will be completed in subsequent commits.
+**Memory Lifecycle Functions Added:**
+```cpp
+// Allocate guest memory for context (called in initialize())
+bool MEM_AllocateForContext(DOSBoxContext* ctx, size_t size_kb);
+
+// Free guest memory (called in shutdown())
+void MEM_FreeForContext(DOSBoxContext* ctx);
+
+// Sync globals with context (for backward compatibility)
+void MEM_SyncFromContext(DOSBoxContext* ctx);
+void MEM_SyncToContext(DOSBoxContext* ctx);
+```
+
+**Additional Tests Added:**
+- `ContextInitializeAllocatesMemory` - Memory allocated on init
+- `ContextShutdownFreesMemory` - Memory freed on shutdown
+- `MemoryAllocationRespectsConfig` - Config memory_size honored
+- `MultipleContextsHaveIndependentMemory` - Contexts have separate RAM
+
+**Implementation Notes:**
+- `DOSBoxContext::initialize()` now calls `MEM_AllocateForContext()`
+- `DOSBoxContext::shutdown()` now calls `MEM_FreeForContext()`
+- Global `MemBase` and `memory` struct kept as aliases for backward compatibility
+- Sync functions bridge globals ↔ context for transitional code
 
 **Contract Progression:**
-- V1 single-instance: ✅ Memory state struct in context
-- V2 sequential instances: 🔜 Pending global removal and caller migration
+- V1 single-instance: ✅ Memory allocated per context
+- V2 sequential instances: ✅ Independent memory per context
+- V3 concurrent instances: 🔜 Pending page handler migration
 

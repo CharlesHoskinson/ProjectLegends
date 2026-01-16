@@ -55,6 +55,10 @@
 #include "../gamelink/gamelink.h"
 #endif // C_GAMELINK
 
+#ifdef DOSBOX_LIBRARY_MODE
+#include "dosbox/dosbox_context.h"
+#endif
+
 /* memory from file, memory mapping */
 #if C_HAVE_MMAP
 # define DO_MEMORY_FILE
@@ -260,6 +264,153 @@ uint32_t MEM_get_address_bits4GB() { /* some code cannot yet handle values large
  *          the 384KB wasted at the 8086 1MB limit is too small to worry about. */
 HostPt MemBase = NULL;
 size_t MemSize = 0;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Library Mode Memory Management (Sprint 2 Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#ifdef DOSBOX_LIBRARY_MODE
+
+/**
+ * @brief Allocate memory for a DOSBox context in library mode.
+ *
+ * Allocates guest RAM and stores it in the context's memory state.
+ * Also updates the global MemBase for backward compatibility.
+ *
+ * @param ctx The DOSBox context
+ * @param size_kb Memory size in KB
+ * @return true on success, false on allocation failure
+ */
+bool MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t size_kb) {
+    if (!ctx) return false;
+
+    // Calculate pages (4KB per page)
+    size_t pages = size_kb / 4;
+    if (pages < 256) pages = 256;  // Minimum 1MB
+
+    size_t alloc_size = pages * 4096;
+
+    // Allocate memory
+    uint8_t* mem = new(std::nothrow) uint8_t[alloc_size];
+    if (!mem) return false;
+
+    // Zero the memory
+    memset(mem, 0, alloc_size);
+
+    // Store in context
+    ctx->memory.base = mem;
+    ctx->memory.size = alloc_size;
+    ctx->memory.pages = static_cast<uint32_t>(pages);
+    ctx->memory.reported_pages = static_cast<uint32_t>(pages);
+    ctx->memory.address_bits = 32;  // Default 32-bit addressing
+
+    // Update globals for backward compatibility
+    MemBase = mem;
+    MemSize = alloc_size;
+
+    // Sync global memory struct with context
+    memory.pages = pages;
+    memory.reported_pages = pages;
+    memory.address_bits = ctx->memory.address_bits;
+    memory.a20.enabled = ctx->memory.a20.enabled;
+    memory.a20.controlport = ctx->memory.a20.controlport;
+
+    return true;
+}
+
+/**
+ * @brief Free memory allocated for a DOSBox context.
+ *
+ * Frees guest RAM and clears the context's memory state.
+ *
+ * @param ctx The DOSBox context
+ */
+void MEM_FreeForContext(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return;
+
+    if (ctx->memory.base) {
+        delete[] ctx->memory.base;
+        ctx->memory.base = nullptr;
+        ctx->memory.size = 0;
+    }
+
+    // Clear globals if they pointed to this context's memory
+    if (MemBase == ctx->memory.base) {
+        MemBase = nullptr;
+        MemSize = 0;
+    }
+
+    ctx->memory.reset();
+}
+
+/**
+ * @brief Sync global memory state with a context.
+ *
+ * Called when switching contexts to update globals.
+ *
+ * @param ctx The DOSBox context to sync from
+ */
+void MEM_SyncFromContext(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return;
+
+    // Update global pointer
+    MemBase = ctx->memory.base;
+    MemSize = ctx->memory.size;
+
+    // Sync memory struct fields
+    memory.pages = ctx->memory.pages;
+    memory.reported_pages = ctx->memory.reported_pages;
+    memory.reported_pages_4gb = ctx->memory.reported_pages_4gb;
+    memory.address_bits = ctx->memory.address_bits;
+    memory.a20.enabled = ctx->memory.a20.enabled;
+    memory.a20.controlport = ctx->memory.a20.controlport;
+    memory.mem_alias_pagemask = ctx->memory.mem_alias_pagemask;
+    memory.mem_alias_pagemask_active = ctx->memory.mem_alias_pagemask_active;
+    memory.hw_next_assign = ctx->memory.hw_next_assign;
+
+    // LFB regions (page numbers only, handlers are not context-owned)
+    memory.lfb.start_page = ctx->memory.lfb.start_page;
+    memory.lfb.end_page = ctx->memory.lfb.end_page;
+    memory.lfb.pages = ctx->memory.lfb.pages;
+    memory.lfb_mmio.start_page = ctx->memory.lfb_mmio.start_page;
+    memory.lfb_mmio.end_page = ctx->memory.lfb_mmio.end_page;
+    memory.lfb_mmio.pages = ctx->memory.lfb_mmio.pages;
+}
+
+/**
+ * @brief Sync context memory state from globals.
+ *
+ * Called to save global state back to context.
+ *
+ * @param ctx The DOSBox context to sync to
+ */
+void MEM_SyncToContext(dosbox::DOSBoxContext* ctx) {
+    if (!ctx) return;
+
+    // Only sync if context owns this memory
+    if (ctx->memory.base != MemBase) return;
+
+    // Sync from memory struct
+    ctx->memory.pages = static_cast<uint32_t>(memory.pages);
+    ctx->memory.reported_pages = static_cast<uint32_t>(memory.reported_pages);
+    ctx->memory.reported_pages_4gb = static_cast<uint32_t>(memory.reported_pages_4gb);
+    ctx->memory.address_bits = memory.address_bits;
+    ctx->memory.a20.enabled = memory.a20.enabled;
+    ctx->memory.a20.controlport = memory.a20.controlport;
+    ctx->memory.mem_alias_pagemask = memory.mem_alias_pagemask;
+    ctx->memory.mem_alias_pagemask_active = memory.mem_alias_pagemask_active;
+    ctx->memory.hw_next_assign = memory.hw_next_assign;
+
+    // LFB regions
+    ctx->memory.lfb.start_page = static_cast<uint32_t>(memory.lfb.start_page);
+    ctx->memory.lfb.end_page = static_cast<uint32_t>(memory.lfb.end_page);
+    ctx->memory.lfb.pages = static_cast<uint32_t>(memory.lfb.pages);
+    ctx->memory.lfb_mmio.start_page = static_cast<uint32_t>(memory.lfb_mmio.start_page);
+    ctx->memory.lfb_mmio.end_page = static_cast<uint32_t>(memory.lfb_mmio.end_page);
+    ctx->memory.lfb_mmio.pages = static_cast<uint32_t>(memory.lfb_mmio.pages);
+}
+
+#endif // DOSBOX_LIBRARY_MODE
 
 class UnmappedPageHandler : public PageHandler {
 public:

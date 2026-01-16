@@ -9,6 +9,7 @@
 #include "dosbox/safe_call.h"
 #include "dosbox/state_hash.h"
 #include "aibox/headless_stub.h"
+#include "mem.h"
 
 #include <cassert>
 #include <stdexcept>
@@ -538,6 +539,16 @@ Result<void> DOSBoxContext::initialize() {
     pic.reset();
     keyboard.reset();
     input.reset();
+    memory.reset();
+
+    // Allocate guest memory (Sprint 2 Phase 2)
+    // config_.memory_size is in bytes, MEM_AllocateForContext expects KB
+    size_t memory_kb = config_.memory_size / 1024;
+    if (memory_kb < 1024) memory_kb = 1024;  // Minimum 1MB
+
+    if (!MEM_AllocateForContext(this, memory_kb)) {
+        return Err(Error(ErrorCode::OutOfMemory, "Failed to allocate guest memory"));
+    }
 
     // Apply configuration
     cpu_state.cycle_limit = config_.cpu_cycles;
@@ -595,6 +606,9 @@ void DOSBoxContext::shutdown() noexcept {
         return;
     }
 
+    // Free guest memory (Sprint 2 Phase 2)
+    MEM_FreeForContext(this);
+
     // Reset all subsystem state
     timing.reset();
     cpu_state.reset();
@@ -603,6 +617,7 @@ void DOSBoxContext::shutdown() noexcept {
     pic.reset();
     keyboard.reset();
     input.reset();
+    memory.reset();
 
     initialized_ = false;
     stop_requested_ = true;

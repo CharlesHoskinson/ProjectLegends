@@ -473,3 +473,80 @@ TEST_F(ExplicitContextHashTest, MemoryStateIncludedInContextHash) {
 
     EXPECT_NE(hash_default.value(), hash_modified.value());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Sprint 2 Phase 2: Memory Allocation Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+TEST_F(ExplicitContextHashTest, ContextInitializeAllocatesMemory) {
+    // Create a fresh context
+    auto ctx = std::make_unique<DOSBoxContext>();
+
+    // Before init, memory should be null
+    EXPECT_EQ(ctx->memory.base, nullptr);
+    EXPECT_EQ(ctx->memory.size, 0u);
+
+    // Initialize - this should allocate memory
+    auto result = ctx->initialize();
+    ASSERT_TRUE(result.has_value());
+
+    // After init, memory should be allocated
+    EXPECT_NE(ctx->memory.base, nullptr);
+    EXPECT_GT(ctx->memory.size, 0u);
+    EXPECT_GE(ctx->memory.pages, 256u);  // At least 1MB
+
+    // Shutdown to clean up
+    ctx->shutdown();
+}
+
+TEST_F(ExplicitContextHashTest, ContextShutdownFreesMemory) {
+    auto ctx = std::make_unique<DOSBoxContext>();
+
+    // Initialize
+    auto result = ctx->initialize();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_NE(ctx->memory.base, nullptr);
+
+    // Shutdown
+    ctx->shutdown();
+
+    // After shutdown, memory should be freed
+    EXPECT_EQ(ctx->memory.base, nullptr);
+    EXPECT_EQ(ctx->memory.size, 0u);
+}
+
+TEST_F(ExplicitContextHashTest, MemoryAllocationRespectsConfig) {
+    // Create context with specific memory size
+    ContextConfig config;
+    config.memory_size = 4 * 1024 * 1024;  // 4MB
+
+    auto [handle, ctx_ptr] = create_instance(config).value();
+
+    // Initialize
+    auto result = ctx_ptr->initialize();
+    ASSERT_TRUE(result.has_value());
+
+    // Check memory size (should be at least 4MB = 1024 pages)
+    EXPECT_GE(ctx_ptr->memory.pages, 1024u);
+
+    // Clean up
+    destroy_instance(handle);
+}
+
+TEST_F(ExplicitContextHashTest, MultipleContextsHaveIndependentMemory) {
+    auto ctx1 = std::make_unique<DOSBoxContext>();
+    auto ctx2 = std::make_unique<DOSBoxContext>();
+
+    ctx1->initialize();
+    ctx2->initialize();
+
+    // Both should have their own memory
+    EXPECT_NE(ctx1->memory.base, nullptr);
+    EXPECT_NE(ctx2->memory.base, nullptr);
+
+    // Memory should be independent (different pointers)
+    EXPECT_NE(ctx1->memory.base, ctx2->memory.base);
+
+    ctx1->shutdown();
+    ctx2->shutdown();
+}

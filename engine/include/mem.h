@@ -55,6 +55,15 @@ HostPt                      GetMemBase(void);
 bool                        MEM_A20_Enabled(void);
 void                        MEM_A20_Enable(bool enabled);
 
+/* Library mode memory management (Sprint 2 Phase 2) */
+#ifdef DOSBOX_LIBRARY_MODE
+namespace dosbox { class DOSBoxContext; }
+bool                        MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t size_kb);
+void                        MEM_FreeForContext(dosbox::DOSBoxContext* ctx);
+void                        MEM_SyncFromContext(dosbox::DOSBoxContext* ctx);
+void                        MEM_SyncToContext(dosbox::DOSBoxContext* ctx);
+#endif
+
 /* Memory management / EMS mapping */
 Bitu                        MEM_FreeTotal(void);           //Free 4 kb pages
 Bitu                        MEM_FreeLargest(void);         //Largest free 4 kb pages block
