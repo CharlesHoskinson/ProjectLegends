@@ -259,6 +259,10 @@ void MachineContext::request_stop() noexcept {
     stop_requested_.store(true, std::memory_order_release);
 }
 
+void MachineContext::clear_stop_request() noexcept {
+    stop_requested_.store(false, std::memory_order_release);
+}
+
 Result<void> MachineContext::pause() {
     if (state_ != MachineState::Running) {
         auto err = Error(ErrorCode::InvalidState, "Not running");

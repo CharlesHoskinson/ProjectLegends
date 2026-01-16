@@ -1,0 +1,35 @@
+{
+  "phase_id": "SPRINT2-P10",
+  "phase_name": "CI Enforcement",
+  "dependencies": ["SPRINT2-P09"],
+
+  "scripts": {
+    "check_globals.py": {
+      "purpose": "Validate globals registry",
+      "exit_code_pass": 0,
+      "exit_code_fail": 1
+    },
+    "check_migration_status.py": {
+      "purpose": "Detect status regressions",
+      "exit_code_pass": 0,
+      "exit_code_fail": 1
+    },
+    "check_current_context.py": {
+      "purpose": "Detect production current_context() usage",
+      "exit_code_pass": 0,
+      "exit_code_fail": 1
+    }
+  },
+
+  "allowed_current_context_files": [
+    "tests/",
+    "dosbox_context.cpp",
+    "machine_context.cpp",
+    "_compat.cpp"
+  ],
+
+  "tests": {
+    "unit": ["TEST-P10-U01", "TEST-P10-U02", "TEST-P10-U03", "TEST-P10-U04"],
+    "integration": ["TEST-P10-I01", "TEST-P10-I02"]
+  }
+}

@@ -753,18 +753,9 @@ static uint8_t vga_palette[248][3]=
   {0x0b,0x10,0x0b},{0x0b,0x10,0x0c},{0x0b,0x10,0x0d},{0x0b,0x10,0x0f},{0x0b,0x10,0x10},{0x0b,0x0f,0x10},{0x0b,0x0d,0x10},{0x0b,0x0c,0x10}
 };
 
-// CurMode accessor functions
-
-VideoModeBlock* INT10_GetCurMode() {
-    if (!dosbox::has_current_context()) return nullptr;
-    return dosbox::current_context().vga.cur_mode;
-}
-
-void INT10_SetCurModePtr(VideoModeBlock* mode) {
-    if (dosbox::has_current_context()) {
-        dosbox::current_context().vga.cur_mode = mode;
-    }
-}
+// CurMode accessor functions - implementation in int10_compat.cpp
+// to isolate current_context() usage per Sprint 2 policy
+// (declarations are in int10.h)
 
 static bool SetCurMode(VideoModeBlock modeblock[],uint16_t mode) {
 	Bitu i=0;

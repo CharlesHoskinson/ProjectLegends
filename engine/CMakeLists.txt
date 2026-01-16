@@ -154,12 +154,15 @@ set(AIBOX_CORE_SOURCES
     src/misc/safe_call.cpp
     # PR #7: State Hash API
     src/misc/state_hash.cpp
+    src/misc/state_hash_compat.cpp
     # PR #8: Misuse-Resilient Handle System
     src/misc/instance_handle.cpp
     # PR #9: DOSBoxContext Structure
     src/misc/dosbox_context.cpp
     # PR #22: DOSBox-X Embeddable Library API
     src/misc/dosbox_library.cpp
+    # Phase 1: CPU Bridge for library mode
+    src/misc/cpu_bridge.cpp
     # PR #16: Headless Platform Backend
     src/platform/headless/headless_display.cpp
     src/platform/headless/buffer_audio.cpp

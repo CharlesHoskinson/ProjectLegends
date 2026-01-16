@@ -1,7 +1,6 @@
 # Project Legends Architecture
 
-This document provides a comprehensive architectural overview of Project Legends,
-a modernized, embeddable x86 emulation framework.
+This document describes the architectural design of Project Legends, an embeddable x86 emulation framework.
 
 ---
 
@@ -10,10 +9,10 @@ a modernized, embeddable x86 emulation framework.
 1. [High-Level Architecture](#high-level-architecture)
 2. [Layer Details](#layer-details)
 3. [Data Flow](#data-flow)
-4. [Platform Abstraction Layer (PAL)](#platform-abstraction-layer-pal)
-5. [Threading Model](#threading-model)
-6. [Determinism Guarantees](#determinism-guarantees)
-7. [Formal Verification](#formal-verification)
+4. [State Serialization](#state-serialization)
+5. [Platform Abstraction Layer](#platform-abstraction-layer)
+6. [Threading Model](#threading-model)
+7. [Determinism Guarantees](#determinism-guarantees)
 8. [File Organization](#file-organization)
 
 ---
@@ -21,97 +20,72 @@ a modernized, embeddable x86 emulation framework.
 ## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                           HOST APPLICATION                                                       │
-│                                                                                                                  │
-│    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐                 │
-│    │   LLM Agent      │    │   Game Bot       │    │  Testing Harness │    │   Rust/Python    │                 │
-│    │   Controller    │    │   (Speedrun)     │    │   (CI/CD)        │    │   FFI Wrapper    │                 │
-│    └────────┬─────────┘    └────────┬─────────┘    └────────┬─────────┘    └────────┬─────────┘                 │
-│             │                       │                       │                       │                            │
-│             └───────────────────────┴───────────────────────┴───────────────────────┘                            │
-│                                                 │                                                                 │
-└─────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────┘
-                                                  │
-                                                  ▼ Stable C ABI (23 Contract Gates)
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                         LEGENDS EMBED API                                                        │
-│                                         legends_embed.h                                                          │
-│                                                                                                                  │
-│  ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐│
-│  │                                      API Function Categories                                                 ││
-│  ├───────────────┬───────────────┬───────────────┬───────────────┬───────────────┬─────────────────────────────┤│
-│  │   Lifecycle   │   Stepping    │    Capture    │     Input     │  Save/Load    │         Query               ││
-│  ├───────────────┼───────────────┼───────────────┼───────────────┼───────────────┼─────────────────────────────┤│
-│  │ create()      │ step_ms()     │capture_text() │ key_event()   │ save_state()  │ get_api_version()           ││
-│  │ destroy()     │ step_cycles() │capture_rgb()  │ key_event_ext │ load_state()  │ get_config()                ││
-│  │ reset()       │ get_emu_time()│is_frame_dirty │ text_input()  │ get_hash()    │ get_last_error()            ││
-│  │               │ get_cycles()  │get_cursor()   │ mouse_event() │ verify_det()  │                             ││
-│  └───────────────┴───────────────┴───────────────┴───────────────┴───────────────┴─────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                                                  │
-                       ┌──────────────────────────┴──────────────────────────┐
-                       │                                                      │
-                       ▼                                                      ▼
-┌──────────────────────────────────────────────────────┐  ┌──────────────────────────────────────────────────────┐
-│              LEGENDS CORE (C++23)                     │  │        PLATFORM ABSTRACTION LAYER (PAL)              │
-│                                                       │  │                                                       │
-│  ┌─────────────────────────────────────────────────┐ │  │  ┌─────────────────────────────────────────────────┐ │
-│  │              Handle Registry                     │ │  │  │                  Interfaces                     │ │
-│  │  - Single instance enforcement                   │ │  │  │                                                 │ │
-│  │  - Handle validation                             │ │  │  │  IWindow        - Window management             │ │
-│  │  - Resource tracking                             │ │  │  │  IContext       - Rendering context            │ │
-│  └─────────────────────────────────────────────────┘ │  │  │  IAudioSink     - Audio output (push)          │ │
-│                                                       │  │  │  IHostClock     - Wall-clock timing            │ │
-│  ┌─────────────────────────────────────────────────┐ │  │  │  IInputSource   - Input event polling          │ │
-│  │              Machine Context                     │ │  │  │                                                 │ │
-│  │  - CPU state wrapper                             │ │  │  └─────────────────────────────────────────────────┘ │
-│  │  - Memory access                                 │ │  │                          │                           │
-│  │  - Device state                                  │ │  │      ┌──────────────────┼──────────────────┐        │
-│  └─────────────────────────────────────────────────┘ │  │      ▼                  ▼                  ▼        │
-│                                                       │  │ ┌──────────┐      ┌──────────┐      ┌──────────┐   │
-│  ┌─────────────────────────────────────────────────┐ │  │ │ Headless │      │   SDL2   │      │   SDL3   │   │
-│  │              Event Bus                           │ │  │ ├──────────┤      ├──────────┤      ├──────────┤   │
-│  │  - Frame events                                  │ │  │ │ Memory   │      │ Window   │      │ Window   │   │
-│  │  - Input events                                  │ │  │ │ Virtual  │      │ Callback │      │ Stream   │   │
-│  │  - State change notifications                    │ │  │ │ Clock    │      │ Audio    │      │ Audio    │   │
-│  └─────────────────────────────────────────────────┘ │  │ │ No deps  │      │ Events   │      │ Events   │   │
-│                                                       │  │ └──────────┘      └──────────┘      └──────────┘   │
-│  ┌─────────────────────────────────────────────────┐ │  │                                                       │
-│  │              LLM Frame Layer                     │ │  └──────────────────────────────────────────────────────┘
-│  │  - llm_frame.h: Screen abstraction              │ │
-│  │  - llm_actions.h: Semantic actions              │ │
-│  │  - llm_diff.h: Delta encoding                   │ │
-│  │  - llm_serializer.h: JSON output                │ │
-│  └─────────────────────────────────────────────────┘ │
-│                                                       │
-│  ┌─────────────────────────────────────────────────┐ │
-│  │              Vision Capture Layer                │ │
-│  │  - vision_capture.h: RGB capture                │ │
-│  │  - vision_framebuffer.h: FB access              │ │
-│  │  - vision_overlay.h: Annotations                │ │
-│  │  - vision_annotations.h: Semantic markup        │ │
-│  └─────────────────────────────────────────────────┘ │
-└──────────────────────────────────────┬───────────────┘
-                                       │
-                                       ▼ Compile Firewall (No SDL leakage)
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                    LEGACY DOSBOX-X CORE                                                          │
-│                                    903,199 lines / 664 source files                                              │
-│                                                                                                                  │
-│  ┌────────────────────────────────┐  ┌────────────────────────────────┐  ┌────────────────────────────────────┐ │
-│  │            CPU                 │  │          Hardware              │  │            DOS/BIOS                │ │
-│  │                                │  │                                │  │                                    │ │
-│  │  Normal_Loop()                 │  │  PIC (8259)                    │  │  INT 21h - DOS services            │ │
-│  │  cpudecoder_x86()              │  │  PIT (8254)                    │  │  INT 10h - Video BIOS              │ │
-│  │  x86 instruction decode        │  │  DMA (8237)                    │  │  INT 13h - Disk BIOS               │ │
-│  │  Protected/Real mode           │  │  VGA (CRTC, DAC, Sequencer)    │  │  INT 16h - Keyboard BIOS           │ │
-│  │  V86 mode                      │  │  Sound Blaster 16              │  │  File system                       │ │
-│  │                                │  │  UART (Serial)                 │  │  Memory management                 │ │
-│  │  PIC_RunQueue()                │  │  Keyboard controller           │  │  Device drivers                    │ │
-│  │  Event scheduler               │  │  Floppy/HDD controller         │  │                                    │ │
-│  └────────────────────────────────┘  └────────────────────────────────┘  └────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           HOST APPLICATION                                   │
+│                                                                              │
+│    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                 │
+│    │  LLM Agent   │    │  Game Bot    │    │  Test Harness│                 │
+│    └──────┬───────┘    └──────┬───────┘    └──────┬───────┘                 │
+│           └───────────────────┴───────────────────┘                          │
+│                               │                                              │
+└───────────────────────────────┼──────────────────────────────────────────────┘
+                                │
+                                ▼ Stable C ABI
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         LEGENDS EMBED API                                    │
+│                         legends_embed.h                                      │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                        API Function Categories                           ││
+│  ├─────────────┬─────────────┬─────────────┬─────────────┬─────────────────┤│
+│  │  Lifecycle  │  Stepping   │   Capture   │    Input    │   Save/Load     ││
+│  ├─────────────┼─────────────┼─────────────┼─────────────┼─────────────────┤│
+│  │ create()    │ step_ms()   │capture_text │ key_event() │ save_state()    ││
+│  │ destroy()   │ step_cycles │capture_rgb()│ text_input()│ load_state()    ││
+│  │ reset()     │ get_cycles()│             │mouse_event()│ get_state_hash()││
+│  └─────────────┴─────────────┴─────────────┴─────────────┴─────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────┘
+                                │
+              ┌─────────────────┴─────────────────┐
+              │                                    │
+              ▼                                    ▼
+┌─────────────────────────────────┐  ┌────────────────────────────────────────┐
+│        LEGENDS CORE (C++23)     │  │   PLATFORM ABSTRACTION LAYER (PAL)     │
+│                                 │  │                                         │
+│  ┌───────────────────────────┐  │  │  ┌─────────────────────────────────┐   │
+│  │     Handle Registry       │  │  │  │          Interfaces             │   │
+│  │  - Single instance rule   │  │  │  │                                 │   │
+│  │  - Handle validation      │  │  │  │  IWindow      - Window mgmt     │   │
+│  └───────────────────────────┘  │  │  │  IContext     - Rendering       │   │
+│                                 │  │  │  IAudioSink   - Audio output    │   │
+│  ┌───────────────────────────┐  │  │  │  IHostClock   - Wall-clock time │   │
+│  │     Machine Context       │  │  │  │  IInputSource - Event polling   │   │
+│  │  - CPU state wrapper      │  │  │  └─────────────────────────────────┘   │
+│  │  - Memory access          │  │  │                    │                   │
+│  │  - Device state           │  │  │      ┌────────────┼────────────┐      │
+│  └───────────────────────────┘  │  │      ▼            ▼            ▼      │
+│                                 │  │ ┌──────────┐ ┌──────────┐ ┌──────────┐│
+│  ┌───────────────────────────┐  │  │ │ Headless │ │   SDL2   │ │   SDL3   ││
+│  │     DOSBox Library        │  │  │ │  (none)  │ │ callback │ │  stream  ││
+│  │  dosbox_lib_step_cycles() │  │  │ └──────────┘ └──────────┘ └──────────┘│
+│  │  dosbox_lib_save_state()  │  │  └────────────────────────────────────────┘
+│  │  dosbox_lib_load_state()  │  │
+│  └───────────────────────────┘  │
+└───────────────┬─────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        DOSBOX-X CORE ENGINE                                  │
+│                                                                              │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                 │
+│  │      CPU       │  │    Hardware    │  │    DOS/BIOS    │                 │
+│  │                │  │                │  │                │                 │
+│  │  Normal_Loop() │  │  PIC (8259)    │  │  INT 21h       │                 │
+│  │  x86 decode    │  │  PIT (8254)    │  │  INT 10h       │                 │
+│  │  Prot/Real mode│  │  DMA, VGA, SB  │  │  File system   │                 │
+│  │  PIC_RunQueue()│  │  Keyboard ctrl │  │  Memory mgmt   │                 │
+│  └────────────────┘  └────────────────┘  └────────────────┘                 │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -124,86 +98,43 @@ The topmost layer is the user's application that embeds Project Legends.
 
 **Responsibilities:**
 - Create and own the emulator instance
-- Provide configuration
+- Provide configuration at creation
 - Drive emulation via stepping
 - Consume output (screen, audio, state)
-- Handle input from user/AI
+- Handle input from user or AI
 
-**Examples:**
-- LLM agents that play DOS games
-- Automated testing harnesses
-- Speedrun bots
-- Python/Rust bindings
+### Layer 2: C API Boundary
 
-### Layer 2: C API Boundary (`legends_embed.h`)
+The stable ABI layer defined in `legends_embed.h`.
 
-The stable ABI layer enforced by 23 contract gates.
-
-**Key Properties:**
+**Properties:**
 - Pure C interface (no C++ types exposed)
-- Version handshake at creation
-- Single-instance per process
-- All errors returned as codes (no exceptions)
-- No exit/abort reachable
+- Single-instance per process (V1 constraint)
+- All errors returned as codes
+- No `exit()` or `abort()` reachable
 
-**API Categories:**
+### Layer 3: Legends Core
 
-| Category | Functions | Purpose |
-|----------|-----------|---------|
-| Lifecycle | `create`, `destroy`, `reset` | Instance management |
-| Stepping | `step_ms`, `step_cycles` | Advance emulation |
-| Capture | `capture_text`, `capture_rgb` | Read screen |
-| Input | `key_event`, `text_input`, `mouse_event` | Inject input |
-| State | `save_state`, `load_state`, `get_hash` | Serialization |
+Modern C++ implementation providing:
 
-### Layer 3: Legends Core (C++23)
+**Handle Registry:** Enforces single-instance rule, validates handles.
 
-Modern C++ wrapper providing:
+**Machine Context:** Wraps DOSBox-X CPU state, provides safe memory access.
 
-**Handle Registry:**
-- Enforces single-instance rule
-- Validates handles on every API call
-- Tracks resource ownership
+**DOSBox Library Bridge:** Connects to engine via `dosbox_lib_*()` functions for stepping and state management.
 
-**Machine Context:**
-- Wraps DOSBox-X CPU state
-- Provides safe memory access
-- Manages device state
+### Layer 4: Platform Abstraction Layer
 
-**Event Bus:**
-- Frame completion events
-- Input injection events
-- State change notifications
+See [Platform Abstraction Layer](#platform-abstraction-layer) section.
 
-**LLM Frame Layer:**
-- `llm_frame.h`: Abstract screen as structured data
-- `llm_actions.h`: Semantic action descriptors
-- `llm_diff.h`: Efficient delta compression
-- `llm_serializer.h`: JSON output for LLMs
+### Layer 5: DOSBox-X Core Engine
 
-**Vision Capture Layer:**
-- `vision_capture.h`: RGB24 screen capture
-- `vision_framebuffer.h`: Direct FB access
-- `vision_overlay.h`: Annotation rendering
-- `vision_annotations.h`: Semantic markup
-
-### Layer 4: Platform Abstraction Layer (PAL)
-
-See [Platform Abstraction Layer section](#platform-abstraction-layer-pal) for details.
-
-### Layer 5: Legacy DOSBox-X Core
-
-The original DOSBox-X codebase with minimal patches.
+The original DOSBox-X codebase with modifications for library embedding.
 
 **Components:**
 - CPU: x86 instruction execution, mode switching
 - Hardware: PIC, PIT, DMA, VGA, Sound Blaster
 - DOS/BIOS: INT handlers, file system, device drivers
-
-**Statistics:**
-- 903,199 lines of code
-- 664 source files
-- Minimal modifications for embedding
 
 ---
 
@@ -216,140 +147,130 @@ Host App                    Legends Core                 DOSBox-X Core
     │                            │                            │
     │  legends_step_ms(h, 100)   │                            │
     │ ─────────────────────────► │                            │
-    │                            │  Normal_Loop(cycles)       │
+    │                            │  dosbox_lib_step_cycles()  │
     │                            │ ─────────────────────────► │
     │                            │                            │
     │                            │     Execute x86 code       │
     │                            │     PIC_RunQueue()         │
-    │                            │     Update hardware        │
     │                            │                            │
     │                            │  ◄───────────────────────  │
     │                            │                            │
     │  step_result_t             │                            │
     │ ◄───────────────────────── │                            │
-    │                            │                            │
 ```
 
-### Capture Flow
+### Save/Load Flow
 
 ```
 Host App                    Legends Core                 DOSBox-X Core
     │                            │                            │
-    │  legends_capture_text()    │                            │
+    │  legends_save_state()      │                            │
     │ ─────────────────────────► │                            │
-    │                            │  Read VGA text memory      │
+    │                            │  Save legends state        │
+    │                            │  (time, PIC, DMA, events)  │
+    │                            │                            │
+    │                            │  dosbox_lib_save_state()   │
     │                            │ ─────────────────────────► │
+    │                            │     Serialize engine state │
+    │                            │  ◄───────────────────────  │
     │                            │                            │
-    │                            │  ◄─── CP437 + attributes   │
+    │                            │  Compute CRC32             │
+    │                            │  Write combined buffer     │
     │                            │                            │
-    │  legends_text_cell_t[]     │                            │
+    │  buffer + size             │                            │
     │ ◄───────────────────────── │                            │
-    │                            │                            │
 ```
-
-### Audio Flow (Push Model)
-
-```
-DOSBox-X Core              Legends Core                 PAL (SDL2/SDL3)
-    │                            │                            │
-    │  MIXER produces samples    │                            │
-    │ ─────────────────────────► │                            │
-    │                            │  Ring buffer               │
-    │                            │ ─────────────────────────► │
-    │                            │                            │
-    │                            │   pushSamples()            │
-    │                            │ ─────────────────────────► │
-    │                            │                            │
-    │                            │      Audio device          │
-    │                            │ ──────────────────────────►│
-```
-
-Note: Audio callback (SDL2) only reads from ring buffer. It never calls into core.
 
 ---
 
-## Platform Abstraction Layer (PAL)
+## State Serialization
+
+### Format Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ SaveStateHeader (96 bytes)                                  │
+│   magic: 0x4C454753 ("LEGS")                                │
+│   version: 2                                                │
+│   total_size, checksum                                      │
+│   section offsets and sizes                                 │
+├─────────────────────────────────────────────────────────────┤
+│ Legends Layer Sections                                      │
+│   TimeState      - cycles, emu_time_us                      │
+│   CPUState       - interrupt flag, halted                   │
+│   PICState       - IRR, IMR, ISR for both PICs              │
+│   DMAState       - 8 channels                               │
+│   EventQueue     - pending events with deadlines            │
+│   InputState     - key and mouse queues                     │
+│   FrameState     - text buffer, cursor, graphics pixels     │
+├─────────────────────────────────────────────────────────────┤
+│ Engine State (120 bytes)                                    │
+│   EngineStateHeader   - magic, version, offsets             │
+│   EngineStateTiming   - total_cycles, virtual_ticks         │
+│   EngineStatePic      - PIC ticks, IRQ masks                │
+│   EngineStateKeyboard - scancode state, buffer              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Integrity Verification
+
+The save format includes multiple integrity checks:
+
+1. **Header validation**: Magic number and version check
+2. **Size validation**: `total_size >= sizeof(header)` and `total_size <= buffer_size`
+3. **CRC32 checksum**: Computed over all data after header
+4. **Section bounds**: All offsets validated against checksummed region
+5. **Content validation**: Frame dimensions checked against maximum bounds
+
+### Security Considerations
+
+- All section offsets validated against `verified_size` (checksummed region)
+- Prevents reading beyond integrity-verified data
+- Prevents integer overflow in offset calculations
+- Frame dimensions capped at 80×50 to prevent buffer overflows
+
+---
+
+## Platform Abstraction Layer
 
 ### Design Principles
 
-1. **Platform Services, NOT Framebuffer Owner**
-   - PAL provides window/context resources
-   - Existing `OUTPUT_*` layer owns pixels
-   - No duplicate rendering abstractions
+1. **Platform services, not framebuffer owner**: PAL provides window/context resources; existing OUTPUT layer owns pixels.
 
-2. **Push Model Audio (NOT Callback-Driven)**
-   - Emulation produces samples
-   - Pushes to PAL sink
-   - SDL2 callback only reads ring buffer
-   - SDL3 uses `SDL_AudioStream` (pure push)
+2. **Push model audio**: Emulation produces samples and pushes to PAL sink. SDL2 callback only reads ring buffer; SDL3 uses `SDL_AudioStream`.
 
-3. **Host Clock vs Emulated Time**
-   - `IHostClock`: Wall time for throttling/UI
-   - Emulated time: Advanced ONLY by stepping
-   - Never confused
+3. **Host clock vs emulated time**: `IHostClock` provides wall time for throttling. Emulated time advances only via stepping.
 
-4. **Compile Firewall (SDL Isolation)**
-   - SDL headers only included in `src/pal/sdl2/` and `src/pal/sdl3/`
-   - Core library contains no SDL symbols
-   - **CI Enforcement:** `sdl-firewall` job verifies:
-     ```bash
-     # No SDL includes outside PAL
-     grep -r "SDL\.h\|SDL2\|SDL3" src/ include/ --include="*.cpp" --include="*.h" \
-       | grep -v "src/pal/" && exit 1
-
-     # No SDL symbols in core library
-     nm -g build/lib/libprojectlegends_core.a | grep "SDL_" && exit 1
-     ```
+4. **Compile firewall**: SDL headers only in `src/pal/sdl2/` and `src/pal/sdl3/`. Core library contains no SDL symbols.
 
 ### Interfaces
 
 ```cpp
 namespace pal {
 
-// Window management
 class IWindow {
     Result create(const WindowConfig& config);
     void destroy();
     Result resize(uint32_t width, uint32_t height);
     Result setFullscreen(bool fullscreen);
     Result present();
-    uint32_t getDisplayCount() const;
-    Result getDisplayInfo(uint32_t index, DisplayInfo& info) const;
 };
 
-// Rendering context
-class IContext {
-    Result createSoftware(uint32_t width, uint32_t height, PixelFormat fmt);
-    Result createOpenGL(int major, int minor, bool core_profile);
-    Result lockSurface(SoftwareContext& ctx);
-    void unlockSurface();
-    Result makeCurrent();
-    void swapBuffers();
-};
-
-// Audio output (push model)
 class IAudioSink {
     Result open(const AudioConfig& config);
     void close();
     Result pushSamples(const int16_t* samples, uint32_t frame_count);
     uint32_t getQueuedFrames() const;
-    Result pause(bool pause);
-    Result setVolume(float volume);
 };
 
-// Host timing (NOT emulated time)
 class IHostClock {
     uint64_t getTicksMs() const;
     uint64_t getTicksUs() const;
     void sleepMs(uint32_t ms);
-    void sleepUs(uint64_t us);
 };
 
-// Input events
 class IInputSource {
     uint32_t poll(InputEvent* events, uint32_t max_events);
-    Result setMouseCapture(bool capture);
-    Result setRelativeMouseMode(bool relative);
 };
 
 } // namespace pal
@@ -359,10 +280,9 @@ class IInputSource {
 
 | Feature | Headless | SDL2 | SDL3 |
 |---------|----------|------|------|
-| Window | Memory buffer | `SDL_Window` | `SDL_Window` |
-| Rendering | Software only | Surface/GL | Texture/GL/GPU |
-| Audio | Discarded | Callback | `SDL_AudioStream` |
-| Timing | Virtual clock | `SDL_GetTicks` | `SDL_GetTicks` |
+| Window | Memory buffer | SDL_Window | SDL_Window |
+| Audio | Discarded | Callback | SDL_AudioStream |
+| Timing | Virtual clock | SDL_GetTicks | SDL_GetTicks |
 | Dependencies | None | SDL2 | SDL3 |
 | Use case | Testing, CI | Desktop | Desktop (future) |
 
@@ -373,74 +293,47 @@ class IInputSource {
 ### Core is Single-Threaded
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              APPLICATION THREAD                                  │
-│                                                                                  │
-│    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐ │
-│    │legends_create│───►│legends_step  │───►│legends_capture───►│legends_destroy│
-│    └──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘ │
-│                                                                                  │
-│    All API calls must be from the SAME thread (the "owner thread")               │
-│    Wrong-thread calls return LEGENDS_ERR_WRONG_THREAD (not UB)                   │
-│                                                                                  │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       │ owns
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              LEGENDS CORE                                        │
-│                                                                                  │
-│    ┌──────────────────────────────────────────────────────────────────────────┐ │
-│    │                          DOSBox-X Core                                    │ │
-│    │                                                                           │ │
-│    │   CPU execution, hardware emulation, DOS services                         │ │
-│    │   ALL state access is single-threaded                                     │ │
-│    │                                                                           │ │
-│    └──────────────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       │ uses (but PAL threads never call back)
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              PAL LAYER                                           │
-│                                                                                  │
-│    ┌──────────────────────┐    ┌──────────────────────┐                         │
-│    │    Audio Thread      │    │    (SDL2 only)       │                         │
-│    │    (SDL2 callback)   │    │                      │                         │
-│    │                      │    │  Only READS from     │                         │
-│    │  NEVER calls core    │    │  ring buffer         │                         │
-│    │  NEVER calls API     │    │                      │                         │
-│    └──────────────────────┘    └──────────────────────┘                         │
-│                                                                                  │
-│    SDL3: No audio callbacks (uses SDL_AudioStream push model)                    │
-│                                                                                  │
-└─────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          APPLICATION THREAD                              │
+│                                                                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐ │
+│  │  create  │──►│   step   │──►│  capture │──►│   save   │──►│  destroy  │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └───────────┘ │
+│                                                                          │
+│  All API calls from the SAME thread (the "owner thread")                 │
+│  Wrong-thread calls return LEGENDS_ERR_WRONG_THREAD                      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ owns
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            LEGENDS CORE                                  │
+│                                                                          │
+│  CPU execution, hardware emulation, DOS services                         │
+│  ALL state access is single-threaded                                     │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ uses (PAL threads never call back)
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              PAL LAYER                                   │
+│                                                                          │
+│  Audio thread (SDL2 callback): NEVER calls core, only reads ring buffer │
+│  SDL3: No callbacks (pure push model via SDL_AudioStream)                │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
-
-### TLA+ Verified Invariants
-
-| Invariant | Specification | Meaning |
-|-----------|---------------|---------|
-| `CoreSingleThreaded` | `coreOwner \in {"None", "Main"}` | Only main thread owns core |
-| `PALIsolation` | `\A t \in palThreads : t # coreOwner` | PAL threads never access core |
-| `AudioPushModel` | `currentThread = "Audio" => lastCaller # "Core"` | Audio never calls core |
 
 ---
 
 ## Determinism Guarantees
 
-### The Core Guarantee
+### Core Guarantee
 
 ```
-f(config, input_trace, step_schedule) -> state_hash
+f(config, input_trace, step_schedule) → state_hash
 ```
 
-Given identical:
-1. Configuration (`legends_config_t`)
-2. Input trace (sequence of key/mouse events)
-3. Step schedule (sequence of `step_ms`/`step_cycles` calls)
-
-The resulting state hash is **bit-identical**.
+Given identical configuration, input trace, and step schedule, the resulting state hash is bit-identical.
 
 ### Round-Trip Invariant
 
@@ -448,73 +341,31 @@ The resulting state hash is **bit-identical**.
 Obs(Deserialize(Serialize(S))) = Obs(S)
 ```
 
-Observable state after load equals observable state before save.
+Observable state after load equals observable state before save. This invariant is verified by TLA+ specification and integration tests.
 
-### Observable State Definition
+### Observable State
 
-The `get_state_hash()` function computes SHA-256 over **observable state**, defined as:
+The `get_state_hash()` function computes SHA-256 over observable state:
 
-**Included (affects emulation behavior):**
-- CPU: All registers, flags, mode, instruction pointer, segment descriptors
-- Memory: Conventional RAM, EMS pages, XMS blocks, UMB regions
-- Paging: Page tables, CR3, if protected mode
-- PIC: IRR, IMR, ISR for master and slave 8259
-- PIT: All channel counters, modes, latches, output states
-- DMA: Channel state, masks, page registers
-- VGA: All registers, VRAM, DAC palette, timing state
-- Keyboard: Buffer contents, LED state, controller mode
-- Event Queue: All pending timer/interrupt events with deadlines
+**Included:**
+- Time: total_cycles, emu_time_us
+- Event queue: pending events with deadlines
+- CPU: interrupt flag, halted state
+- PIC: IRR, IMR, ISR for master and slave
 
-**Excluded (host-only, no emulation effect):**
-- PAL state: Window handles, audio device handles
+**Excluded (host-only):**
+- PAL state (window handles, audio device)
 - Host clock values
 - Performance counters
 - Log buffers
-- Capture buffers (derived from VRAM)
 
-### Verified By
+### Verification
 
-| Property | C++ Test | TLA+ Specification |
-|----------|----------|-------------------|
-| Trace determinism | `IdenticalTracesProduceIdenticalHash` | `Determinism.tla` |
-| Round-trip | `SaveLoadRoundTripPreservesState` | `SaveStateTest.tla` |
-| Input replay | `InputReplayProducesIdenticalHash` | - |
-
----
-
-## Formal Verification
-
-### TLA+ Specifications
-
-| Specification | Purpose | States | Invariants |
-|--------------|---------|--------|------------|
-| `LifecycleMinimal.tla` | Instance lifecycle | 85 | AtMostOneInstance, MisuseSafe |
-| `PALMinimal.tla` | Audio push model | 99 | AudioPushModel, ThreadSafety |
-| `ThreadingMinimal.tla` | Thread isolation | 1,474 | CoreSingleThreaded, PALIsolation |
-| `SaveStateTest.tla` | Save/load round-trip | 8 | ObservationPreserved |
-
-### Model Checking Results
-
-All specifications pass TLC model checking:
-
-```
-LifecycleMinimal: 85 states generated, 24 distinct - PASSED
-PALMinimal: 99 states generated, 29 distinct - PASSED
-ThreadingMinimal: 1,474 states generated, 303 distinct - PASSED
-SaveStateTest: 8 states generated, 3 distinct - PASSED
-```
-
-### Traceability
-
-Each TLA+ invariant maps to a C++ test:
-
-| TLA+ Invariant | C++ Test | File:Line |
-|----------------|----------|-----------|
-| `AtMostOneInstance` | `SingleInstanceEnforced` | test_contract_gates.cpp:90 |
-| `MisuseSafe` | `MisuseSafe_StepWithoutCreate` | test_contract_gates.cpp:69 |
-| `AudioPushModel` | `PushModelNoCallback` | test_contract_gates.cpp:421 |
-| `CoreSingleThreaded` | `CoreIsSingleThreaded` | test_contract_gates.cpp:447 |
-| `ObservationPreserved` | `SaveLoadRoundTripPreservesState` | test_contract_gates.cpp:201 |
+| Property | Test | Specification |
+|----------|------|---------------|
+| Trace determinism | `IdenticalTracesProduceIdenticalHash` | Determinism.tla |
+| Round-trip | `TLAPlusObservationInvariant` | SaveStateTest.tla |
+| Step granularity | `MultipleBranchingDeterminism` | - |
 
 ---
 
@@ -524,97 +375,51 @@ Each TLA+ invariant maps to a C++ test:
 ProjectLegends/
 ├── include/
 │   ├── legends/                    # Public API headers
-│   │   ├── legends_embed.h         # Main C API (stable ABI)
-│   │   ├── llm_frame.h             # LLM-optimized screen
-│   │   ├── llm_actions.h           # Semantic actions
-│   │   ├── llm_diff.h              # Delta compression
-│   │   ├── llm_serializer.h        # JSON serialization
-│   │   ├── vision_capture.h        # RGB capture
-│   │   ├── vision_framebuffer.h    # Framebuffer access
-│   │   ├── vision_overlay.h        # Annotation rendering
-│   │   ├── vision_annotations.h    # Semantic markup
-│   │   ├── machine_context.h       # CPU/memory wrapper
-│   │   ├── event_bus.h             # Event system
+│   │   ├── legends_embed.h         # Main C API
 │   │   ├── handle_registry.h       # Handle management
-│   │   └── ...
+│   │   └── machine_context.h       # CPU/memory wrapper
 │   │
-│   └── pal/                        # Platform Abstraction Layer
-│       ├── platform.h              # Backend factory
-│       ├── types.h                 # Common types
-│       ├── window.h                # IWindow interface
-│       ├── context.h               # IContext interface
-│       ├── audio_sink.h            # IAudioSink interface
-│       ├── host_clock.h            # IHostClock interface
-│       └── input_source.h          # IInputSource interface
+│   └── pal/                        # Platform interfaces
+│       ├── window.h
+│       ├── audio_sink.h
+│       ├── host_clock.h
+│       └── input_source.h
 │
 ├── src/
 │   ├── legends/                    # Core implementation
-│   │   ├── embed_api.cpp           # C API implementation
-│   │   ├── machine_context.cpp     # Machine context
-│   │   ├── event_bus.cpp           # Event system
-│   │   ├── handle_registry.cpp     # Handle management
-│   │   ├── llm_*.cpp               # LLM layer
-│   │   └── vision_*.cpp            # Vision layer
+│   │   ├── legends_embed_api.cpp   # C API implementation
+│   │   └── machine_context.cpp
 │   │
 │   └── pal/                        # PAL backends
-│       ├── headless/               # No-dependency backend
-│       │   ├── window_headless.cpp
-│       │   ├── context_headless.cpp
-│       │   ├── audio_sink_headless.cpp
-│       │   ├── host_clock_headless.cpp
-│       │   ├── input_source_headless.cpp
-│       │   └── platform_headless.cpp
-│       │
-│       ├── sdl2/                   # SDL2 backend
-│       │   ├── window_sdl2.cpp
-│       │   ├── context_sdl2.cpp
-│       │   ├── audio_sink_sdl2.cpp
-│       │   ├── host_clock_sdl2.cpp
-│       │   ├── input_source_sdl2.cpp
-│       │   └── platform_sdl2.cpp
-│       │
-│       └── sdl3/                   # SDL3 backend
-│           ├── window_sdl3.cpp
-│           ├── context_sdl3.cpp
-│           ├── audio_sink_sdl3.cpp
-│           ├── host_clock_sdl3.cpp
-│           ├── input_source_sdl3.cpp
-│           └── platform_sdl3.cpp
+│       ├── headless/
+│       ├── sdl2/
+│       └── sdl3/
+│
+├── engine/
+│   ├── include/dosbox/
+│   │   ├── dosbox_context.h        # Context structure
+│   │   ├── dosbox_library.h        # Library mode API
+│   │   ├── engine_state.h          # Serialization format
+│   │   └── cpu_bridge.h            # CPU execution bridge
+│   │
+│   └── src/misc/
+│       ├── dosbox_library.cpp      # Library implementation
+│       └── cpu_bridge.cpp          # CPU bridge (stub)
 │
 ├── tests/
 │   └── unit/
-│       ├── test_contract_gates.cpp # 23 contract gate tests
-│       ├── test_legends_abi.c      # Pure C compilation
-│       ├── test_lifecycle.cpp      # Lifecycle tests
-│       ├── test_stepping.cpp       # Stepping tests
-│       ├── test_capture.cpp        # Capture tests
-│       ├── test_input.cpp          # Input tests
-│       ├── test_saveload.cpp       # State tests
-│       ├── test_pal_*.cpp          # PAL tests
-│       └── ...
+│       ├── test_legends_embed.cpp
+│       └── test_dosbox_library.cpp
 │
 ├── spec/
-│   ├── CONTRACT.md                 # Contract specification
-│   ├── VERIFICATION_REPORT.md      # TLA+ verification results
+│   ├── CONTRACT.md
 │   └── tla/
-│       ├── Types.tla               # Core type definitions
-│       ├── LifecycleMinimal.tla    # Lifecycle model
-│       ├── PALMinimal.tla          # PAL model
-│       ├── ThreadingMinimal.tla    # Threading model
-│       ├── SaveStateTest.tla       # Save/load model
-│       ├── EmuKernel.tla           # Emulation kernel
-│       ├── Scheduler.tla           # Event scheduler
-│       ├── PIC.tla                 # Interrupt controller
-│       ├── DMA.tla                 # DMA controller
-│       └── *.cfg                   # TLC configurations
+│       ├── SaveStateTest.tla
+│       └── Determinism.tla
 │
-├── .github/workflows/
-│   └── pal-ci.yml                  # CI configuration
-│
-├── README.md                       # Project overview
-├── ARCHITECTURE.md                 # This document
-├── CMakeLists.txt                  # Build configuration
-└── LICENSE                         # GPL-2.0
+├── README.md
+├── ARCHITECTURE.md
+└── TODO.md
 ```
 
 ---
@@ -623,15 +428,10 @@ ProjectLegends/
 
 Project Legends provides:
 
-1. **Clean Architecture**: 5-layer design with clear responsibilities
-2. **Stable ABI**: 23 contract gates enforce correctness
-3. **Platform Independence**: PAL enables SDL2/SDL3/Headless
-4. **Formal Verification**: TLA+ specifications with TLC model checking
-5. **Determinism**: Bit-perfect reproducibility guaranteed
-6. **Embeddability**: No singletons, explicit ownership
+1. **Layered architecture** with clear boundaries and responsibilities
+2. **Stable C ABI** for embedding from any language
+3. **Platform independence** via PAL abstraction
+4. **Deterministic execution** verified by specification and tests
+5. **Full state serialization** with integrity verification
 
-The architecture enables:
-- AI agents to play DOS games deterministically
-- Automated testing with save/load checkpoints
-- Cross-platform deployment without code changes
-- Future SDL3 migration without touching core
+The architecture enables deterministic replay, automated testing with checkpoints, and cross-platform deployment without code changes.

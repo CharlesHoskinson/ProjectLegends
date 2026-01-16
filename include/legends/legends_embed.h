@@ -147,6 +147,7 @@ typedef struct {
 #define LEGENDS_STOP_HALT           1   /**< CPU halted (HLT instruction) */
 #define LEGENDS_STOP_BREAKPOINT     2   /**< Breakpoint hit */
 #define LEGENDS_STOP_ERROR          3   /**< Error during execution */
+#define LEGENDS_STOP_USER_REQUEST   4   /**< User called request_stop() */
 
 /**
  * @brief Result of a step operation.

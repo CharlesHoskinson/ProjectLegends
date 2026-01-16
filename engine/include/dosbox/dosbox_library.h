@@ -131,6 +131,8 @@ typedef struct {
 #define DOSBOX_LIB_STOP_HALT           1
 #define DOSBOX_LIB_STOP_BREAKPOINT     2
 #define DOSBOX_LIB_STOP_ERROR          3
+#define DOSBOX_LIB_STOP_USER_REQUEST   4
+#define DOSBOX_LIB_STOP_CALLBACK       5
 
 typedef struct {
     uint64_t cycles_executed;       /**< Actual CPU cycles executed */

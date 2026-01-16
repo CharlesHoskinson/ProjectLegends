@@ -316,6 +316,10 @@ public:
     /**
      * @brief Validate and retrieve object from handle.
      *
+     * P1 Security Fix: Combined validation and retrieval into single atomic
+     * operation to prevent TOCTOU race where another thread could free the
+     * slot between validation and pointer retrieval.
+     *
      * @tparam T Expected object type
      * @param handle Handle to validate
      * @param expected_type Expected handle type
@@ -323,28 +327,90 @@ public:
      */
     template<typename T>
     [[nodiscard]] std::optional<T*> get(PackedHandle handle, HandleType expected_type) {
-        auto status = validate_impl(handle, expected_type, std::type_index(typeid(T)));
-        if (status != HandleStatus::Valid) {
+        if (handle.is_null()) {
             return std::nullopt;
         }
 
+        uint32_t slot_idx = handle.slot();
+        if (slot_idx >= MaxHandles) {
+            return std::nullopt;
+        }
+
+        // Single lock for entire validate-and-retrieve operation (TOCTOU fix)
         std::lock_guard lock(mutex_);
-        return static_cast<T*>(slots_[handle.slot()].object_ptr);
+
+        const auto& slot = slots_[slot_idx];
+        if (!slot.in_use) {
+            return std::nullopt;
+        }
+
+        // Check generation matches
+        uint32_t expected_gen = slot.generation & PackedHandle::GenerationMask;
+        if (handle.generation() != expected_gen) {
+            return std::nullopt;
+        }
+
+        // Check type tag if specified
+        if (expected_type != HandleType::Invalid && slot.type_tag != expected_type) {
+            return std::nullopt;
+        }
+
+        // Check RTTI type if not void
+        std::type_index expected_type_info(typeid(T));
+        if (expected_type_info != std::type_index(typeid(void)) &&
+            slot.type_info != expected_type_info) {
+            return std::nullopt;
+        }
+
+        // Slot is valid, return pointer (still under lock, so it can't be freed)
+        return static_cast<T*>(slot.object_ptr);
     }
 
     /**
      * @brief Validate and retrieve const object from handle.
+     *
+     * P1 Security Fix: Combined validation and retrieval into single atomic
+     * operation to prevent TOCTOU race.
      */
     template<typename T>
     [[nodiscard]] std::optional<const T*> get_const(PackedHandle handle, HandleType expected_type) const {
-        auto status = const_cast<HandleRegistry*>(this)->validate_impl(
-            handle, expected_type, std::type_index(typeid(T)));
-        if (status != HandleStatus::Valid) {
+        if (handle.is_null()) {
             return std::nullopt;
         }
 
+        uint32_t slot_idx = handle.slot();
+        if (slot_idx >= MaxHandles) {
+            return std::nullopt;
+        }
+
+        // Single lock for entire validate-and-retrieve operation (TOCTOU fix)
         std::lock_guard lock(mutex_);
-        return static_cast<const T*>(slots_[handle.slot()].object_ptr);
+
+        const auto& slot = slots_[slot_idx];
+        if (!slot.in_use) {
+            return std::nullopt;
+        }
+
+        // Check generation matches
+        uint32_t expected_gen = slot.generation & PackedHandle::GenerationMask;
+        if (handle.generation() != expected_gen) {
+            return std::nullopt;
+        }
+
+        // Check type tag if specified
+        if (expected_type != HandleType::Invalid && slot.type_tag != expected_type) {
+            return std::nullopt;
+        }
+
+        // Check RTTI type if not void
+        std::type_index expected_type_info(typeid(T));
+        if (expected_type_info != std::type_index(typeid(void)) &&
+            slot.type_info != expected_type_info) {
+            return std::nullopt;
+        }
+
+        // Slot is valid, return pointer (still under lock, so it can't be freed)
+        return static_cast<const T*>(slot.object_ptr);
     }
 
     /**

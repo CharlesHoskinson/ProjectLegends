@@ -292,6 +292,16 @@ public:
     void request_stop() noexcept;
 
     /**
+     * @brief Clear the stop request flag.
+     *
+     * Should be called after handling a stop request to allow
+     * subsequent step/run calls to proceed normally.
+     *
+     * @note Thread-safe (atomic operation).
+     */
+    void clear_stop_request() noexcept;
+
+    /**
      * @brief Pause execution.
      *
      * Suspends execution but keeps state. Can resume later.

@@ -173,15 +173,10 @@ bool dosbox_int_pop_save_state(void);
 
 using namespace std;
 
-// LFB assignment accessor via context
-static inline uint32_t& get_assigned_lfb() {
-    static uint32_t fallback_lfb = 0;  // Fallback if no context
-    if (dosbox::has_current_context()) {
-        return dosbox::current_context().vga.assigned_lfb;
-    }
-    return fallback_lfb;
-}
-#define assigned_lfb (get_assigned_lfb())
+// LFB assignment accessor via context - implementation in vga_compat.cpp
+// to isolate current_context() usage per Sprint 2 policy
+extern uint32_t& vga_get_assigned_lfb();
+#define assigned_lfb (vga_get_assigned_lfb())
 
 bool                                VGA_PITsync = false;
 

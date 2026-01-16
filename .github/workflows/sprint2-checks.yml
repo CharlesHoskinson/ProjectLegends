@@ -1,0 +1,39 @@
+name: Sprint 2 Checks
+
+on:
+  push:
+    paths:
+      - 'engine/**'
+      - 'scripts/**'
+      - '.github/workflows/sprint2-checks.yml'
+      - '.github/baseline_globals.yaml'
+  pull_request:
+    paths:
+      - 'engine/**'
+      - 'scripts/**'
+      - '.github/workflows/sprint2-checks.yml'
+      - '.github/baseline_globals.yaml'
+
+jobs:
+  globals-registry:
+    name: Globals Registry Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Check current_context() usage
+        run: python scripts/check_current_context.py
+
+      - name: Check migration status
+        run: python scripts/check_migration_status.py
+
+      - name: Check globals registry
+        run: python scripts/check_globals.py

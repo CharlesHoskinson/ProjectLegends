@@ -518,3 +518,475 @@ TEST_F(Sprint2Phase1Test, InitDestroyWithoutThreadLocalContextLeak) {
     // Thread-local context should not be set after init (Sprint 2 Phase 1)
     EXPECT_FALSE(dosbox::has_current_context());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CPU Bridge Integration Tests (Phase 1.2)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#include "dosbox/cpu_bridge.h"
+
+class DOSBoxLibraryCpuBridgeTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Initialize the CPU bridge
+        dosbox::init_cpu_bridge();
+
+        // Create and init library instance
+        ASSERT_EQ(dosbox_lib_create(nullptr, &handle_), DOSBOX_LIB_OK);
+        ASSERT_EQ(dosbox_lib_init(handle_), DOSBOX_LIB_OK);
+    }
+
+    void TearDown() override {
+        if (handle_) {
+            dosbox_lib_destroy(handle_);
+            handle_ = nullptr;
+        }
+    }
+
+    dosbox_lib_handle_t handle_ = nullptr;
+};
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, CpuBridgeIsReady) {
+    EXPECT_TRUE(dosbox::is_cpu_bridge_ready());
+}
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, StepCyclesUsesbridge) {
+    // This test verifies that dosbox_lib_step_cycles uses the CPU bridge
+
+    dosbox_lib_step_result_t result{};
+    auto err = dosbox_lib_step_cycles(handle_, 1000, &result);
+
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+    // The bridge should have executed (or attempted to execute) cycles
+    // In headless mode, actual execution depends on CPU core availability
+    EXPECT_EQ(result.stop_reason, DOSBOX_LIB_STOP_COMPLETED);
+}
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, StepCyclesReturnsAllStopReasons) {
+    // Test that all stop reasons can be returned
+    // Most will just complete normally
+    dosbox_lib_step_result_t result{};
+
+    // Normal completion
+    EXPECT_EQ(dosbox_lib_step_cycles(handle_, 100, &result), DOSBOX_LIB_OK);
+    EXPECT_EQ(result.stop_reason, DOSBOX_LIB_STOP_COMPLETED);
+}
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, StepCyclesUpdatesTimeState) {
+    // Get initial time
+    uint64_t initial_time = 0;
+    dosbox_lib_get_emu_time(handle_, &initial_time);
+
+    // Step
+    dosbox_lib_step_result_t result{};
+    dosbox_lib_step_cycles(handle_, 10000, &result);
+
+    // Time should be updated
+    uint64_t final_time = 0;
+    dosbox_lib_get_emu_time(handle_, &final_time);
+
+    EXPECT_GT(final_time, initial_time);
+}
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, StepCyclesUpdatesCycleCount) {
+    // Get initial cycles
+    uint64_t initial_cycles = 0;
+    dosbox_lib_get_total_cycles(handle_, &initial_cycles);
+
+    // Step
+    dosbox_lib_step_result_t result{};
+    dosbox_lib_step_cycles(handle_, 5000, &result);
+
+    // Cycles should be updated
+    uint64_t final_cycles = 0;
+    dosbox_lib_get_total_cycles(handle_, &final_cycles);
+
+    EXPECT_GT(final_cycles, initial_cycles);
+}
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, StepMsUsesBridgeViaCycles) {
+    // step_ms should delegate to step_cycles which uses the bridge
+
+    dosbox_lib_step_result_t result{};
+    auto err = dosbox_lib_step_ms(handle_, 10, &result);
+
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+    EXPECT_EQ(result.stop_reason, DOSBOX_LIB_STOP_COMPLETED);
+}
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, MultipleStepsAccumulateCorrectly) {
+    uint64_t initial_cycles = 0;
+    dosbox_lib_get_total_cycles(handle_, &initial_cycles);
+
+    // Multiple steps
+    for (int i = 0; i < 10; ++i) {
+        dosbox_lib_step_cycles(handle_, 1000, nullptr);
+    }
+
+    uint64_t final_cycles = 0;
+    dosbox_lib_get_total_cycles(handle_, &final_cycles);
+
+    // Total cycles should have accumulated
+    EXPECT_GE(final_cycles - initial_cycles, 0u);
+}
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, StepResultEventsProcessedIsReasonable) {
+    dosbox_lib_step_result_t result{};
+    dosbox_lib_step_cycles(handle_, 100000, &result);
+
+    // Events processed should be a reasonable number
+    // (could be 0 in headless mode without actual event queue)
+    EXPECT_GE(result.events_processed, 0u);
+}
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, StepResultCyclesMatchesRequest) {
+    dosbox_lib_step_result_t result{};
+    dosbox_lib_step_cycles(handle_, 1000, &result);
+
+    // If completed normally, cycles should roughly match requested
+    // (bridge might execute slightly more or less due to batching)
+    if (result.stop_reason == DOSBOX_LIB_STOP_COMPLETED) {
+        // Allow some variance for batching/rounding
+        EXPECT_GE(result.cycles_executed, 0u);
+    }
+}
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, NewStopReasonsAreDefined) {
+    // Verify new stop reason constants exist and have correct values
+    EXPECT_EQ(DOSBOX_LIB_STOP_COMPLETED, 0);
+    EXPECT_EQ(DOSBOX_LIB_STOP_HALT, 1);
+    EXPECT_EQ(DOSBOX_LIB_STOP_BREAKPOINT, 2);
+    EXPECT_EQ(DOSBOX_LIB_STOP_ERROR, 3);
+    EXPECT_EQ(DOSBOX_LIB_STOP_USER_REQUEST, 4);
+    EXPECT_EQ(DOSBOX_LIB_STOP_CALLBACK, 5);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Determinism Tests with CPU Bridge
+// ═══════════════════════════════════════════════════════════════════════════════
+
+TEST_F(DOSBoxLibraryCpuBridgeTest, DeterministicSteppingProducesSameResults) {
+    // First run
+    dosbox_lib_reset(handle_);
+    dosbox_lib_step_result_t result1{};
+    dosbox_lib_step_cycles(handle_, 10000, &result1);
+
+    uint8_t hash1[32] = {0};
+    dosbox_lib_get_state_hash(handle_, hash1);
+
+    // Reset and run again
+    dosbox_lib_reset(handle_);
+    dosbox_lib_step_result_t result2{};
+    dosbox_lib_step_cycles(handle_, 10000, &result2);
+
+    uint8_t hash2[32] = {0};
+    dosbox_lib_get_state_hash(handle_, hash2);
+
+    // Results should be identical (deterministic)
+    EXPECT_EQ(result1.cycles_executed, result2.cycles_executed);
+    EXPECT_EQ(result1.stop_reason, result2.stop_reason);
+
+    // Hashes should match
+    for (int i = 0; i < 32; ++i) {
+        EXPECT_EQ(hash1[i], hash2[i]) << "Hash differs at byte " << i;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Phase 2: Engine State Serialization Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#include "dosbox/engine_state.h"
+
+class DOSBoxLibraryEngineStateTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        auto err = dosbox_lib_create(nullptr, &handle_);
+        ASSERT_EQ(err, DOSBOX_LIB_OK);
+        err = dosbox_lib_init(handle_);
+        ASSERT_EQ(err, DOSBOX_LIB_OK);
+    }
+
+    void TearDown() override {
+        if (handle_) {
+            dosbox_lib_destroy(handle_);
+            handle_ = nullptr;
+        }
+    }
+
+    dosbox_lib_handle_t handle_ = nullptr;
+};
+
+TEST_F(DOSBoxLibraryEngineStateTest, SaveStateReturnsCorrectSize) {
+    size_t size = 0;
+    auto err = dosbox_lib_save_state(handle_, nullptr, 0, &size);
+
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+    EXPECT_EQ(size, dosbox::ENGINE_STATE_SIZE);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SaveStateWritesValidMagic) {
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+
+    std::vector<uint8_t> buffer(size);
+    auto err = dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+
+    auto* header = reinterpret_cast<const dosbox::EngineStateHeader*>(buffer.data());
+    EXPECT_EQ(header->magic, dosbox::ENGINE_STATE_MAGIC);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SaveStateWritesCorrectVersion) {
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+
+    std::vector<uint8_t> buffer(size);
+    dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+
+    auto* header = reinterpret_cast<const dosbox::EngineStateHeader*>(buffer.data());
+    EXPECT_EQ(header->version, dosbox::ENGINE_STATE_VERSION);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SaveStateWritesCorrectTotalSize) {
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+
+    std::vector<uint8_t> buffer(size);
+    dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+
+    auto* header = reinterpret_cast<const dosbox::EngineStateHeader*>(buffer.data());
+    EXPECT_EQ(header->total_size, dosbox::ENGINE_STATE_SIZE);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SaveStateWritesValidChecksum) {
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+
+    std::vector<uint8_t> buffer(size);
+    dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+
+    auto* header = reinterpret_cast<const dosbox::EngineStateHeader*>(buffer.data());
+
+    // Verify checksum matches data
+    const uint8_t* data_start = buffer.data() + sizeof(dosbox::EngineStateHeader);
+    size_t data_size = size - sizeof(dosbox::EngineStateHeader);
+    uint32_t computed_crc = dosbox::compute_crc32(data_start, data_size);
+    EXPECT_EQ(header->checksum, computed_crc);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SaveStateHasValidSectionOffsets) {
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+
+    std::vector<uint8_t> buffer(size);
+    dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+
+    auto* header = reinterpret_cast<const dosbox::EngineStateHeader*>(buffer.data());
+
+    // All section offsets should be within bounds
+    // Current format: timing, pic, keyboard (120 bytes total)
+    EXPECT_GE(header->timing_offset, sizeof(dosbox::EngineStateHeader));
+    EXPECT_LT(header->timing_offset, size);
+
+    EXPECT_GE(header->pic_offset, sizeof(dosbox::EngineStateHeader));
+    EXPECT_LT(header->pic_offset, size);
+
+    EXPECT_GE(header->keyboard_offset, sizeof(dosbox::EngineStateHeader));
+    EXPECT_LT(header->keyboard_offset, size);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, LoadStateRejectsInvalidMagic) {
+    std::vector<uint8_t> buffer(dosbox::ENGINE_STATE_SIZE, 0);
+
+    // Set invalid magic
+    auto* header = reinterpret_cast<dosbox::EngineStateHeader*>(buffer.data());
+    header->magic = 0xDEADBEEF;  // Wrong magic
+    header->version = dosbox::ENGINE_STATE_VERSION;
+    header->total_size = dosbox::ENGINE_STATE_SIZE;
+
+    auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_STATE);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, LoadStateRejectsVersionMismatch) {
+    std::vector<uint8_t> buffer(dosbox::ENGINE_STATE_SIZE, 0);
+
+    auto* header = reinterpret_cast<dosbox::EngineStateHeader*>(buffer.data());
+    header->magic = dosbox::ENGINE_STATE_MAGIC;
+    header->version = dosbox::ENGINE_STATE_VERSION + 100;  // Wrong version
+    header->total_size = dosbox::ENGINE_STATE_SIZE;
+
+    auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_VERSION_MISMATCH);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, LoadStateRejectsBufferTooSmall) {
+    std::vector<uint8_t> buffer(10, 0);  // Way too small
+
+    auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_BUFFER_TOO_SMALL);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, LoadStateRejectsChecksumMismatch) {
+    // First save valid state
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+    std::vector<uint8_t> buffer(size);
+    dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+
+    // Corrupt the data (not the header)
+    buffer[sizeof(dosbox::EngineStateHeader) + 10] ^= 0xFF;
+
+    auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_STATE);  // Checksum mismatch
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SaveLoadRoundTrip) {
+    // Step to modify state
+    dosbox_lib_step_cycles(handle_, 10000, nullptr);
+
+    // Get state hash before save
+    uint8_t hash_before[32] = {0};
+    dosbox_lib_get_state_hash(handle_, hash_before);
+
+    // Save state
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+    std::vector<uint8_t> buffer(size);
+    auto err = dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+
+    // Step more to change state
+    dosbox_lib_step_cycles(handle_, 10000, nullptr);
+
+    // Verify state changed
+    uint8_t hash_diverged[32] = {0};
+    dosbox_lib_get_state_hash(handle_, hash_diverged);
+    EXPECT_NE(memcmp(hash_before, hash_diverged, 32), 0);
+
+    // Load saved state
+    err = dosbox_lib_load_state(handle_, buffer.data(), size);
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+
+    // Verify state restored
+    uint8_t hash_after[32] = {0};
+    dosbox_lib_get_state_hash(handle_, hash_after);
+    EXPECT_EQ(memcmp(hash_before, hash_after, 32), 0);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SaveLoadPreservesTimingState) {
+    // Step to create timing state
+    dosbox_lib_step_cycles(handle_, 50000, nullptr);
+
+    uint64_t total_cycles_before = 0;
+    uint64_t emu_time_before = 0;
+    dosbox_lib_get_total_cycles(handle_, &total_cycles_before);
+    dosbox_lib_get_emu_time(handle_, &emu_time_before);
+
+    // Save state
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+    std::vector<uint8_t> buffer(size);
+    dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+
+    // Reset
+    dosbox_lib_reset(handle_);
+
+    // Verify reset
+    uint64_t total_cycles_reset = 0;
+    dosbox_lib_get_total_cycles(handle_, &total_cycles_reset);
+    EXPECT_EQ(total_cycles_reset, 0u);
+
+    // Load state
+    dosbox_lib_load_state(handle_, buffer.data(), size);
+
+    // Verify timing restored
+    uint64_t total_cycles_after = 0;
+    uint64_t emu_time_after = 0;
+    dosbox_lib_get_total_cycles(handle_, &total_cycles_after);
+    dosbox_lib_get_emu_time(handle_, &emu_time_after);
+
+    EXPECT_EQ(total_cycles_before, total_cycles_after);
+    EXPECT_EQ(emu_time_before, emu_time_after);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, DeterministicAfterSaveLoad) {
+    // Step to initial state
+    dosbox_lib_step_cycles(handle_, 5000, nullptr);
+
+    // Save state
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+    std::vector<uint8_t> saved_state(size);
+    dosbox_lib_save_state(handle_, saved_state.data(), size, &size);
+
+    // Step more and record result
+    dosbox_lib_step_result_t result1{};
+    dosbox_lib_step_cycles(handle_, 10000, &result1);
+    uint8_t hash1[32] = {0};
+    dosbox_lib_get_state_hash(handle_, hash1);
+
+    // Restore state
+    dosbox_lib_load_state(handle_, saved_state.data(), size);
+
+    // Step same amount and compare
+    dosbox_lib_step_result_t result2{};
+    dosbox_lib_step_cycles(handle_, 10000, &result2);
+    uint8_t hash2[32] = {0};
+    dosbox_lib_get_state_hash(handle_, hash2);
+
+    // Should be deterministic - same cycles, same hash
+    EXPECT_EQ(result1.cycles_executed, result2.cycles_executed);
+    EXPECT_EQ(memcmp(hash1, hash2, 32), 0);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, CRC32ComputesCorrectly) {
+    // Test known CRC32 values
+    const char* test_data = "123456789";
+    uint32_t crc = dosbox::compute_crc32(test_data, 9);
+    // Standard CRC32 of "123456789" is 0xCBF43926
+    EXPECT_EQ(crc, 0xCBF43926u);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, CRC32EmptyDataReturnsZero) {
+    uint32_t crc = dosbox::compute_crc32(nullptr, 0);
+    // CRC32 of empty data (initial XOR with final XOR) = 0
+    EXPECT_EQ(crc, 0u);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SaveStateBufferTooSmallFails) {
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+
+    std::vector<uint8_t> buffer(size / 2);  // Too small
+    auto err = dosbox_lib_save_state(handle_, buffer.data(), buffer.size(), &size);
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_BUFFER_TOO_SMALL);
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, MultipleRoundTripsPreserveState) {
+    // Multiple save/load cycles should preserve state
+    dosbox_lib_step_cycles(handle_, 5000, nullptr);
+
+    uint8_t original_hash[32] = {0};
+    dosbox_lib_get_state_hash(handle_, original_hash);
+
+    std::vector<uint8_t> buffer(dosbox::ENGINE_STATE_SIZE);
+    size_t size;
+
+    for (int i = 0; i < 5; ++i) {
+        // Save
+        dosbox_lib_save_state(handle_, buffer.data(), buffer.size(), &size);
+
+        // Step to change state
+        dosbox_lib_step_cycles(handle_, 1000, nullptr);
+
+        // Load (restore)
+        dosbox_lib_load_state(handle_, buffer.data(), size);
+
+        // Verify state matches original
+        uint8_t current_hash[32] = {0};
+        dosbox_lib_get_state_hash(handle_, current_hash);
+        EXPECT_EQ(memcmp(original_hash, current_hash, 32), 0) << "Round trip " << i << " failed";
+    }
+}

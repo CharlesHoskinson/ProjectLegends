@@ -802,21 +802,11 @@ bool PIC_RunQueue(void) {
 }
 
 /* The TIMER Part - Sprint 2 Phase 5: Migrated to DOSBoxContext.pic */
+/* Note: TIMER_ShutdownTickHandlers, TIMER_DelTickHandler, TIMER_AddTickHandler
+ * are now in pic_compat.cpp to isolate current_context() usage */
 
-void TIMER_ShutdownTickHandlers() {
-    if (!dosbox::has_current_context()) return;
-    dosbox::current_context().pic.shutdown_tickers();
-}
-
-void TIMER_DelTickHandler(TIMER_TickHandler handler) {
-    if (!dosbox::has_current_context()) return;
-    dosbox::current_context().pic.remove_ticker(handler);
-}
-
-void TIMER_AddTickHandler(TIMER_TickHandler handler) {
-    if (!dosbox::has_current_context()) return;
-    dosbox::current_context().pic.add_ticker(handler);
-}
+// Forward declaration for compat function
+extern void TIMER_ExecuteTickHandlers();
 
 extern Bitu time_limit_ms;
 
@@ -849,9 +839,8 @@ void TIMER_AddTick(void) {
     }
 
     /* Call our list of ticker handlers - Sprint 2 Phase 5: Use context */
-    if (dosbox::has_current_context()) {
-        dosbox::current_context().pic.execute_tickers();
-    }
+    /* Uses compat shim (pic_compat.cpp) to isolate context access */
+    TIMER_ExecuteTickHandlers();
 }
 
 static IO_WriteHandleObject PCXT_NMI_WriteHandler;

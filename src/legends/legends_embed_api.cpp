@@ -363,7 +363,7 @@ std::array<DMAChannelState, 8> g_dma{};
 
 // Magic number: "DBXS" (DOSBox-X Save)
 constexpr uint32_t SAVESTATE_MAGIC = 0x53584244;  // "DBXS" in little-endian
-constexpr uint32_t SAVESTATE_VERSION = 1;
+constexpr uint32_t SAVESTATE_VERSION = 2;  // Version 2: Includes engine state
 
 // Save state header (fixed size, at start of buffer)
 struct SaveStateHeader {
@@ -380,7 +380,9 @@ struct SaveStateHeader {
     uint32_t event_queue_offset;
     uint32_t input_offset;
     uint32_t frame_offset;
-    uint32_t _reserved[5];
+    uint32_t engine_offset;    // NEW: Engine state offset (0 if not present)
+    uint32_t engine_size;      // NEW: Engine state size in bytes
+    uint32_t _reserved[3];
 };
 static_assert(sizeof(SaveStateHeader) == 64, "SaveStateHeader must be 64 bytes");
 
@@ -835,6 +837,44 @@ legends_error_t safe_call(Func&& func) noexcept {
         return (err); \
     } while(0)
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Save State Bounds Validation Macros (P0 Security Fix)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Validate that a fixed-size section fits within buffer bounds
+// Checks for overflow: offset + size could wrap around on 32-bit
+#define VALIDATE_SECTION_BOUNDS(offset, section_type, buf_size) \
+    do { \
+        if ((offset) > (buf_size) || \
+            sizeof(section_type) > (buf_size) - (offset)) { \
+            LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, \
+                "Section offset out of bounds: " #offset); \
+        } \
+    } while(0)
+
+// Validate that variable-size data fits within buffer bounds
+// data_size is from untrusted input, must check for overflow
+#define VALIDATE_DATA_BOUNDS(offset, data_size, buf_size) \
+    do { \
+        if ((offset) > (buf_size) || \
+            (data_size) > (buf_size) - (offset)) { \
+            LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, \
+                "Data section exceeds buffer bounds at offset: " #offset); \
+        } \
+    } while(0)
+
+// Validate that a count doesn't exceed a maximum (prevents huge allocations)
+#define VALIDATE_COUNT_MAX(count, max_val, name) \
+    do { \
+        if ((count) > (max_val)) { \
+            LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, \
+                "Count exceeds maximum for " name); \
+        } \
+    } while(0)
+
+// Maximum size for indexed pixels buffer (4MB - enough for 2048x2048)
+constexpr size_t MAX_INDEXED_PIXELS_SIZE = 4 * 1024 * 1024;
+
 // Log at various levels
 #define LEGENDS_LOG_INFO(msg) g_log_state.info(msg)
 #define LEGENDS_LOG_DEBUG(msg) g_log_state.debug(msg)
@@ -843,6 +883,11 @@ legends_error_t safe_call(Func&& func) noexcept {
 } // anonymous namespace
 
 extern "C" {
+
+// Forward declarations for internal helper functions
+void sync_state_from_engine();
+void sync_state_to_engine();
+size_t get_engine_state_size();
 
 /* =========================================================================
  * LIFECYCLE API
@@ -989,6 +1034,11 @@ legends_error_t legends_destroy(legends_handle handle) {
         return LEGENDS_OK;
     }
 
+    // P1 Security Fix: Verify caller is on owner thread to prevent data races
+    // on global state. Must check after null-handle check since LEGENDS_CHECK_THREAD
+    // requires g_instance_exists to be true.
+    LEGENDS_CHECK_THREAD();
+
     LEGENDS_LOG_INFO("Destroying DOSBox-X instance");
 
     // Shutdown and destroy instance
@@ -1003,8 +1053,30 @@ legends_error_t legends_destroy(legends_handle handle) {
         g_engine_handle = nullptr;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // P3 Fix: Reset ALL global state to prevent leakage to subsequent instances
+    // Previously only reset in legends_reset(), causing stale state issues
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Reset time state
     g_time_state.reset();
+
+    // Reset frame and input state
+    g_frame_state.reset();
+    g_input_state.reset();
+
+    // Reset event queue
+    g_event_queue.reset();
+
+    // Reset PIC state to defaults
+    g_pics[0] = {0, 255, 0, 8, 2, {0, 0, 0}};    // Master
+    g_pics[1] = {0, 255, 0, 112, 2, {0, 0, 0}};  // Slave
+
+    // Reset DMA state
+    for (auto& ch : g_dma) {
+        ch = DMAChannelState{};
+        ch.masked = 1;
+    }
 
     // Reset single instance flag and owner thread
     g_instance_exists = false;
@@ -1028,6 +1100,16 @@ legends_error_t legends_reset(legends_handle handle) {
         if (!result.has_value()) {
             g_last_error = result.error().format();
             return LEGENDS_ERR_INTERNAL;
+        }
+
+        // Reset engine state for determinism
+        // This ensures repeated resets produce identical starting states
+        if (g_engine_handle) {
+            auto engine_err = dosbox_lib_reset(g_engine_handle);
+            if (engine_err != DOSBOX_LIB_OK) {
+                g_last_error = "Failed to reset engine state";
+                return dosbox_to_legends_error(engine_err);
+            }
         }
 
         // Reset time state for determinism
@@ -1088,63 +1170,61 @@ legends_error_t legends_step_cycles(
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
     LEGENDS_REQUIRE(g_instance != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
+    LEGENDS_REQUIRE(g_engine_handle != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
 
     try {
-        // Set context for compatibility shim
+        // Set context for compatibility shim (still needed for legacy code paths)
         legends::compat::ContextGuard guard(*g_instance);
 
-        uint64_t cycles_executed = 0;
-        uint32_t events_processed = 0;
-        uint32_t stop_reason = LEGENDS_STOP_COMPLETED;
+        // Delegate to the DOSBox library which now uses the CPU bridge
+        // for actual CPU instruction execution
+        dosbox_lib_step_result_t engine_result{};
+        auto err = dosbox_lib_step_cycles(g_engine_handle, cycles, &engine_result);
 
-        // Execute through MachineContext
-        // For now, we use the existing step() which works in milliseconds
-        // We convert cycles to approximate ms for the underlying implementation
-
-        // Execute in batches to allow for stop conditions
-        const uint64_t batch_size = g_time_state.cycles_per_ms;  // ~1ms batches
-
-        while (cycles_executed < cycles) {
-            uint64_t remaining = cycles - cycles_executed;
-            uint64_t batch = std::min(remaining, batch_size);
-
-            // Check for halt condition (CPU halted)
-            if (g_instance->cpu.halted) {
-                stop_reason = LEGENDS_STOP_HALT;
-                break;
+        if (err != DOSBOX_LIB_OK) {
+            g_last_error = "Engine step_cycles failed";
+            if (result_out != nullptr) {
+                result_out->stop_reason = LEGENDS_STOP_ERROR;
             }
-
-            // Check for stop request
-            if (g_instance->stop_requested()) {
-                stop_reason = LEGENDS_STOP_COMPLETED;
-                break;
-            }
-
-            // Execute the batch
-            // The MachineContext::step() increments internal counters
-            // We track cycles separately in our TimeState for precise accounting
-            cycles_executed += batch;
-
-            // Simulate some event processing (placeholder for real PIC events)
-            // In a real implementation, this would call into DOSBox-X's PIC_RunQueue
-            if (cycles_executed % (batch_size * 10) == 0) {
-                events_processed++;
-            }
+            return dosbox_to_legends_error(err);
         }
 
-        // Update canonical time state
-        g_time_state.total_cycles += cycles_executed;
-        g_time_state.emu_time_us += g_time_state.cycles_to_us(cycles_executed);
+        // Map engine stop reason to legends stop reason
+        uint32_t stop_reason = LEGENDS_STOP_COMPLETED;
+        switch (engine_result.stop_reason) {
+            case DOSBOX_LIB_STOP_COMPLETED:
+                stop_reason = LEGENDS_STOP_COMPLETED;
+                break;
+            case DOSBOX_LIB_STOP_HALT:
+                stop_reason = LEGENDS_STOP_HALT;
+                break;
+            case DOSBOX_LIB_STOP_BREAKPOINT:
+                stop_reason = LEGENDS_STOP_BREAKPOINT;
+                break;
+            case DOSBOX_LIB_STOP_ERROR:
+                stop_reason = LEGENDS_STOP_ERROR;
+                break;
+            case DOSBOX_LIB_STOP_USER_REQUEST:
+                stop_reason = LEGENDS_STOP_USER_REQUEST;
+                break;
+            case DOSBOX_LIB_STOP_CALLBACK:
+                // Callback is internal to engine; map to completed for legends
+                stop_reason = LEGENDS_STOP_COMPLETED;
+                break;
+            default:
+                stop_reason = LEGENDS_STOP_ERROR;
+                break;
+        }
 
-        // Also update MachineContext's internal counters for consistency
-        // (The MachineContext tracks this separately, but we keep them in sync)
+        // Sync legends layer state from engine
+        sync_state_from_engine();
 
         // Fill result if requested
         if (result_out != nullptr) {
-            result_out->cycles_executed = cycles_executed;
+            result_out->cycles_executed = engine_result.cycles_executed;
             result_out->emu_time_us = g_time_state.emu_time_us;
             result_out->stop_reason = stop_reason;
-            result_out->events_processed = events_processed;
+            result_out->events_processed = engine_result.events_processed;
         }
 
         g_last_error.clear();
@@ -1548,6 +1628,59 @@ legends_error_t legends_mouse_event(
 }
 
 /* =========================================================================
+ * STATE SYNCHRONIZATION - Phase 3 Implementation
+ *
+ * These functions synchronize state between the legends layer and the
+ * DOSBox engine layer. This ensures the two layers remain consistent
+ * after operations like stepping or loading state.
+ * ========================================================================= */
+
+/**
+ * @brief Sync legends layer state from engine.
+ *
+ * Called after:
+ * - stepping cycles (engine has updated timing)
+ * - loading state (engine state was restored)
+ *
+ * Updates legends layer timing state to match engine.
+ */
+void sync_state_from_engine() {
+    if (!g_engine_handle) {
+        return;
+    }
+
+    // Sync timing state from engine (canonical source after stepping)
+    dosbox_lib_get_total_cycles(g_engine_handle, &g_time_state.total_cycles);
+    dosbox_lib_get_emu_time(g_engine_handle, &g_time_state.emu_time_us);
+
+    // Future: sync other state (PIC state, VGA mode, etc.) if needed
+}
+
+/**
+ * @brief Push legends layer state to engine.
+ *
+ * Called when legends layer state is modified directly and
+ * engine needs to be updated to match.
+ *
+ * Note: Currently timing is engine-authoritative (engine is source of truth
+ * after stepping). This function is for cases where legends layer needs to
+ * push state to the engine (e.g., external state injection).
+ */
+void sync_state_to_engine() {
+    if (!g_engine_handle) {
+        return;
+    }
+
+    // Currently, timing flows engine -> legends, not the reverse.
+    // This function is a placeholder for future state push needs.
+    // Example use cases:
+    // - Setting virtual time externally
+    // - Injecting device state
+
+    // For now, no-op. Engine is authoritative for most state.
+}
+
+/* =========================================================================
  * SAVE/LOAD API - Phase 5 Implementation
  *
  * Per TLA+ SaveState.tla specification:
@@ -1555,6 +1688,16 @@ legends_error_t legends_mouse_event(
  * - Obs(Deserialize(Serialize(S))) = Obs(S) must hold
  * - State includes: now, Q (events), CPU, PICs, DMA
  * ========================================================================= */
+
+// Helper: Get engine state size
+size_t get_engine_state_size() {
+    if (!g_engine_handle) {
+        return 0;
+    }
+    size_t engine_size = 0;
+    dosbox_lib_save_state(g_engine_handle, nullptr, 0, &engine_size);
+    return engine_size;
+}
 
 // Helper: Calculate total save state size
 size_t calculate_save_state_size() {
@@ -1577,6 +1720,9 @@ size_t calculate_save_state_size() {
     size += sizeof(SaveStateFrameHeader);
     size += g_frame_state.text_cell_count() * sizeof(uint16_t);
     size += g_frame_state.indexed_pixels.size();
+
+    // Engine state (Phase 2 - full DOSBox context)
+    size += get_engine_state_size();
 
     return size;
 }
@@ -1717,8 +1863,37 @@ legends_error_t legends_save_state(
         offset += pixels_size;
     }
 
-    // Calculate checksum of data after header
-    header->checksum = crc32(data_start, required_size - sizeof(SaveStateHeader));
+    // Write engine state (Phase 2 - full DOSBox context)
+    size_t engine_size = get_engine_state_size();
+    if (engine_size > 0 && g_engine_handle) {
+        header->engine_offset = static_cast<uint32_t>(offset);
+
+        size_t actual_engine_size = 0;
+        auto engine_err = dosbox_lib_save_state(
+            g_engine_handle,
+            ptr + offset,
+            engine_size,
+            &actual_engine_size
+        );
+
+        if (engine_err != DOSBOX_LIB_OK) {
+            return dosbox_to_legends_error(engine_err);
+        }
+
+        // Security Fix: Use actual size written, not pre-computed size
+        // This ensures header and checksum match actual data
+        header->engine_size = static_cast<uint32_t>(actual_engine_size);
+        offset += actual_engine_size;
+    } else {
+        header->engine_offset = 0;
+        header->engine_size = 0;
+    }
+
+    // Security Fix: Calculate checksum based on actual written data (offset),
+    // not pre-computed required_size, in case actual sizes differed
+    const size_t actual_data_size = offset - sizeof(SaveStateHeader);
+    header->total_size = static_cast<uint32_t>(offset);  // Update to actual total
+    header->checksum = crc32(data_start, actual_data_size);
 
     return LEGENDS_OK;
 }
@@ -1750,17 +1925,48 @@ legends_error_t legends_load_state(
         LEGENDS_ERROR(LEGENDS_ERR_VERSION_MISMATCH, "Save state version mismatch");
     }
 
-    // Validate size
+    // ─────────────────────────────────────────────────────────────────────────
+    // Security Fix: Comprehensive bounds validation
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Validate size - total_size must be at least header size to prevent underflow
+    if (header->total_size < sizeof(SaveStateHeader)) {
+        LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "Declared size smaller than header");
+    }
+
+    // Validate that declared size doesn't exceed buffer
     if (header->total_size > buffer_size) {
         LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Buffer smaller than declared state size");
     }
 
-    // Validate checksum
+    // Validate checksum over the checksummed region
     const uint8_t* data_start = ptr + sizeof(SaveStateHeader);
-    uint32_t computed_crc = crc32(data_start, header->total_size - sizeof(SaveStateHeader));
+    size_t data_size = header->total_size - sizeof(SaveStateHeader);
+    uint32_t computed_crc = crc32(data_start, data_size);
     if (computed_crc != header->checksum) {
         LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "Save state checksum mismatch");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Security Fix: Validate ALL section offsets against TOTAL_SIZE (checksummed region)
+    // This ensures all sections fall within the integrity-verified data
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Use total_size (not buffer_size) for section validation to ensure integrity
+    const size_t verified_size = header->total_size;
+
+    // Validate fixed-size section bounds against checksummed region
+    VALIDATE_SECTION_BOUNDS(header->time_offset, SaveStateTime, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->cpu_offset, SaveStateCPU, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->pic_offset, SaveStatePIC, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->dma_offset, SaveStateDMA, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->event_queue_offset, SaveStateEventQueueHeader, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->input_offset, SaveStateInputHeader, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->frame_offset, SaveStateFrameHeader, verified_size);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Now safe to read section headers (bounds validated above)
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Load time state
     const SaveStateTime* time_section = reinterpret_cast<const SaveStateTime*>(ptr + header->time_offset);
@@ -1786,12 +1992,25 @@ legends_error_t legends_load_state(
         g_dma[i] = dma_section->channels[i];
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Variable-size sections: validate counts AND data bounds before access
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Load event queue (CRITICAL for TLA+ compliance)
     const SaveStateEventQueueHeader* eq_header = reinterpret_cast<const SaveStateEventQueueHeader*>(ptr + header->event_queue_offset);
+
+    // Validate event count doesn't exceed maximum (prevents huge allocations/OOB)
+    VALIDATE_COUNT_MAX(eq_header->event_count, EventQueueState::MAX_EVENTS, "event_count");
+
+    // Validate event data fits in buffer
+    size_t events_data_size = static_cast<size_t>(eq_header->event_count) * sizeof(ScheduledEvent);
+    size_t eq_data_offset = header->event_queue_offset + sizeof(SaveStateEventQueueHeader);
+    VALIDATE_DATA_BOUNDS(eq_data_offset, events_data_size, verified_size);
+
     g_event_queue.event_count = eq_header->event_count;
     g_event_queue.next_event_id = eq_header->next_event_id;
 
-    size_t eq_offset = header->event_queue_offset + sizeof(SaveStateEventQueueHeader);
+    size_t eq_offset = eq_data_offset;
     for (size_t i = 0; i < g_event_queue.event_count; ++i) {
         std::memcpy(&g_event_queue.events[i], ptr + eq_offset, sizeof(ScheduledEvent));
         eq_offset += sizeof(ScheduledEvent);
@@ -1799,11 +2018,23 @@ legends_error_t legends_load_state(
 
     // Load input state
     const SaveStateInputHeader* input_header = reinterpret_cast<const SaveStateInputHeader*>(ptr + header->input_offset);
+
+    // Validate input queue sizes don't exceed maximums
+    VALIDATE_COUNT_MAX(input_header->key_queue_size, InputState::MAX_KEY_EVENTS, "key_queue_size");
+    VALIDATE_COUNT_MAX(input_header->mouse_queue_size, InputState::MAX_MOUSE_EVENTS, "mouse_queue_size");
+
+    // Validate input data fits in buffer
+    size_t key_data_size = static_cast<size_t>(input_header->key_queue_size) * sizeof(KeyEvent);
+    size_t mouse_data_size = static_cast<size_t>(input_header->mouse_queue_size) * sizeof(MouseEvent);
+    size_t input_data_offset = header->input_offset + sizeof(SaveStateInputHeader);
+    VALIDATE_DATA_BOUNDS(input_data_offset, key_data_size, verified_size);
+    VALIDATE_DATA_BOUNDS(input_data_offset + key_data_size, mouse_data_size, verified_size);
+
     g_input_state.reset();
 
-    size_t input_offset = header->input_offset + sizeof(SaveStateInputHeader);
+    size_t input_offset = input_data_offset;
 
-    // Load key events
+    // Load key events (bounds now validated)
     for (uint32_t i = 0; i < input_header->key_queue_size; ++i) {
         KeyEvent ke;
         std::memcpy(&ke, ptr + input_offset, sizeof(KeyEvent));
@@ -1811,7 +2042,7 @@ legends_error_t legends_load_state(
         input_offset += sizeof(KeyEvent);
     }
 
-    // Load mouse events
+    // Load mouse events (bounds now validated)
     for (uint32_t i = 0; i < input_header->mouse_queue_size; ++i) {
         MouseEvent me;
         std::memcpy(&me, ptr + input_offset, sizeof(MouseEvent));
@@ -1821,6 +2052,36 @@ legends_error_t legends_load_state(
 
     // Load frame state
     const SaveStateFrameHeader* frame_header = reinterpret_cast<const SaveStateFrameHeader*>(ptr + header->frame_offset);
+
+    // Validate frame buffer sizes don't exceed maximums
+    constexpr size_t max_text_buffer_bytes = FrameState::MAX_TEXT_CELLS * sizeof(uint16_t);
+    VALIDATE_COUNT_MAX(frame_header->text_buffer_size, max_text_buffer_bytes, "text_buffer_size");
+    VALIDATE_COUNT_MAX(frame_header->indexed_pixels_size, MAX_INDEXED_PIXELS_SIZE, "indexed_pixels_size");
+
+    // Validate frame data fits in buffer
+    size_t frame_data_offset = header->frame_offset + sizeof(SaveStateFrameHeader);
+    VALIDATE_DATA_BOUNDS(frame_data_offset, frame_header->text_buffer_size, verified_size);
+    VALIDATE_DATA_BOUNDS(frame_data_offset + frame_header->text_buffer_size,
+                         frame_header->indexed_pixels_size, verified_size);
+
+    // Security Fix: Validate frame dimensions against maximum values
+    // Maximum is 80 columns x 50 rows for text mode
+    constexpr uint8_t MAX_COLUMNS = 80;
+    constexpr uint8_t MAX_ROWS = 50;
+
+    if (frame_header->columns > MAX_COLUMNS) {
+        LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "Frame columns exceeds maximum (80)");
+    }
+    if (frame_header->rows > MAX_ROWS) {
+        LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "Frame rows exceeds maximum (50)");
+    }
+
+    // Validate that columns * rows doesn't exceed MAX_TEXT_CELLS
+    const size_t cell_count = static_cast<size_t>(frame_header->columns) * frame_header->rows;
+    if (cell_count > FrameState::MAX_TEXT_CELLS) {
+        LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "Frame cell count exceeds maximum");
+    }
+
     g_frame_state.is_text_mode = (frame_header->is_text_mode != 0);
     g_frame_state.columns = frame_header->columns;
     g_frame_state.rows = frame_header->rows;
@@ -1831,13 +2092,13 @@ legends_error_t legends_load_state(
     g_frame_state.gfx_width = frame_header->gfx_width;
     g_frame_state.gfx_height = frame_header->gfx_height;
 
-    size_t frame_offset = header->frame_offset + sizeof(SaveStateFrameHeader);
+    size_t frame_offset = frame_data_offset;
 
-    // Load text buffer
+    // Load text buffer (bounds now validated)
     std::memcpy(g_frame_state.text_buffer.data(), ptr + frame_offset, frame_header->text_buffer_size);
     frame_offset += frame_header->text_buffer_size;
 
-    // Load indexed pixels
+    // Load indexed pixels (bounds now validated)
     if (frame_header->indexed_pixels_size > 0) {
         g_frame_state.indexed_pixels.resize(frame_header->indexed_pixels_size);
         std::memcpy(g_frame_state.indexed_pixels.data(), ptr + frame_offset, frame_header->indexed_pixels_size);
@@ -1847,6 +2108,33 @@ legends_error_t legends_load_state(
 
     // Mark frame as dirty after load
     g_frame_state.dirty = true;
+
+    // Load engine state (Phase 2 - full DOSBox context)
+    // V2 save states with an active engine MUST include engine state for determinism
+    if (g_engine_handle) {
+        if (header->engine_offset == 0 || header->engine_size == 0) {
+            // Engine is active but save state has no engine data - would leave engine stale
+            LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE,
+                "Save state missing engine data (required when engine is active)");
+        }
+
+        // Validate engine state bounds against verified_size (checksummed region)
+        VALIDATE_DATA_BOUNDS(header->engine_offset, header->engine_size, verified_size);
+
+        auto engine_err = dosbox_lib_load_state(
+            g_engine_handle,
+            ptr + header->engine_offset,
+            header->engine_size
+        );
+
+        if (engine_err != DOSBOX_LIB_OK) {
+            return dosbox_to_legends_error(engine_err);
+        }
+
+        // Note: Do NOT call sync_state_from_engine() here.
+        // After load, both legends layer and engine state were restored from save.
+        // They are already synchronized. Calling sync would overwrite with stale values.
+    }
 
     return LEGENDS_OK;
 }
