@@ -299,4 +299,4 @@ GPL-2.0, consistent with DOSBox-X.
 
 ---
 
-*Copyright 2024-2026 Charles Hoskinson*
+*Copyright 2026 Charles Hoskinson*
