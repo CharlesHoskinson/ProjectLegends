@@ -1,0 +1,30 @@
+{
+  "phase_id": "SPRINT2-P08",
+  "phase_name": "Keyboard Buffer Migration",
+  "dependencies": ["SPRINT2-P06"],
+
+  "structures": {
+    "KeyboardState": {
+      "file": "engine/include/dosbox/dosbox_context.h",
+      "members": {
+        "buffer": {"type": "uint16_t[]", "required": true},
+        "buffer_used": {"type": "uint32_t", "required": true},
+        "led_state": {"type": "uint32_t", "required": true},
+        "repeat": {"type": "struct", "required": true}
+      }
+    }
+  },
+
+  "globals_to_remove": [
+    {
+      "name": "keyb",
+      "file": "engine/src/hardware/keyboard.cpp",
+      "line_pattern": "static struct.*keyb"
+    }
+  ],
+
+  "tests": {
+    "unit": ["TEST-P08-U01", "TEST-P08-U02", "TEST-P08-U03", "TEST-P08-U04", "TEST-P08-U05"],
+    "integration": ["TEST-P08-I01", "TEST-P08-I02"]
+  }
+}

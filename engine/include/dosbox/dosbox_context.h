@@ -825,11 +825,41 @@ struct KeyboardState {
     bool active = true;              ///< Keyboard active (not reset)
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Buffer State
+    // 8042 Controller Buffer
     // ─────────────────────────────────────────────────────────────────────────
 
-    uint8_t buffer_size = 0;         ///< Number of bytes in buffer
-    uint8_t buffer_pos = 0;          ///< Current buffer read position
+    uint8_t buf8042[8] = {};         ///< 8042 controller response buffer
+    uint8_t buf8042_len = 0;         ///< Bytes in 8042 buffer
+    uint8_t buf8042_pos = 0;         ///< Current 8042 buffer position
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Main Keyboard Buffer
+    // ─────────────────────────────────────────────────────────────────────────
+
+    static constexpr size_t BUFFER_SIZE = 16;  ///< Keyboard buffer size
+    uint16_t buffer[BUFFER_SIZE] = {};         ///< Keyboard scan code buffer
+    uint32_t buffer_used = 0;                  ///< Bytes used in buffer
+    uint32_t buffer_pos = 0;                   ///< Current buffer read position
+    int32_t pending_key = 0;                   ///< Pending key event
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Key Repeat State
+    // ─────────────────────────────────────────────────────────────────────────
+
+    struct {
+        uint32_t key = 0;            ///< Key being repeated
+        uint32_t wait = 0;           ///< Wait counter
+        uint32_t pause = 0;          ///< Initial pause before repeat
+        uint32_t rate = 0;           ///< Repeat rate
+    } repeat;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LED and Port State
+    // ─────────────────────────────────────────────────────────────────────────
+
+    uint32_t led_state = 0;          ///< Keyboard LED state
+    uint8_t p60data = 0;             ///< Port 0x60 data
+    bool p60changed = false;         ///< Port 0x60 data changed
 
     // ─────────────────────────────────────────────────────────────────────────
     // Lock State (modifier keys)
@@ -847,11 +877,42 @@ struct KeyboardState {
     bool expecting_data = false;     ///< Expecting data byte after command
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Control Flags
+    // ─────────────────────────────────────────────────────────────────────────
+
+    bool scanning = false;           ///< Keyboard scanning enabled
+    bool auxactive = false;          ///< Aux (mouse) port active
+    bool scheduled = false;          ///< Event scheduled
+    bool auxchanged = false;         ///< Aux data changed
+    bool pending_key_state = false;  ///< Pending key state
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Command Byte Flags
+    // ─────────────────────────────────────────────────────────────────────────
+
+    bool cb_override_inhibit = false;  ///< Override inhibit
+    bool cb_irq12 = false;             ///< IRQ12 enabled (PS/2 mouse)
+    bool cb_irq1 = false;              ///< IRQ1 enabled (keyboard)
+    bool cb_xlat = false;              ///< Scancode translation
+    bool cb_sys = false;               ///< System flag
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PS/2 Controller State
     // ─────────────────────────────────────────────────────────────────────────
 
     bool ps2_mouse_enabled = false;  ///< PS/2 mouse port enabled
     bool a20_gate = true;            ///< A20 gate state
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Modifier Key Tracking
+    // ─────────────────────────────────────────────────────────────────────────
+
+    bool leftalt_pressed = false;    ///< Left Alt pressed
+    bool rightalt_pressed = false;   ///< Right Alt pressed
+    bool leftctrl_pressed = false;   ///< Left Ctrl pressed
+    bool rightctrl_pressed = false;  ///< Right Ctrl pressed
+    bool leftshift_pressed = false;  ///< Left Shift pressed
+    bool rightshift_pressed = false; ///< Right Shift pressed
 
     /**
      * @brief Reset to initial state.
@@ -860,15 +921,63 @@ struct KeyboardState {
         scanset = 2;
         enabled = true;
         active = true;
-        buffer_size = 0;
+
+        // 8042 buffer
+        std::fill(std::begin(buf8042), std::end(buf8042), 0);
+        buf8042_len = 0;
+        buf8042_pos = 0;
+
+        // Main buffer
+        std::fill(std::begin(buffer), std::end(buffer), 0);
+        buffer_used = 0;
         buffer_pos = 0;
+        pending_key = 0;
+
+        // Repeat state
+        repeat.key = 0;
+        repeat.wait = 0;
+        repeat.pause = 0;
+        repeat.rate = 0;
+
+        // LED and port state
+        led_state = 0;
+        p60data = 0;
+        p60changed = false;
+
+        // Lock state
         num_lock = false;
         caps_lock = false;
         scroll_lock = false;
+
+        // Command state
         command = 0;
         expecting_data = false;
+
+        // Control flags
+        scanning = false;
+        auxactive = false;
+        scheduled = false;
+        auxchanged = false;
+        pending_key_state = false;
+
+        // Command byte flags
+        cb_override_inhibit = false;
+        cb_irq12 = false;
+        cb_irq1 = false;
+        cb_xlat = false;
+        cb_sys = false;
+
+        // PS/2 state
         ps2_mouse_enabled = false;
         a20_gate = true;
+
+        // Modifier keys
+        leftalt_pressed = false;
+        rightalt_pressed = false;
+        leftctrl_pressed = false;
+        rightctrl_pressed = false;
+        leftshift_pressed = false;
+        rightshift_pressed = false;
     }
 
     /**

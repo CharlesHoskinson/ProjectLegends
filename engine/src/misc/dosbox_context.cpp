@@ -317,9 +317,31 @@ void KeyboardState::hash_into(HashBuilder& builder) const {
     builder.update(enabled);
     builder.update(active);
 
-    // Buffer state
-    builder.update(buffer_size);
+    // 8042 buffer (hash used portion only)
+    builder.update(buf8042_len);
+    builder.update(buf8042_pos);
+    for (uint8_t i = 0; i < buf8042_len && i < 8; ++i) {
+        builder.update(buf8042[i]);
+    }
+
+    // Main buffer (hash used portion only)
+    builder.update(buffer_used);
     builder.update(buffer_pos);
+    builder.update(pending_key);
+    for (uint32_t i = 0; i < buffer_used && i < BUFFER_SIZE; ++i) {
+        builder.update(buffer[i]);
+    }
+
+    // Repeat state
+    builder.update(repeat.key);
+    builder.update(repeat.wait);
+    builder.update(repeat.pause);
+    builder.update(repeat.rate);
+
+    // LED and port state
+    builder.update(led_state);
+    builder.update(p60data);
+    builder.update(p60changed);
 
     // Lock state
     builder.update(num_lock);
@@ -330,9 +352,31 @@ void KeyboardState::hash_into(HashBuilder& builder) const {
     builder.update(command);
     builder.update(expecting_data);
 
+    // Control flags
+    builder.update(scanning);
+    builder.update(auxactive);
+    builder.update(scheduled);
+    builder.update(auxchanged);
+    builder.update(pending_key_state);
+
+    // Command byte flags
+    builder.update(cb_override_inhibit);
+    builder.update(cb_irq12);
+    builder.update(cb_irq1);
+    builder.update(cb_xlat);
+    builder.update(cb_sys);
+
     // PS/2 controller state
     builder.update(ps2_mouse_enabled);
     builder.update(a20_gate);
+
+    // Modifier keys
+    builder.update(leftalt_pressed);
+    builder.update(rightalt_pressed);
+    builder.update(leftctrl_pressed);
+    builder.update(rightctrl_pressed);
+    builder.update(leftshift_pressed);
+    builder.update(rightshift_pressed);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
