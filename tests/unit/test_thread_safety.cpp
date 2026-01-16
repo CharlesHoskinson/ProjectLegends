@@ -344,3 +344,125 @@ TEST_F(ThreadSafetyTest, ThreadAffinityConsistentAcrossMultipleCalls) {
     legends_destroy(handle);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Test Hardening: Thread-Affinity for Destroy/Reset
+// ═══════════════════════════════════════════════════════════════════════════════
+
+TEST_F(ThreadSafetyTest, DestroyFromWrongThreadReturnsWrongThread) {
+    legends_handle handle = nullptr;
+    legends_create(nullptr, &handle);
+
+    std::atomic<legends_error_t> result{LEGENDS_OK};
+    std::thread other([&]() {
+        result = legends_destroy(handle);
+    });
+    other.join();
+
+    // Destroy from wrong thread should return WRONG_THREAD
+    EXPECT_EQ(result.load(), LEGENDS_ERR_WRONG_THREAD)
+        << "Destroy from wrong thread should return WRONG_THREAD";
+
+    // Clean up from owner thread
+    legends_destroy(handle);
+}
+
+TEST_F(ThreadSafetyTest, ResetStepDestroyFromWrongThread) {
+    legends_handle handle = nullptr;
+    legends_create(nullptr, &handle);
+
+    std::atomic<legends_error_t> reset_err{LEGENDS_OK};
+    std::atomic<legends_error_t> step_err{LEGENDS_OK};
+
+    std::thread other([&]() {
+        reset_err = legends_reset(handle);
+        legends_step_result_t result;
+        step_err = legends_step_cycles(handle, 1000, &result);
+    });
+    other.join();
+
+    EXPECT_EQ(reset_err.load(), LEGENDS_ERR_WRONG_THREAD);
+    EXPECT_EQ(step_err.load(), LEGENDS_ERR_WRONG_THREAD);
+
+    legends_destroy(handle);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Test Hardening: Handle Registry (Single-Instance)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+TEST_F(ThreadSafetyTest, HandleRegistryNoUseAfterFree) {
+    legends_handle handle = nullptr;
+    legends_create(nullptr, &handle);
+
+    // Step once from owner thread to establish state
+    legends_step_cycles(handle, 1000, nullptr);
+
+    // Save the handle pointer value
+    legends_handle old_handle = handle;
+
+    // Destroy
+    legends_destroy(handle);
+
+    // Trying to use the old handle should fail gracefully
+    // (either NULL_HANDLE or INVALID_HANDLE, but not crash)
+    legends_step_result_t result;
+    auto err = legends_step_cycles(old_handle, 1000, &result);
+
+    // Should not return OK (handle is invalid now)
+    EXPECT_NE(err, LEGENDS_OK)
+        << "Using freed handle should not succeed";
+
+    // Should not crash - if we got here, the test passed
+}
+
+TEST_F(ThreadSafetyTest, RapidCreateDestroyCycle) {
+    // Test rapid create/destroy doesn't cause issues
+    // Note: Each iteration needs fresh Platform state
+    for (int i = 0; i < 5; ++i) {
+        // Re-initialize platform for each iteration
+        pal::Platform::shutdown();
+        pal::Platform::initialize(pal::Backend::Headless);
+
+        legends_handle handle = nullptr;
+        auto err = legends_create(nullptr, &handle);
+        ASSERT_EQ(err, LEGENDS_OK) << "Create failed on iteration " << i;
+
+        legends_step_cycles(handle, 100, nullptr);
+
+        err = legends_destroy(handle);
+        EXPECT_EQ(err, LEGENDS_OK) << "Destroy failed on iteration " << i;
+    }
+}
+
+TEST_F(ThreadSafetyTest, ConcurrentDestroyAttempts) {
+    legends_handle handle = nullptr;
+    legends_create(nullptr, &handle);
+
+    std::atomic<int> wrong_thread_count{0};
+    std::atomic<int> ok_count{0};
+    std::vector<std::thread> threads;
+
+    // Multiple threads try to destroy simultaneously
+    for (int i = 0; i < 5; ++i) {
+        threads.emplace_back([&]() {
+            auto err = legends_destroy(handle);
+            if (err == LEGENDS_ERR_WRONG_THREAD) {
+                wrong_thread_count++;
+            } else if (err == LEGENDS_OK) {
+                ok_count++;
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    // All should get WRONG_THREAD since they're not the owner
+    EXPECT_EQ(wrong_thread_count.load(), 5);
+    EXPECT_EQ(ok_count.load(), 0);
+
+    // Clean up from owner thread
+    legends_destroy(handle);
+}
+

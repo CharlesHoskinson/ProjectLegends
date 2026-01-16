@@ -990,3 +990,113 @@ TEST_F(DOSBoxLibraryEngineStateTest, MultipleRoundTripsPreserveState) {
         EXPECT_EQ(memcmp(original_hash, current_hash, 32), 0) << "Round trip " << i << " failed";
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Test Hardening: Engine State Security Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+TEST_F(DOSBoxLibraryEngineStateTest, LoadRejectsTotalSizeSmallerThanHeader) {
+    std::vector<uint8_t> buffer(dosbox::ENGINE_STATE_SIZE, 0);
+
+    auto* header = reinterpret_cast<dosbox::EngineStateHeader*>(buffer.data());
+    header->magic = dosbox::ENGINE_STATE_MAGIC;
+    header->version = dosbox::ENGINE_STATE_VERSION;
+    header->total_size = 10;  // Smaller than header (32 bytes)
+
+    auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_STATE)
+        << "Should reject total_size < sizeof(EngineStateHeader)";
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, LoadRejectsTotalSizeLargerThanBuffer) {
+    std::vector<uint8_t> buffer(dosbox::ENGINE_STATE_SIZE, 0);
+
+    auto* header = reinterpret_cast<dosbox::EngineStateHeader*>(buffer.data());
+    header->magic = dosbox::ENGINE_STATE_MAGIC;
+    header->version = dosbox::ENGINE_STATE_VERSION;
+    header->total_size = dosbox::ENGINE_STATE_SIZE * 10;  // Way larger than buffer
+
+    auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_STATE)
+        << "Should reject total_size > buffer_size";
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, LoadRejectsInvalidSectionOffsets) {
+    // First save valid state
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+    std::vector<uint8_t> buffer(size);
+    dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+
+    auto* header = reinterpret_cast<dosbox::EngineStateHeader*>(buffer.data());
+
+    // Corrupt timing_offset to be before header end
+    header->timing_offset = 5;  // Inside header area
+
+    // Recompute checksum for the corrupted header
+    const uint8_t* data_start = buffer.data() + sizeof(dosbox::EngineStateHeader);
+    size_t data_size = size - sizeof(dosbox::EngineStateHeader);
+    header->checksum = dosbox::compute_crc32(data_start, data_size);
+
+    auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_STATE)
+        << "Should reject offset < sizeof(header)";
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, LoadRejectsOffsetBeyondTotal) {
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+    std::vector<uint8_t> buffer(size);
+    dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+
+    auto* header = reinterpret_cast<dosbox::EngineStateHeader*>(buffer.data());
+
+    // Set offset beyond total_size
+    header->pic_offset = header->total_size + 100;
+
+    auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_STATE)
+        << "Should reject offset > total_size";
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SavedSizeEqualsEngineStateSize) {
+    size_t size = 0;
+    auto err = dosbox_lib_save_state(handle_, nullptr, 0, &size);
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+    EXPECT_EQ(size, dosbox::ENGINE_STATE_SIZE)
+        << "Saved size must equal ENGINE_STATE_SIZE constant";
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, SavedCrcMatchesData) {
+    size_t size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &size);
+    std::vector<uint8_t> buffer(size);
+    dosbox_lib_save_state(handle_, buffer.data(), size, &size);
+
+    auto* header = reinterpret_cast<const dosbox::EngineStateHeader*>(buffer.data());
+
+    // Verify CRC matches
+    const uint8_t* data_start = buffer.data() + sizeof(dosbox::EngineStateHeader);
+    size_t data_size = size - sizeof(dosbox::EngineStateHeader);
+    uint32_t computed_crc = dosbox::compute_crc32(data_start, data_size);
+
+    EXPECT_EQ(header->checksum, computed_crc)
+        << "Saved CRC must match computed CRC of data section";
+}
+
+TEST_F(DOSBoxLibraryEngineStateTest, FuzzCorruptedEngineState) {
+    // Test various corruption patterns
+    for (int seed = 0; seed < 100; ++seed) {
+        std::vector<uint8_t> buffer(dosbox::ENGINE_STATE_SIZE);
+
+        // Fill with pseudo-random data
+        for (size_t i = 0; i < buffer.size(); ++i) {
+            buffer[i] = static_cast<uint8_t>((seed * 31 + i * 17) % 256);
+        }
+
+        // Should not crash, should return error
+        auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+        EXPECT_NE(err, DOSBOX_LIB_OK)
+            << "Random data should be rejected (seed=" << seed << ")";
+    }
+}

@@ -2179,3 +2179,329 @@ TEST_F(DeterminismIntegrationTest, TLAPlusObservationInvariant) {
     EXPECT_EQ(std::memcmp(obs_before, obs_after, 32), 0)
         << "TLA+ invariant violated: Obs(Deserialize(Serialize(S))) != Obs(S)";
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Hardening: Security and Robustness Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+class SecurityHardeningTest : public ::testing::Test {
+protected:
+    legends_handle handle_ = nullptr;
+
+    void SetUp() override {
+        legends_destroy(reinterpret_cast<legends_handle>(1));
+        auto err = legends_create(nullptr, &handle_);
+        ASSERT_EQ(err, LEGENDS_OK);
+    }
+
+    void TearDown() override {
+        legends_destroy(handle_);
+    }
+
+    // Helper to create a valid save state buffer
+    std::vector<uint8_t> createValidSaveState() {
+        size_t size = 0;
+        legends_save_state(handle_, nullptr, 0, &size);
+        std::vector<uint8_t> buffer(size);
+        legends_save_state(handle_, buffer.data(), size, &size);
+        return buffer;
+    }
+};
+
+// Test: Save/load rejects total_size < sizeof(header)
+TEST_F(SecurityHardeningTest, LoadRejectsTotalSizeSmallerThanHeader) {
+    auto buffer = createValidSaveState();
+
+    // Corrupt: set total_size smaller than header
+    // SaveStateHeader is at offset 0, total_size is at offset 8
+    uint32_t* total_size_ptr = reinterpret_cast<uint32_t*>(buffer.data() + 8);
+    *total_size_ptr = 10;  // Way smaller than header (96 bytes)
+
+    auto err = legends_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, LEGENDS_ERR_INVALID_STATE)
+        << "Should reject total_size < sizeof(header)";
+}
+
+// Test: Save/load rejects total_size > buffer_size
+TEST_F(SecurityHardeningTest, LoadRejectsTotalSizeLargerThanBuffer) {
+    auto buffer = createValidSaveState();
+
+    // Corrupt: set total_size larger than actual buffer
+    uint32_t* total_size_ptr = reinterpret_cast<uint32_t*>(buffer.data() + 8);
+    *total_size_ptr = static_cast<uint32_t>(buffer.size() * 2);
+
+    auto err = legends_load_state(handle_, buffer.data(), buffer.size());
+    // May return INVALID_STATE or BUFFER_TOO_SMALL depending on check order
+    EXPECT_TRUE(err == LEGENDS_ERR_INVALID_STATE || err == LEGENDS_ERR_BUFFER_TOO_SMALL)
+        << "Should reject total_size > buffer_size, got error " << err;
+}
+
+// Test: Validates all offsets against total_size
+TEST_F(SecurityHardeningTest, LoadRejectsOffsetsExceedingTotalSize) {
+    auto buffer = createValidSaveState();
+
+    // Corrupt: set time_offset beyond total_size
+    // time_offset is at offset 16 in SaveStateHeader
+    uint32_t* time_offset_ptr = reinterpret_cast<uint32_t*>(buffer.data() + 16);
+    uint32_t total_size = *reinterpret_cast<uint32_t*>(buffer.data() + 8);
+    *time_offset_ptr = total_size + 1000;  // Beyond total_size
+
+    auto err = legends_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, LEGENDS_ERR_INVALID_STATE)
+        << "Should reject offset exceeding total_size";
+}
+
+// Test: Frame bounds validation (columns/rows)
+TEST_F(SecurityHardeningTest, LoadRejectsInvalidFrameGeometry) {
+    auto buffer = createValidSaveState();
+
+    // Find frame section and corrupt dimensions
+    // frame_offset is at offset 48 in SaveStateHeader
+    uint32_t frame_offset = *reinterpret_cast<uint32_t*>(buffer.data() + 48);
+    if (frame_offset > 0 && frame_offset < buffer.size()) {
+        // Frame header: columns (uint8_t), rows (uint8_t) at start
+        buffer[frame_offset] = 255;      // columns > 80
+        buffer[frame_offset + 1] = 255;  // rows > 50
+    }
+
+    auto err = legends_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, LEGENDS_ERR_INVALID_STATE)
+        << "Should reject invalid frame dimensions";
+}
+
+// Test: Fuzz with randomized offsets
+TEST_F(SecurityHardeningTest, FuzzRandomizedOffsets) {
+    auto buffer = createValidSaveState();
+    const size_t header_size = 96;  // SaveStateHeader size
+
+    // Test various corrupted offset patterns
+    for (int seed = 0; seed < 50; ++seed) {
+        auto corrupted = buffer;
+
+        // Randomize an offset field (offsets start at byte 16)
+        size_t offset_field = 16 + (seed % 8) * 4;  // 8 offset fields
+        if (offset_field + 4 <= header_size) {
+            uint32_t bad_value = static_cast<uint32_t>(seed * 12345 + 0xDEAD0000);
+            std::memcpy(corrupted.data() + offset_field, &bad_value, 4);
+        }
+
+        // Should either reject or not crash
+        auto err = legends_load_state(handle_, corrupted.data(), corrupted.size());
+        EXPECT_NE(err, LEGENDS_OK)
+            << "Corrupted state should be rejected (seed=" << seed << ")";
+    }
+}
+
+// Test: Fuzz with randomized sizes
+TEST_F(SecurityHardeningTest, FuzzRandomizedSizes) {
+    auto buffer = createValidSaveState();
+
+    // Test various corrupted size patterns
+    size_t sizes_to_test[] = {0, 1, 10, 50, 95, 96, 97, 100, 200};
+    for (size_t test_size : sizes_to_test) {
+        if (test_size > buffer.size()) continue;
+
+        auto err = legends_load_state(handle_, buffer.data(), test_size);
+        // Small sizes should be rejected
+        if (test_size < 96) {
+            EXPECT_NE(err, LEGENDS_OK)
+                << "Should reject buffer_size=" << test_size;
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Hardening: Determinism Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+class DeterminismHardeningTest : public ::testing::Test {
+protected:
+    legends_handle handle_ = nullptr;
+
+    void SetUp() override {
+        legends_destroy(reinterpret_cast<legends_handle>(1));
+        auto err = legends_create(nullptr, &handle_);
+        ASSERT_EQ(err, LEGENDS_OK);
+    }
+
+    void TearDown() override {
+        legends_destroy(handle_);
+    }
+};
+
+// Test: Split-step determinism (step N vs step N/2 + N/2)
+TEST_F(DeterminismHardeningTest, SplitStepDeterminism) {
+    // Run 1: step 10000 cycles at once
+    legends_reset(handle_);
+    legends_step_cycles(handle_, 10000, nullptr);
+    uint8_t hash1[32];
+    legends_get_state_hash(handle_, hash1);
+
+    // Run 2: step 5000 + 5000 cycles
+    legends_reset(handle_);
+    legends_step_cycles(handle_, 5000, nullptr);
+    legends_step_cycles(handle_, 5000, nullptr);
+    uint8_t hash2[32];
+    legends_get_state_hash(handle_, hash2);
+
+    EXPECT_EQ(std::memcmp(hash1, hash2, 32), 0)
+        << "Split-step should produce identical state: step(N) == step(N/2) + step(N/2)";
+}
+
+// Test: Various split patterns
+TEST_F(DeterminismHardeningTest, VariousSplitPatterns) {
+    const uint64_t total = 12000;
+
+    // Reference: single step
+    legends_reset(handle_);
+    legends_step_cycles(handle_, total, nullptr);
+    uint8_t ref_hash[32];
+    legends_get_state_hash(handle_, ref_hash);
+
+    // Pattern 1: 3 equal parts
+    legends_reset(handle_);
+    legends_step_cycles(handle_, 4000, nullptr);
+    legends_step_cycles(handle_, 4000, nullptr);
+    legends_step_cycles(handle_, 4000, nullptr);
+    uint8_t hash1[32];
+    legends_get_state_hash(handle_, hash1);
+    EXPECT_EQ(std::memcmp(ref_hash, hash1, 32), 0) << "3-way split failed";
+
+    // Pattern 2: 12 small steps
+    legends_reset(handle_);
+    for (int i = 0; i < 12; ++i) {
+        legends_step_cycles(handle_, 1000, nullptr);
+    }
+    uint8_t hash2[32];
+    legends_get_state_hash(handle_, hash2);
+    EXPECT_EQ(std::memcmp(ref_hash, hash2, 32), 0) << "12-way split failed";
+
+    // Pattern 3: uneven split
+    legends_reset(handle_);
+    legends_step_cycles(handle_, 1, nullptr);
+    legends_step_cycles(handle_, 11999, nullptr);
+    uint8_t hash3[32];
+    legends_get_state_hash(handle_, hash3);
+    EXPECT_EQ(std::memcmp(ref_hash, hash3, 32), 0) << "Uneven split failed";
+}
+
+// Test: Round-trip determinism with continued execution
+TEST_F(DeterminismHardeningTest, RoundTripWithContinuedExecution) {
+    // Setup: step to create state
+    legends_step_cycles(handle_, 5000, nullptr);
+
+    // Save checkpoint
+    size_t size = 0;
+    legends_save_state(handle_, nullptr, 0, &size);
+    std::vector<uint8_t> checkpoint(size);
+    legends_save_state(handle_, checkpoint.data(), size, &size);
+
+    // Run 1: continue from checkpoint
+    legends_step_cycles(handle_, 10000, nullptr);
+    uint8_t hash1[32];
+    legends_get_state_hash(handle_, hash1);
+
+    // Restore and Run 2: same continuation
+    legends_load_state(handle_, checkpoint.data(), size);
+    legends_step_cycles(handle_, 10000, nullptr);
+    uint8_t hash2[32];
+    legends_get_state_hash(handle_, hash2);
+
+    EXPECT_EQ(std::memcmp(hash1, hash2, 32), 0)
+        << "Round-trip with continued execution should be deterministic";
+}
+
+// Test: Input injection at deterministic times
+TEST_F(DeterminismHardeningTest, InputInjectionDeterminism) {
+    legends_step_cycles(handle_, 1000, nullptr);
+
+    // Save checkpoint
+    size_t size = 0;
+    legends_save_state(handle_, nullptr, 0, &size);
+    std::vector<uint8_t> checkpoint(size);
+    legends_save_state(handle_, checkpoint.data(), size, &size);
+
+    // Run 1: inject input sequence
+    legends_key_event(handle_, 0x1E, 1);  // 'A' down
+    legends_step_cycles(handle_, 500, nullptr);
+    legends_key_event(handle_, 0x1E, 0);  // 'A' up
+    legends_step_cycles(handle_, 500, nullptr);
+    legends_key_event(handle_, 0x30, 1);  // 'B' down
+    legends_step_cycles(handle_, 500, nullptr);
+    legends_key_event(handle_, 0x30, 0);  // 'B' up
+    legends_step_cycles(handle_, 500, nullptr);
+    uint8_t hash1[32];
+    legends_get_state_hash(handle_, hash1);
+
+    // Restore and Run 2: identical sequence
+    legends_load_state(handle_, checkpoint.data(), size);
+    legends_key_event(handle_, 0x1E, 1);
+    legends_step_cycles(handle_, 500, nullptr);
+    legends_key_event(handle_, 0x1E, 0);
+    legends_step_cycles(handle_, 500, nullptr);
+    legends_key_event(handle_, 0x30, 1);
+    legends_step_cycles(handle_, 500, nullptr);
+    legends_key_event(handle_, 0x30, 0);
+    legends_step_cycles(handle_, 500, nullptr);
+    uint8_t hash2[32];
+    legends_get_state_hash(handle_, hash2);
+
+    EXPECT_EQ(std::memcmp(hash1, hash2, 32), 0)
+        << "Input injection replay should be deterministic";
+}
+
+// Test: Multi-checkpoint restore in mixed order
+TEST_F(DeterminismHardeningTest, MultiCheckpointMixedOrderRestore) {
+    // Create checkpoint A at t=1000
+    legends_step_cycles(handle_, 1000, nullptr);
+    size_t sizeA = 0;
+    legends_save_state(handle_, nullptr, 0, &sizeA);
+    std::vector<uint8_t> checkpointA(sizeA);
+    legends_save_state(handle_, checkpointA.data(), sizeA, &sizeA);
+    uint8_t hashA[32];
+    legends_get_state_hash(handle_, hashA);
+
+    // Create checkpoint B at t=3000
+    legends_step_cycles(handle_, 2000, nullptr);
+    size_t sizeB = 0;
+    legends_save_state(handle_, nullptr, 0, &sizeB);
+    std::vector<uint8_t> checkpointB(sizeB);
+    legends_save_state(handle_, checkpointB.data(), sizeB, &sizeB);
+    uint8_t hashB[32];
+    legends_get_state_hash(handle_, hashB);
+
+    // Create checkpoint C at t=6000
+    legends_step_cycles(handle_, 3000, nullptr);
+    size_t sizeC = 0;
+    legends_save_state(handle_, nullptr, 0, &sizeC);
+    std::vector<uint8_t> checkpointC(sizeC);
+    legends_save_state(handle_, checkpointC.data(), sizeC, &sizeC);
+    uint8_t hashC[32];
+    legends_get_state_hash(handle_, hashC);
+
+    // Restore in mixed order: C, A, B, A, C
+    legends_load_state(handle_, checkpointC.data(), sizeC);
+    uint8_t verifyC[32];
+    legends_get_state_hash(handle_, verifyC);
+    EXPECT_EQ(std::memcmp(hashC, verifyC, 32), 0) << "Restore C failed";
+
+    legends_load_state(handle_, checkpointA.data(), sizeA);
+    uint8_t verifyA1[32];
+    legends_get_state_hash(handle_, verifyA1);
+    EXPECT_EQ(std::memcmp(hashA, verifyA1, 32), 0) << "Restore A (first) failed";
+
+    legends_load_state(handle_, checkpointB.data(), sizeB);
+    uint8_t verifyB[32];
+    legends_get_state_hash(handle_, verifyB);
+    EXPECT_EQ(std::memcmp(hashB, verifyB, 32), 0) << "Restore B failed";
+
+    legends_load_state(handle_, checkpointA.data(), sizeA);
+    uint8_t verifyA2[32];
+    legends_get_state_hash(handle_, verifyA2);
+    EXPECT_EQ(std::memcmp(hashA, verifyA2, 32), 0) << "Restore A (second) failed";
+
+    legends_load_state(handle_, checkpointC.data(), sizeC);
+    uint8_t verifyC2[32];
+    legends_get_state_hash(handle_, verifyC2);
+    EXPECT_EQ(std::memcmp(hashC, verifyC2, 32), 0) << "Restore C (second) failed";
+}
