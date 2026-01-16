@@ -25,6 +25,12 @@ option(LEGENDS_BUILD_TESTS "Build unit tests" OFF)
 option(LEGENDS_HEADLESS "Build in headless mode (no GUI)" OFF)
 option(LEGENDS_LIBRARY_MODE "Build as static library" OFF)
 
+# Fuzzing Options (requires Clang)
+option(ENABLE_FUZZING "Build fuzz targets with libFuzzer" OFF)
+option(ENABLE_ASAN "Enable AddressSanitizer for fuzz targets" OFF)
+option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for fuzz targets" OFF)
+option(ENABLE_MSAN "Enable MemorySanitizer for fuzz targets" OFF)
+
 # PAL Backend Options
 option(PAL_BACKEND_HEADLESS "Build headless PAL backend" ON)
 option(PAL_BACKEND_SDL2 "Build SDL2 PAL backend" OFF)
@@ -498,6 +504,14 @@ if(LEGENDS_BUILD_TESTS)
         COMMENT "Running all tests"
     )
 
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fuzz Testing
+# ─────────────────────────────────────────────────────────────────────────────
+
+if(ENABLE_FUZZING)
+    add_subdirectory(tests/fuzz)
 endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
