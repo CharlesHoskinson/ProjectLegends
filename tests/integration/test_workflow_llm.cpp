@@ -126,7 +126,7 @@ TEST_F(LLMWorkflowTest, HypercallLogging) {
     for (int i = 0; i < 10; ++i) {
         HypercallLogEntry entry;
         entry.timestamp_us = i * 1000;
-        entry.command_id = i;
+        entry.command_id = static_cast<uint16_t>(i);
         entry.success = (i % 2 == 0);
         builder_.add_hypercall_log(entry);
     }

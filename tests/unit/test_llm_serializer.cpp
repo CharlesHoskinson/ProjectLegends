@@ -3,6 +3,10 @@
  * @brief Unit tests for LLM text serialization.
  */
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4566) // character cannot be represented in current code page
+#endif
+
 #include <gtest/gtest.h>
 #include <legends/llm_serializer.h>
 #include <legends/llm_frame.h>
@@ -413,10 +417,12 @@ TEST(EstimateTokensTest, LongerText) {
 
 TEST(EstimateTokensTest, BoxCharacters) {
     // Box drawing characters typically take more tokens
-    std::string text = "\u2554\u2550\u2550\u2550\u2557";  // ╔═══╗
+    // Use explicit UTF-8 bytes to avoid MSVC \uXXXX encoding issues
+    // ╔═══╗ = U+2554 U+2550 U+2550 U+2550 U+2557
+    std::string text = "\xE2\x95\x94\xE2\x95\x90\xE2\x95\x90\xE2\x95\x90\xE2\x95\x97";
     size_t tokens = estimate_tokens(text);
 
-    // Should estimate higher for special characters
+    // Should estimate higher for special characters (5 multibyte chars -> ~11 tokens)
     EXPECT_GE(tokens, 5u);
 }
 

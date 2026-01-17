@@ -3,6 +3,10 @@
  * @brief Unit tests for compatibility shim (compat::current).
  */
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4834) // discarding return value of [[nodiscard]] function
+#endif
+
 #include <gtest/gtest.h>
 #include <legends/machine_context.h>
 

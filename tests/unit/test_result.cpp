@@ -77,13 +77,13 @@ TEST(ResultTest, FailureErrorReturnsError) {
 TEST(ResultTest, FailureValueThrows) {
     Result<int> result = Err(Error(ErrorCode::InvalidState, "error"));
 
-    EXPECT_THROW(result.value(), std::bad_expected_access<Error>);
+    EXPECT_THROW((void)result.value(), std::bad_expected_access<Error>);
 }
 
 TEST(ResultTest, FailureConstValueThrows) {
     const Result<int> result = Err(Error(ErrorCode::InvalidState, "error"));
 
-    EXPECT_THROW(result.value(), std::bad_expected_access<Error>);
+    EXPECT_THROW((void)result.value(), std::bad_expected_access<Error>);
 }
 
 TEST(ResultTest, FailureErrorMutable) {
@@ -252,7 +252,7 @@ TEST(ResultTest, MoveOnlyFailure) {
         Error(ErrorCode::OutOfMemory, "allocation failed"));
 
     EXPECT_FALSE(result.has_value());
-    EXPECT_THROW(std::move(result).value(), std::bad_expected_access<Error>);
+    EXPECT_THROW((void)std::move(result).value(), std::bad_expected_access<Error>);
 }
 
 TEST(ResultTest, VectorMoveWorks) {
@@ -292,7 +292,7 @@ TEST(ResultTest, ComplexTypeFailure) {
         Error(ErrorCode::InvalidArgument, "bad input"));
 
     EXPECT_FALSE(result.has_value());
-    EXPECT_THROW(result.value(), std::bad_expected_access<Error>);
+    EXPECT_THROW((void)result.value(), std::bad_expected_access<Error>);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

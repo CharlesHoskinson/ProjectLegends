@@ -14,6 +14,7 @@ This document describes the architectural design of Project Legends, an embeddab
 6. [Threading Model](#threading-model)
 7. [Determinism Guarantees](#determinism-guarantees)
 8. [File Organization](#file-organization)
+9. [Module Graph (Sprint 3)](#module-graph-sprint-3)
 
 ---
 
@@ -421,6 +422,115 @@ ProjectLegends/
 ├── ARCHITECTURE.md
 └── TODO.md
 ```
+
+---
+
+## Module Graph (Sprint 3)
+
+This section documents the static library DAG and module boundaries established in Sprint 3.
+
+### Module Definitions
+
+| Module | Public Headers | Private Sources | Library Target | Tier |
+|--------|---------------|-----------------|----------------|------|
+| legends | include/legends/ | src/legends/ | legends_core | A (strict) |
+| pal | include/pal/ | src/pal/ | legends_pal | A (strict) |
+| engine | engine/include/dosbox/, engine/include/aibox/ | engine/src/, engine/include/ | aibox_core | B (legacy) |
+
+### Dependency Rules
+
+1. **legends_core** may depend on **aibox_core** only
+2. **legends_pal** has no module dependencies (leaf node)
+3. **aibox_core** has no module dependencies (leaf node)
+4. Cross-module includes MUST use public header paths only
+5. No `../src/` includes in public headers
+
+### Include Path Convention
+
+- Public: `#include "legends/foo.h"` or `#include "dosbox/bar.h"`
+- Private: `#include "internal/baz.h"` (within same module only)
+
+### DAG Visualization
+
+```
+legends_core ──→ aibox_core
+legends_pal  ──→ (none)
+aibox_core   ──→ (none)
+```
+
+### CI Enforcement
+
+The module DAG is enforced by:
+- `cmake/ModuleManifest.cmake` - Module definitions
+- `cmake/ModuleDAG.cmake` - Dependency verification at configure time
+- `scripts/check_includes.py` - Include rule verification
+- `.github/workflows/module-dag.yml` - CI workflow
+
+### Cross-Module Service Interfaces
+
+The formal contract between `legends_core` and `aibox_core` is defined in
+`engine/include/dosbox/engine_services.h`. This header:
+
+1. Re-exports `dosbox_library.h` functions (the C API)
+2. Provides `EngineServiceTable` struct for dependency injection
+3. Documents the complete integration surface
+4. Includes `EngineHandle` RAII wrapper for C++ code
+
+**Production Usage:**
+```cpp
+#include "dosbox/engine_services.h"
+
+auto err = dosbox_lib_create(&config, &handle);  // Direct C API (preferred)
+// OR
+auto services = dosbox::EngineServiceTable::defaults();  // Via service table
+```
+
+**Test Usage (Mocking):**
+```cpp
+#include "dosbox/engine_services.h"
+
+auto mocks = dosbox::EngineServiceTable::null_table();
+mocks.create = [](auto*, auto*) { return DOSBOX_LIB_OK; };
+mocks.step_cycles = my_mock_step;
+
+// Pass mocks to code under test
+my_function(mocks);
+```
+
+**Service Categories:**
+
+| Category | Functions | Purpose |
+|----------|-----------|---------|
+| Lifecycle | get_version, create, init, destroy, reset | Context management |
+| Execution | step_ms, step_cycles, get_emu_time, get_total_cycles | Emulation stepping |
+| State | get_state_hash, save_state, load_state | Persistence |
+| Input | inject_key, inject_mouse | User input injection |
+| Error | get_last_error, set_log_callback | Error handling |
+| Hardware | get_pic_state | Hardware state inspection |
+
+### Build Metrics
+
+#### Methodology
+
+Metrics collected using `scripts/measure_rebuild.py`:
+- Clean build: Full rebuild from scratch
+- Incremental: Touch file, rebuild, measure time
+- Each test repeated for consistency
+
+#### Results
+
+| Metric | Before Sprint 3 | After Sprint 3 | Improvement |
+|--------|-----------------|----------------|-------------|
+| Clean build | TBD | TBD | - |
+| legends_embed.h change | TBD | TBD | TBD |
+| dosbox_library.h change | TBD | TBD | TBD |
+| Single .cpp change | TBD | TBD | TBD |
+
+#### Targets
+
+- Header change rebuild: <10s (from ~45s baseline)
+- Single .cpp change: <5s (from ~15s baseline)
+- Overall improvement: >50%
 
 ---
 

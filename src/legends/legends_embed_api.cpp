@@ -203,84 +203,118 @@ struct FrameState {
 FrameState g_frame_state;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Input State - Keyboard and mouse input queues
+// Input State - Unified queue preserving device interleaving order
+// Determinism requires preserved order across device types (keyboard/mouse)
 // ─────────────────────────────────────────────────────────────────────────────
 
-struct KeyEvent {
-    uint8_t scancode;
-    bool is_down;
-    bool is_extended;  // E0-prefixed
-};
+// Unified input event type that preserves ordering across device types
+enum class InputEventType : uint8_t { Key = 0, Mouse = 1 };
 
-struct MouseEvent {
-    int16_t delta_x;
-    int16_t delta_y;
-    uint8_t buttons;
+struct InputEvent {
+    InputEventType type;
+    uint64_t sequence;  // Global sequence number for ordering
+    union {
+        struct {
+            uint8_t scancode;
+            bool is_down;
+            bool is_extended;
+        } key;
+        struct {
+            int16_t delta_x;
+            int16_t delta_y;
+            uint8_t buttons;
+        } mouse;
+    };
 };
 
 struct InputState {
-    // Keyboard event queue
-    static constexpr size_t MAX_KEY_EVENTS = 256;
-    std::array<KeyEvent, MAX_KEY_EVENTS> key_queue{};
-    size_t key_queue_head = 0;
-    size_t key_queue_tail = 0;
+    // Unified queue combining keyboard and mouse events
+    static constexpr size_t MAX_INPUT_EVENTS = 320;  // Combined capacity
+    static constexpr size_t EFFECTIVE_CAPACITY = MAX_INPUT_EVENTS - 1;  // Ring buffer uses one-slot-empty design
+    std::array<InputEvent, MAX_INPUT_EVENTS> queue{};
+    size_t head = 0;
+    size_t tail = 0;
+    uint64_t next_sequence = 0;
 
-    // Mouse event queue
-    static constexpr size_t MAX_MOUSE_EVENTS = 64;
-    std::array<MouseEvent, MAX_MOUSE_EVENTS> mouse_queue{};
-    size_t mouse_queue_head = 0;
-    size_t mouse_queue_tail = 0;
-
-    // Current mouse button state
+    // Current mouse button state (for tracking)
     uint8_t mouse_buttons = 0;
 
-    void reset() {
-        key_queue_head = 0;
-        key_queue_tail = 0;
-        mouse_queue_head = 0;
-        mouse_queue_tail = 0;
-        mouse_buttons = 0;
+    [[nodiscard]] size_t size() const noexcept {
+        return (tail >= head) ? (tail - head) : (MAX_INPUT_EVENTS - head + tail);
     }
 
-    [[nodiscard]] size_t key_queue_size() const noexcept {
-        if (key_queue_tail >= key_queue_head) {
-            return key_queue_tail - key_queue_head;
-        }
-        return MAX_KEY_EVENTS - key_queue_head + key_queue_tail;
+    [[nodiscard]] bool full() const noexcept {
+        return size() >= EFFECTIVE_CAPACITY;
     }
 
-    [[nodiscard]] bool key_queue_full() const noexcept {
-        return key_queue_size() >= MAX_KEY_EVENTS - 1;
+    [[nodiscard]] bool empty() const noexcept {
+        return head == tail;
     }
 
     bool enqueue_key(uint8_t scancode, bool is_down, bool is_extended) {
-        if (key_queue_full()) {
-            return false;  // Queue full
-        }
-        key_queue[key_queue_tail] = {scancode, is_down, is_extended};
-        key_queue_tail = (key_queue_tail + 1) % MAX_KEY_EVENTS;
+        if (full()) return false;
+        auto& evt = queue[tail];
+        evt.type = InputEventType::Key;
+        evt.sequence = next_sequence++;
+        evt.key.scancode = scancode;
+        evt.key.is_down = is_down;
+        evt.key.is_extended = is_extended;
+        tail = (tail + 1) % MAX_INPUT_EVENTS;
         return true;
-    }
-
-    [[nodiscard]] size_t mouse_queue_size() const noexcept {
-        if (mouse_queue_tail >= mouse_queue_head) {
-            return mouse_queue_tail - mouse_queue_head;
-        }
-        return MAX_MOUSE_EVENTS - mouse_queue_head + mouse_queue_tail;
-    }
-
-    [[nodiscard]] bool mouse_queue_full() const noexcept {
-        return mouse_queue_size() >= MAX_MOUSE_EVENTS - 1;
     }
 
     bool enqueue_mouse(int16_t dx, int16_t dy, uint8_t buttons) {
-        if (mouse_queue_full()) {
-            return false;  // Queue full
-        }
-        mouse_queue[mouse_queue_tail] = {dx, dy, buttons};
-        mouse_queue_tail = (mouse_queue_tail + 1) % MAX_MOUSE_EVENTS;
+        if (full()) return false;
+        auto& evt = queue[tail];
+        evt.type = InputEventType::Mouse;
+        evt.sequence = next_sequence++;
+        evt.mouse.delta_x = dx;
+        evt.mouse.delta_y = dy;
+        evt.mouse.buttons = buttons;
+        tail = (tail + 1) % MAX_INPUT_EVENTS;
         mouse_buttons = buttons;
         return true;
+    }
+
+    bool dequeue(InputEvent* out) {
+        if (empty()) return false;
+        *out = queue[head];
+        head = (head + 1) % MAX_INPUT_EVENTS;
+        return true;
+    }
+
+    bool peek(InputEvent* out) const {
+        if (empty()) return false;
+        *out = queue[head];
+        return true;
+    }
+
+    void pop() {
+        if (!empty()) {
+            head = (head + 1) % MAX_INPUT_EVENTS;
+        }
+    }
+
+    // Enqueue a raw event with its original sequence (for loading saved state)
+    bool enqueue_raw(const InputEvent& evt) {
+        if (full()) return false;
+        queue[tail] = evt;
+        tail = (tail + 1) % MAX_INPUT_EVENTS;
+        // Update mouse_buttons if it's a mouse event
+        if (evt.type == InputEventType::Mouse) {
+            mouse_buttons = evt.mouse.buttons;
+        }
+        return true;
+    }
+
+    void clear() {
+        head = tail = 0;
+        next_sequence = 0;
+        mouse_buttons = 0;
+    }
+
+    void reset() {
+        clear();
     }
 };
 
@@ -363,7 +397,117 @@ std::array<DMAChannelState, 8> g_dma{};
 
 // Magic number: "DBXS" (DOSBox-X Save)
 constexpr uint32_t SAVESTATE_MAGIC = 0x53584244;  // "DBXS" in little-endian
-constexpr uint32_t SAVESTATE_VERSION = 2;  // Version 2: Includes engine state
+constexpr uint32_t SAVESTATE_VERSION = 3;  // Version 3: Unified input queue, portable serialization
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Portable Serialization Helpers (little-endian, cross-platform)
+// Uses little-endian byte shifts - fully portable across platforms
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Wire format sizes (fixed across all platforms)
+constexpr size_t WIRE_INPUT_EVENT_SIZE = 24;  // type(1) + pad(7) + sequence(8) + data(8)
+constexpr size_t WIRE_DMA_CHANNEL_SIZE = 4;   // count(2) + flags(1) + pad(1)
+
+// Little-endian write helpers (using byte shifts - fully portable)
+inline void write_u8(uint8_t* dst, uint8_t v) { *dst = v; }
+inline void write_u16_le(uint8_t* dst, uint16_t v) {
+    dst[0] = static_cast<uint8_t>(v & 0xFF);
+    dst[1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+}
+inline void write_u32_le(uint8_t* dst, uint32_t v) {
+    dst[0] = static_cast<uint8_t>(v & 0xFF);
+    dst[1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+    dst[2] = static_cast<uint8_t>((v >> 16) & 0xFF);
+    dst[3] = static_cast<uint8_t>((v >> 24) & 0xFF);
+}
+inline void write_u64_le(uint8_t* dst, uint64_t v) {
+    for (int i = 0; i < 8; ++i) {
+        dst[i] = static_cast<uint8_t>((v >> (i * 8)) & 0xFF);
+    }
+}
+inline void write_i16_le(uint8_t* dst, int16_t v) { write_u16_le(dst, static_cast<uint16_t>(v)); }
+inline void write_bool(uint8_t* dst, bool v) { *dst = v ? 1 : 0; }
+
+// Little-endian read helpers
+inline uint8_t read_u8(const uint8_t* src) { return *src; }
+inline uint16_t read_u16_le(const uint8_t* src) {
+    return static_cast<uint16_t>(src[0]) | (static_cast<uint16_t>(src[1]) << 8);
+}
+inline uint32_t read_u32_le(const uint8_t* src) {
+    return static_cast<uint32_t>(src[0]) |
+           (static_cast<uint32_t>(src[1]) << 8) |
+           (static_cast<uint32_t>(src[2]) << 16) |
+           (static_cast<uint32_t>(src[3]) << 24);
+}
+inline uint64_t read_u64_le(const uint8_t* src) {
+    uint64_t v = 0;
+    for (int i = 0; i < 8; ++i) {
+        v |= static_cast<uint64_t>(src[i]) << (i * 8);
+    }
+    return v;
+}
+inline int16_t read_i16_le(const uint8_t* src) { return static_cast<int16_t>(read_u16_le(src)); }
+inline bool read_bool(const uint8_t* src) { return *src != 0; }
+
+// Portable serialization for unified InputEvent
+void serialize_input_event(uint8_t* dst, const InputEvent& evt) {
+    write_u8(dst + 0, static_cast<uint8_t>(evt.type));
+    std::memset(dst + 1, 0, 7);  // padding for alignment
+    write_u64_le(dst + 8, evt.sequence);
+
+    if (evt.type == InputEventType::Key) {
+        write_u8(dst + 16, evt.key.scancode);
+        write_bool(dst + 17, evt.key.is_down);
+        write_bool(dst + 18, evt.key.is_extended);
+        std::memset(dst + 19, 0, 5);  // remaining padding
+    } else if (evt.type == InputEventType::Mouse) {
+        write_i16_le(dst + 16, evt.mouse.delta_x);
+        write_i16_le(dst + 18, evt.mouse.delta_y);
+        write_u8(dst + 20, evt.mouse.buttons);
+        std::memset(dst + 21, 0, 3);  // remaining padding
+    } else {
+        std::memset(dst + 16, 0, 8);  // zero padding for unknown types
+    }
+}
+
+InputEvent deserialize_input_event(const uint8_t* src) {
+    InputEvent evt{};
+    evt.type = static_cast<InputEventType>(read_u8(src + 0));
+    evt.sequence = read_u64_le(src + 8);
+
+    if (evt.type == InputEventType::Key) {
+        evt.key.scancode = read_u8(src + 16);
+        evt.key.is_down = read_bool(src + 17);
+        evt.key.is_extended = read_bool(src + 18);
+    } else if (evt.type == InputEventType::Mouse) {
+        evt.mouse.delta_x = read_i16_le(src + 16);
+        evt.mouse.delta_y = read_i16_le(src + 18);
+        evt.mouse.buttons = read_u8(src + 20);
+    }
+    return evt;
+}
+
+// Portable serialization for DMAChannelState
+void serialize_dma_channel(uint8_t* dst, const DMAChannelState& ch) {
+    write_u16_le(dst + 0, ch.count);
+    uint8_t flags = (ch.enabled ? 0x01 : 0) | (ch.masked ? 0x02 : 0) |
+                    (ch.request ? 0x04 : 0) | (ch.tc_reached ? 0x08 : 0) |
+                    (ch.autoinit ? 0x10 : 0);
+    write_u8(dst + 2, flags);
+    write_u8(dst + 3, 0);  // padding
+}
+
+DMAChannelState deserialize_dma_channel(const uint8_t* src) {
+    DMAChannelState ch{};
+    ch.count = read_u16_le(src);
+    uint8_t flags = read_u8(src + 2);
+    ch.enabled = (flags & 0x01) != 0;
+    ch.masked = (flags & 0x02) != 0;
+    ch.request = (flags & 0x04) != 0;
+    ch.tc_reached = (flags & 0x08) != 0;
+    ch.autoinit = (flags & 0x10) != 0;
+    return ch;
+}
 
 // Save state header (fixed size, at start of buffer)
 struct SaveStateHeader {
@@ -380,8 +524,8 @@ struct SaveStateHeader {
     uint32_t event_queue_offset;
     uint32_t input_offset;
     uint32_t frame_offset;
-    uint32_t engine_offset;    // NEW: Engine state offset (0 if not present)
-    uint32_t engine_size;      // NEW: Engine state size in bytes
+    uint32_t engine_offset;    // Engine state offset (0 if not present)
+    uint32_t engine_size;      // Engine state size in bytes
     uint32_t _reserved[3];
 };
 static_assert(sizeof(SaveStateHeader) == 64, "SaveStateHeader must be 64 bytes");
@@ -424,12 +568,42 @@ struct SaveStateEventQueueHeader {
     // Followed by event_count * sizeof(ScheduledEvent) bytes
 };
 
-// Input state section header
+// Input state section header (V3: unified queue)
 struct SaveStateInputHeader {
+    uint32_t event_count;       // Total events in unified queue
+    uint32_t next_sequence_lo;  // Lower 32 bits of next_sequence
+    uint32_t next_sequence_hi;  // Upper 32 bits of next_sequence
+    uint32_t _reserved;         // Padding for alignment
+    // Followed by event_count * WIRE_INPUT_EVENT_SIZE bytes
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V2 Legacy Structures (for backward compatibility)
+// WARNING: These use raw memcpy and are NOT portable across platforms/compilers
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct SaveStateInputHeader_V2 {
     uint32_t key_queue_size;
     uint32_t mouse_queue_size;
-    // Followed by key events and mouse events
+    // Followed by key events then mouse events
 };
+
+// V2 used separate event types with implementation-defined sizes
+struct KeyEvent_V2 {
+    uint8_t scancode;
+    bool is_down;
+    bool is_extended;
+};
+
+struct MouseEvent_V2 {
+    int16_t delta_x;
+    int16_t delta_y;
+    uint8_t buttons;
+};
+
+// V2 queue limits (used for validation)
+constexpr size_t V2_MAX_KEY_EVENTS = 256;
+constexpr size_t V2_MAX_MOUSE_EVENTS = 64;
 
 // Frame state section header
 struct SaveStateFrameHeader {
@@ -888,6 +1062,7 @@ extern "C" {
 void sync_state_from_engine();
 void sync_state_to_engine();
 size_t get_engine_state_size();
+legends_error_t drain_input_to_engine(uint32_t* count_out);
 
 /* =========================================================================
  * LIFECYCLE API
@@ -1034,7 +1209,7 @@ legends_error_t legends_destroy(legends_handle handle) {
         return LEGENDS_OK;
     }
 
-    // P1 Security Fix: Verify caller is on owner thread to prevent data races
+    // Verify caller is on owner thread to prevent data races
     // on global state. Must check after null-handle check since LEGENDS_CHECK_THREAD
     // requires g_instance_exists to be true.
     LEGENDS_CHECK_THREAD();
@@ -1175,6 +1350,16 @@ legends_error_t legends_step_cycles(
     try {
         // Set context for compatibility shim (still needed for legacy code paths)
         legends::compat::ContextGuard guard(*g_instance);
+
+        // Drain input queue before stepping to preserve device interleaving order
+        legends_error_t drain_err = drain_input_to_engine(nullptr);
+        if (drain_err != LEGENDS_OK) {
+            g_last_error = "Input injection failed";
+            if (result_out != nullptr) {
+                result_out->stop_reason = LEGENDS_STOP_ERROR;
+            }
+            return drain_err;
+        }
 
         // Delegate to the DOSBox library which now uses the CPU bridge
         // for actual CPU instruction execution
@@ -1653,7 +1838,67 @@ void sync_state_from_engine() {
     dosbox_lib_get_total_cycles(g_engine_handle, &g_time_state.total_cycles);
     dosbox_lib_get_emu_time(g_engine_handle, &g_time_state.emu_time_us);
 
-    // Future: sync other state (PIC state, VGA mode, etc.) if needed
+    // Sync PIC state from engine for hash consistency
+    // This ensures legends layer hash matches actual engine state
+    dosbox_lib_pic_state_t pic_state;
+    if (dosbox_lib_get_pic_state(g_engine_handle, &pic_state) == DOSBOX_LIB_OK) {
+        g_pics[0].irr = pic_state.master_irr;
+        g_pics[0].imr = pic_state.master_imr;
+        g_pics[0].isr = pic_state.master_isr;
+        g_pics[1].irr = pic_state.slave_irr;
+        g_pics[1].imr = pic_state.slave_imr;
+        g_pics[1].isr = pic_state.slave_isr;
+    }
+}
+
+/**
+ * @brief Drain input queue to engine.
+ *
+ * Called before stepping to forward all queued input events to the engine.
+ * This ensures input is processed in the correct interleaved order for determinism.
+ *
+ * @return LEGENDS_OK on success, error if injection failed
+ */
+legends_error_t drain_input_to_engine(uint32_t* count_out) {
+    if (count_out != nullptr) {
+        *count_out = 0;
+    }
+    if (!g_engine_handle) return LEGENDS_OK;
+    uint32_t count = 0;
+
+    InputEvent evt;
+    while (g_input_state.peek(&evt)) {
+        dosbox_lib_error_t err = DOSBOX_LIB_OK;
+        switch (evt.type) {
+            case InputEventType::Key:
+                err = dosbox_lib_inject_key(g_engine_handle,
+                    evt.key.scancode,
+                    evt.key.is_down ? 1 : 0,
+                    evt.key.is_extended ? 1 : 0);
+                break;
+            case InputEventType::Mouse:
+                err = dosbox_lib_inject_mouse(g_engine_handle,
+                    evt.mouse.delta_x,
+                    evt.mouse.delta_y,
+                    evt.mouse.buttons);
+                break;
+        }
+
+        if (err != DOSBOX_LIB_OK) {
+            if (count_out != nullptr) {
+                *count_out = count;
+            }
+            return dosbox_to_legends_error(err);
+        }
+
+        g_input_state.pop();
+        ++count;
+    }
+
+    if (count_out != nullptr) {
+        *count_out = count;
+    }
+    return LEGENDS_OK;
 }
 
 /**
@@ -1672,12 +1917,8 @@ void sync_state_to_engine() {
     }
 
     // Currently, timing flows engine -> legends, not the reverse.
+    // Input is forwarded via drain_input_to_engine() before stepping.
     // This function is a placeholder for future state push needs.
-    // Example use cases:
-    // - Setting virtual time externally
-    // - Injecting device state
-
-    // For now, no-op. Engine is authoritative for most state.
 }
 
 /* =========================================================================
@@ -1705,16 +1946,16 @@ size_t calculate_save_state_size() {
     size += sizeof(SaveStateTime);
     size += sizeof(SaveStateCPU);
     size += sizeof(SaveStatePIC);
-    size += sizeof(SaveStateDMA);
+    // Use wire size for DMA (portable)
+    size += 8 * WIRE_DMA_CHANNEL_SIZE;
 
     // Event queue: header + events
     size += sizeof(SaveStateEventQueueHeader);
     size += g_event_queue.event_count * sizeof(ScheduledEvent);
 
-    // Input state: header + key events + mouse events
+    // Unified input queue with portable wire format
     size += sizeof(SaveStateInputHeader);
-    size += g_input_state.key_queue_size() * sizeof(KeyEvent);
-    size += g_input_state.mouse_queue_size() * sizeof(MouseEvent);
+    size += g_input_state.size() * WIRE_INPUT_EVENT_SIZE;
 
     // Frame state: header + text buffer + indexed pixels
     size += sizeof(SaveStateFrameHeader);
@@ -1790,13 +2031,12 @@ legends_error_t legends_save_state(
     pic_section->pics[1] = g_pics[1];
     offset += sizeof(SaveStatePIC);
 
-    // Write DMA state
+    // Write DMA state (portable serialization)
     header->dma_offset = static_cast<uint32_t>(offset);
-    SaveStateDMA* dma_section = reinterpret_cast<SaveStateDMA*>(ptr + offset);
     for (int i = 0; i < 8; ++i) {
-        dma_section->channels[i] = g_dma[i];
+        serialize_dma_channel(ptr + offset, g_dma[i]);
+        offset += WIRE_DMA_CHANNEL_SIZE;
     }
-    offset += sizeof(SaveStateDMA);
 
     // Write event queue (CRITICAL for TLA+ compliance - event queue MUST be serialized)
     header->event_queue_offset = static_cast<uint32_t>(offset);
@@ -1811,27 +2051,21 @@ legends_error_t legends_save_state(
         offset += sizeof(ScheduledEvent);
     }
 
-    // Write input state
+    // Write input state (unified queue with portable serialization)
     header->input_offset = static_cast<uint32_t>(offset);
     SaveStateInputHeader* input_header = reinterpret_cast<SaveStateInputHeader*>(ptr + offset);
-    size_t key_count = g_input_state.key_queue_size();
-    size_t mouse_count = g_input_state.mouse_queue_size();
-    input_header->key_queue_size = static_cast<uint32_t>(key_count);
-    input_header->mouse_queue_size = static_cast<uint32_t>(mouse_count);
+    size_t input_count = g_input_state.size();
+    input_header->event_count = static_cast<uint32_t>(input_count);
+    input_header->next_sequence_lo = static_cast<uint32_t>(g_input_state.next_sequence & 0xFFFFFFFF);
+    input_header->next_sequence_hi = static_cast<uint32_t>(g_input_state.next_sequence >> 32);
+    input_header->_reserved = 0;
     offset += sizeof(SaveStateInputHeader);
 
-    // Write key events
-    for (size_t i = 0; i < key_count; ++i) {
-        size_t idx = (g_input_state.key_queue_head + i) % InputState::MAX_KEY_EVENTS;
-        std::memcpy(ptr + offset, &g_input_state.key_queue[idx], sizeof(KeyEvent));
-        offset += sizeof(KeyEvent);
-    }
-
-    // Write mouse events
-    for (size_t i = 0; i < mouse_count; ++i) {
-        size_t idx = (g_input_state.mouse_queue_head + i) % InputState::MAX_MOUSE_EVENTS;
-        std::memcpy(ptr + offset, &g_input_state.mouse_queue[idx], sizeof(MouseEvent));
-        offset += sizeof(MouseEvent);
+    // Write unified input events with portable serialization
+    for (size_t i = 0; i < input_count; ++i) {
+        size_t idx = (g_input_state.head + i) % InputState::MAX_INPUT_EVENTS;
+        serialize_input_event(ptr + offset, g_input_state.queue[idx]);
+        offset += WIRE_INPUT_EVENT_SIZE;
     }
 
     // Write frame state
@@ -1866,21 +2100,41 @@ legends_error_t legends_save_state(
     // Write engine state (Phase 2 - full DOSBox context)
     size_t engine_size = get_engine_state_size();
     if (engine_size > 0 && g_engine_handle) {
+        // Verify buffer capacity before engine write
+        size_t remaining = buffer_size - offset;
+        if (engine_size > remaining) {
+            // Buffer too small - report required size in size_out
+            *size_out = offset + engine_size;
+            return LEGENDS_ERR_BUFFER_TOO_SMALL;
+        }
+
         header->engine_offset = static_cast<uint32_t>(offset);
 
         size_t actual_engine_size = 0;
         auto engine_err = dosbox_lib_save_state(
             g_engine_handle,
             ptr + offset,
-            engine_size,
+            remaining,  // Pass actual remaining space, not queried size
             &actual_engine_size
         );
 
+        // Map engine errors appropriately
+        if (engine_err == DOSBOX_LIB_ERR_BUFFER_TOO_SMALL) {
+            // Engine needs more space - report required size
+            *size_out = offset + actual_engine_size;
+            return LEGENDS_ERR_BUFFER_TOO_SMALL;
+        }
         if (engine_err != DOSBOX_LIB_OK) {
             return dosbox_to_legends_error(engine_err);
         }
 
-        // Security Fix: Use actual size written, not pre-computed size
+        // Verify engine didn't exceed allocated space
+        if (actual_engine_size > remaining) {
+            // Engine violated contract - this shouldn't happen
+            return LEGENDS_ERR_INTERNAL;
+        }
+
+        // Use actual size written, not pre-computed size
         // This ensures header and checksum match actual data
         header->engine_size = static_cast<uint32_t>(actual_engine_size);
         offset += actual_engine_size;
@@ -1889,12 +2143,193 @@ legends_error_t legends_save_state(
         header->engine_size = 0;
     }
 
-    // Security Fix: Calculate checksum based on actual written data (offset),
+    // Calculate checksum based on actual written data (offset),
     // not pre-computed required_size, in case actual sizes differed
     const size_t actual_data_size = offset - sizeof(SaveStateHeader);
     header->total_size = static_cast<uint32_t>(offset);  // Update to actual total
     header->checksum = crc32(data_start, actual_data_size);
 
+    // Update size_out to actual written size
+    *size_out = offset;
+
+    return LEGENDS_OK;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V2 Legacy Loader (backward compatibility)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Load a V2 save state (separate keyboard/mouse queues, memcpy serialization).
+ *
+ * WARNING: V2 saves used raw memcpy and are NOT portable across platforms.
+ * This loader only works if the save was created on the same platform/compiler.
+ *
+ * V2 saves are converted to V3's unified queue format during load.
+ */
+static legends_error_t load_state_v2_legacy(
+    const uint8_t* ptr,
+    size_t buffer_size,
+    const SaveStateHeader* header
+) {
+    // V2 validation - basic bounds checking
+    size_t verified_size = header->total_size;
+    if (verified_size > buffer_size) {
+        LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "V2: Buffer smaller than declared size");
+    }
+
+    // Checksum validation
+    const uint8_t* data_start = ptr + sizeof(SaveStateHeader);
+    size_t data_size = verified_size - sizeof(SaveStateHeader);
+    uint32_t computed_crc = crc32(data_start, data_size);
+    if (computed_crc != header->checksum) {
+        LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "V2: Checksum mismatch");
+    }
+
+    // Validate section offsets (same as V3 for common sections)
+    VALIDATE_SECTION_BOUNDS(header->time_offset, SaveStateTime, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->cpu_offset, SaveStateCPU, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->pic_offset, SaveStatePIC, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->input_offset, SaveStateInputHeader_V2, verified_size);
+    VALIDATE_SECTION_BOUNDS(header->frame_offset, SaveStateFrameHeader, verified_size);
+
+    // Load time state (same as V3)
+    const SaveStateTime* time_section = reinterpret_cast<const SaveStateTime*>(ptr + header->time_offset);
+    g_time_state.total_cycles = time_section->total_cycles;
+    g_time_state.emu_time_us = time_section->emu_time_us;
+    g_time_state.cycles_per_ms = time_section->cycles_per_ms;
+
+    // Load CPU state (same as V3)
+    const SaveStateCPU* cpu_section = reinterpret_cast<const SaveStateCPU*>(ptr + header->cpu_offset);
+    if (g_instance) {
+        g_instance->cpu.flags.interrupt = (cpu_section->interrupt_flag != 0);
+        g_instance->cpu.halted = (cpu_section->halted != 0);
+    }
+
+    // Load PIC state (same as V3)
+    const SaveStatePIC* pic_section = reinterpret_cast<const SaveStatePIC*>(ptr + header->pic_offset);
+    for (int i = 0; i < 2; ++i) {
+        g_pics[i].irr = pic_section->pics[i].irr;
+        g_pics[i].imr = pic_section->pics[i].imr;
+        g_pics[i].isr = pic_section->pics[i].isr;
+        g_pics[i].vector_base = pic_section->pics[i].vector_base;
+        g_pics[i].cascade_irq = pic_section->pics[i].cascade_irq;
+    }
+
+    // Load DMA state (V2 used memcpy - may have platform issues)
+    const uint8_t* dma_data = ptr + header->dma_offset;
+    for (int i = 0; i < 8; ++i) {
+        // V2 used raw memcpy - try to read with same struct layout
+        std::memcpy(&g_dma[i], dma_data + i * sizeof(DMAChannelState), sizeof(DMAChannelState));
+    }
+
+    // Load event queue (same as V3)
+    const SaveStateEventQueueHeader* eq_header =
+        reinterpret_cast<const SaveStateEventQueueHeader*>(ptr + header->event_queue_offset);
+    VALIDATE_COUNT_MAX(eq_header->event_count, EventQueueState::MAX_EVENTS, "V2: event_count");
+
+    g_event_queue.event_count = eq_header->event_count;
+    g_event_queue.next_event_id = eq_header->next_event_id;
+
+    size_t eq_data_offset = header->event_queue_offset + sizeof(SaveStateEventQueueHeader);
+    for (size_t i = 0; i < eq_header->event_count; ++i) {
+        std::memcpy(&g_event_queue.events[i], ptr + eq_data_offset + i * sizeof(ScheduledEvent),
+                    sizeof(ScheduledEvent));
+    }
+
+    // Load V2 input state and convert to unified queue
+    const SaveStateInputHeader_V2* input_header_v2 =
+        reinterpret_cast<const SaveStateInputHeader_V2*>(ptr + header->input_offset);
+
+    VALIDATE_COUNT_MAX(input_header_v2->key_queue_size, V2_MAX_KEY_EVENTS, "V2: key_queue_size");
+    VALIDATE_COUNT_MAX(input_header_v2->mouse_queue_size, V2_MAX_MOUSE_EVENTS, "V2: mouse_queue_size");
+
+    // Check total events fit in unified queue
+    size_t total_events = input_header_v2->key_queue_size + input_header_v2->mouse_queue_size;
+    if (total_events > InputState::EFFECTIVE_CAPACITY) {
+        LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "V2: Too many events for unified queue");
+    }
+
+    // Validate V2 input data bounds
+    size_t key_data_size = static_cast<size_t>(input_header_v2->key_queue_size) * sizeof(KeyEvent_V2);
+    size_t mouse_data_size = static_cast<size_t>(input_header_v2->mouse_queue_size) * sizeof(MouseEvent_V2);
+    size_t input_data_offset = header->input_offset + sizeof(SaveStateInputHeader_V2);
+    VALIDATE_DATA_BOUNDS(input_data_offset, key_data_size, verified_size);
+    VALIDATE_DATA_BOUNDS(input_data_offset + key_data_size, mouse_data_size, verified_size);
+
+    // Clear unified queue and convert V2 events
+    g_input_state.clear();
+
+    size_t offset = input_data_offset;
+
+    // Load keyboard events first (they came first in V2 saves)
+    for (uint32_t i = 0; i < input_header_v2->key_queue_size; ++i) {
+        KeyEvent_V2 ke_v2;
+        std::memcpy(&ke_v2, ptr + offset, sizeof(KeyEvent_V2));
+        offset += sizeof(KeyEvent_V2);
+
+        // Convert to unified queue (assign new sequence numbers)
+        if (!g_input_state.enqueue_key(ke_v2.scancode, ke_v2.is_down, ke_v2.is_extended)) {
+            LEGENDS_ERROR(LEGENDS_ERR_INTERNAL, "V2: Failed to enqueue key event");
+        }
+    }
+
+    // Load mouse events (they came second in V2 saves)
+    for (uint32_t i = 0; i < input_header_v2->mouse_queue_size; ++i) {
+        MouseEvent_V2 me_v2;
+        std::memcpy(&me_v2, ptr + offset, sizeof(MouseEvent_V2));
+        offset += sizeof(MouseEvent_V2);
+
+        // Convert to unified queue (assign new sequence numbers)
+        if (!g_input_state.enqueue_mouse(me_v2.delta_x, me_v2.delta_y, me_v2.buttons)) {
+            LEGENDS_ERROR(LEGENDS_ERR_INTERNAL, "V2: Failed to enqueue mouse event");
+        }
+    }
+
+    // Load frame state (same as V3)
+    const SaveStateFrameHeader* frame_header =
+        reinterpret_cast<const SaveStateFrameHeader*>(ptr + header->frame_offset);
+
+    g_frame_state.is_text_mode = frame_header->is_text_mode != 0;
+    g_frame_state.columns = frame_header->columns;
+    g_frame_state.rows = frame_header->rows;
+    g_frame_state.cursor_x = frame_header->cursor_x;
+    g_frame_state.cursor_y = frame_header->cursor_y;
+    g_frame_state.cursor_visible = frame_header->cursor_visible != 0;
+    g_frame_state.active_page = frame_header->active_page;
+    g_frame_state.gfx_width = frame_header->gfx_width;
+    g_frame_state.gfx_height = frame_header->gfx_height;
+
+    size_t frame_data_offset = header->frame_offset + sizeof(SaveStateFrameHeader);
+    size_t text_buffer_size = static_cast<size_t>(frame_header->columns) * frame_header->rows * sizeof(uint16_t);
+    VALIDATE_DATA_BOUNDS(frame_data_offset, text_buffer_size, verified_size);
+
+    // text_buffer is a fixed-size array - just copy the data (no resize needed)
+    if (text_buffer_size <= g_frame_state.text_buffer.size() * sizeof(uint16_t)) {
+        std::memcpy(g_frame_state.text_buffer.data(), ptr + frame_data_offset, text_buffer_size);
+    }
+    frame_data_offset += text_buffer_size;
+
+    size_t pixel_buffer_size = static_cast<size_t>(frame_header->gfx_width) * frame_header->gfx_height;
+    if (pixel_buffer_size > 0) {
+        VALIDATE_DATA_BOUNDS(frame_data_offset, pixel_buffer_size, verified_size);
+        g_frame_state.indexed_pixels.resize(pixel_buffer_size);
+        std::memcpy(g_frame_state.indexed_pixels.data(), ptr + frame_data_offset, pixel_buffer_size);
+    } else {
+        g_frame_state.indexed_pixels.clear();
+    }
+
+    // Load engine state (same as V3)
+    if (header->engine_size > 0 && g_engine_handle) {
+        VALIDATE_DATA_BOUNDS(header->engine_offset, header->engine_size, verified_size);
+        auto engine_err = dosbox_lib_load_state(g_engine_handle,
+            ptr + header->engine_offset, header->engine_size);
+        if (engine_err != DOSBOX_LIB_OK) {
+            LEGENDS_ERROR(LEGENDS_ERR_INTERNAL, "V2: Engine state load failed");
+        }
+    }
+
+    g_last_error.clear();
     return LEGENDS_OK;
 }
 
@@ -1920,13 +2355,19 @@ legends_error_t legends_load_state(
         LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "Invalid save state magic");
     }
 
-    // Validate version
+    // Validate version - V3 is current, V2 is legacy (separate queues, non-portable)
+    if (header->version == 2) {
+        // V2 saves used separate keyboard/mouse queues and non-portable memcpy.
+        // Load using legacy loader and convert to V3's unified queue format.
+        return load_state_v2_legacy(ptr, buffer_size, header);
+    }
     if (header->version != SAVESTATE_VERSION) {
-        LEGENDS_ERROR(LEGENDS_ERR_VERSION_MISMATCH, "Save state version mismatch");
+        LEGENDS_ERROR(LEGENDS_ERR_VERSION_MISMATCH,
+            "Unknown save state version (expected V3)");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Security Fix: Comprehensive bounds validation
+    // Comprehensive bounds validation
     // ─────────────────────────────────────────────────────────────────────────
 
     // Validate size - total_size must be at least header size to prevent underflow
@@ -1948,7 +2389,7 @@ legends_error_t legends_load_state(
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Security Fix: Validate ALL section offsets against TOTAL_SIZE (checksummed region)
+    // Validate ALL section offsets against TOTAL_SIZE (checksummed region)
     // This ensures all sections fall within the integrity-verified data
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -1959,7 +2400,8 @@ legends_error_t legends_load_state(
     VALIDATE_SECTION_BOUNDS(header->time_offset, SaveStateTime, verified_size);
     VALIDATE_SECTION_BOUNDS(header->cpu_offset, SaveStateCPU, verified_size);
     VALIDATE_SECTION_BOUNDS(header->pic_offset, SaveStatePIC, verified_size);
-    VALIDATE_SECTION_BOUNDS(header->dma_offset, SaveStateDMA, verified_size);
+    // DMA uses wire format size, not struct size
+    VALIDATE_DATA_BOUNDS(header->dma_offset, 8 * WIRE_DMA_CHANNEL_SIZE, verified_size);
     VALIDATE_SECTION_BOUNDS(header->event_queue_offset, SaveStateEventQueueHeader, verified_size);
     VALIDATE_SECTION_BOUNDS(header->input_offset, SaveStateInputHeader, verified_size);
     VALIDATE_SECTION_BOUNDS(header->frame_offset, SaveStateFrameHeader, verified_size);
@@ -1986,10 +2428,11 @@ legends_error_t legends_load_state(
     g_pics[0] = pic_section->pics[0];
     g_pics[1] = pic_section->pics[1];
 
-    // Load DMA state
-    const SaveStateDMA* dma_section = reinterpret_cast<const SaveStateDMA*>(ptr + header->dma_offset);
+    // Load DMA state (portable deserialization)
+    size_t dma_offset = header->dma_offset;
     for (int i = 0; i < 8; ++i) {
-        g_dma[i] = dma_section->channels[i];
+        g_dma[i] = deserialize_dma_channel(ptr + dma_offset);
+        dma_offset += WIRE_DMA_CHANNEL_SIZE;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -2016,39 +2459,47 @@ legends_error_t legends_load_state(
         eq_offset += sizeof(ScheduledEvent);
     }
 
-    // Load input state
+    // Load input state (unified queue with portable deserialization)
     const SaveStateInputHeader* input_header = reinterpret_cast<const SaveStateInputHeader*>(ptr + header->input_offset);
 
-    // Validate input queue sizes don't exceed maximums
-    VALIDATE_COUNT_MAX(input_header->key_queue_size, InputState::MAX_KEY_EVENTS, "key_queue_size");
-    VALIDATE_COUNT_MAX(input_header->mouse_queue_size, InputState::MAX_MOUSE_EVENTS, "mouse_queue_size");
+    // Validate against effective capacity (MAX - 1 due to ring buffer design)
+    VALIDATE_COUNT_MAX(input_header->event_count, InputState::EFFECTIVE_CAPACITY, "input_event_count");
 
-    // Validate input data fits in buffer
-    size_t key_data_size = static_cast<size_t>(input_header->key_queue_size) * sizeof(KeyEvent);
-    size_t mouse_data_size = static_cast<size_t>(input_header->mouse_queue_size) * sizeof(MouseEvent);
+    // Validate input data fits in buffer (use wire format size)
+    size_t input_data_size = static_cast<size_t>(input_header->event_count) * WIRE_INPUT_EVENT_SIZE;
     size_t input_data_offset = header->input_offset + sizeof(SaveStateInputHeader);
-    VALIDATE_DATA_BOUNDS(input_data_offset, key_data_size, verified_size);
-    VALIDATE_DATA_BOUNDS(input_data_offset + key_data_size, mouse_data_size, verified_size);
+    VALIDATE_DATA_BOUNDS(input_data_offset, input_data_size, verified_size);
 
-    g_input_state.reset();
+    g_input_state.clear();
+
+    // Restore next_sequence from header
+    g_input_state.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
+                                  (static_cast<uint64_t>(input_header->next_sequence_hi) << 32);
 
     size_t input_offset = input_data_offset;
 
-    // Load key events (bounds now validated)
-    for (uint32_t i = 0; i < input_header->key_queue_size; ++i) {
-        KeyEvent ke;
-        std::memcpy(&ke, ptr + input_offset, sizeof(KeyEvent));
-        g_input_state.enqueue_key(ke.scancode, ke.is_down, ke.is_extended);
-        input_offset += sizeof(KeyEvent);
+    // Load unified input events with portable deserialization
+    // Use enqueue_raw to preserve original sequence numbers
+    for (uint32_t i = 0; i < input_header->event_count; ++i) {
+        InputEvent evt = deserialize_input_event(ptr + input_offset);
+
+        // Validate event type
+        if (evt.type != InputEventType::Key && evt.type != InputEventType::Mouse) {
+            LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "Unknown input event type in save state");
+        }
+
+        // Use enqueue_raw to preserve the original sequence number from the save
+        if (!g_input_state.enqueue_raw(evt)) {
+            // Queue overflow during load - should never happen with validated count
+            LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "Input queue overflow during load");
+        }
+
+        input_offset += WIRE_INPUT_EVENT_SIZE;
     }
 
-    // Load mouse events (bounds now validated)
-    for (uint32_t i = 0; i < input_header->mouse_queue_size; ++i) {
-        MouseEvent me;
-        std::memcpy(&me, ptr + input_offset, sizeof(MouseEvent));
-        g_input_state.enqueue_mouse(me.delta_x, me.delta_y, me.buttons);
-        input_offset += sizeof(MouseEvent);
-    }
+    // Restore next_sequence from saved state (enqueue_raw doesn't modify it)
+    g_input_state.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
+                                  (static_cast<uint64_t>(input_header->next_sequence_hi) << 32);
 
     // Load frame state
     const SaveStateFrameHeader* frame_header = reinterpret_cast<const SaveStateFrameHeader*>(ptr + header->frame_offset);
@@ -2064,7 +2515,7 @@ legends_error_t legends_load_state(
     VALIDATE_DATA_BOUNDS(frame_data_offset + frame_header->text_buffer_size,
                          frame_header->indexed_pixels_size, verified_size);
 
-    // Security Fix: Validate frame dimensions against maximum values
+    // Validate frame dimensions against maximum values
     // Maximum is 80 columns x 50 rows for text mode
     constexpr uint8_t MAX_COLUMNS = 80;
     constexpr uint8_t MAX_ROWS = 50;
@@ -2148,41 +2599,69 @@ legends_error_t legends_get_state_hash(
     LEGENDS_REQUIRE(hash_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    // Hash the observable state per TLA+ Obs() function:
-    // - now (virtual time)
-    // - Q_digest (event queue)
-    // - CPU_IF, CPU_halted
-    // - pic0/pic1: irr, imr, isr
+    // Sync state from engine first to ensure hash consistency
+    sync_state_from_engine();
 
     SHA256 sha;
 
-    // Hash time (now)
+    // Include engine's authoritative hash as primary source
+    // This ensures the hash reflects actual engine state, not stale legends layer state
+    if (g_engine_handle) {
+        uint8_t engine_hash[32];
+        if (dosbox_lib_get_state_hash(g_engine_handle, engine_hash) == DOSBOX_LIB_OK) {
+            sha.update(engine_hash, 32);
+        }
+    }
+
+    // Include legends-layer state that affects determinism
+    // (pending input queue events will affect future state)
+    uint64_t input_queue_size = g_input_state.size();
+    sha.update(&input_queue_size, sizeof(input_queue_size));
+
+    // If there are pending input events, hash their sequence numbers
+    // to catch ordering differences
+    if (input_queue_size > 0) {
+        sha.update(&g_input_state.next_sequence, sizeof(g_input_state.next_sequence));
+        size_t idx = g_input_state.head;
+        for (size_t i = 0; i < input_queue_size; ++i) {
+            const auto& evt = g_input_state.queue[idx];
+            const uint8_t type = static_cast<uint8_t>(evt.type);
+            sha.update(&type, sizeof(type));
+            sha.update(&evt.sequence, sizeof(evt.sequence));
+            if (evt.type == InputEventType::Key) {
+                sha.update(&evt.key.scancode, sizeof(evt.key.scancode));
+                const uint8_t down = evt.key.is_down ? 1 : 0;
+                const uint8_t ext = evt.key.is_extended ? 1 : 0;
+                sha.update(&down, sizeof(down));
+                sha.update(&ext, sizeof(ext));
+            } else {
+                sha.update(&evt.mouse.delta_x, sizeof(evt.mouse.delta_x));
+                sha.update(&evt.mouse.delta_y, sizeof(evt.mouse.delta_y));
+                sha.update(&evt.mouse.buttons, sizeof(evt.mouse.buttons));
+            }
+            idx = (idx + 1) % InputState::MAX_INPUT_EVENTS;
+        }
+    }
+
+    // Hash time (now) - these are synced from engine
     sha.update(&g_time_state.total_cycles, sizeof(g_time_state.total_cycles));
     sha.update(&g_time_state.emu_time_us, sizeof(g_time_state.emu_time_us));
 
-    // Hash event queue digest (per TLA+: <<deadline, kind, tieKey>>)
-    uint32_t event_count = static_cast<uint32_t>(g_event_queue.event_count);
-    sha.update(&event_count, sizeof(event_count));
-    for (size_t i = 0; i < g_event_queue.event_count; ++i) {
-        const auto& e = g_event_queue.events[i];
-        sha.update(&e.deadline, sizeof(e.deadline));
-        sha.update(&e.kind, sizeof(e.kind));
-        sha.update(&e.tie_key, sizeof(e.tie_key));
-    }
-
-    // Hash CPU state
-    uint8_t cpu_if = g_instance ? (g_instance->cpu.flags.interrupt ? 1 : 0) : 0;
-    uint8_t cpu_halted = g_instance ? (g_instance->cpu.halted ? 1 : 0) : 0;
-    sha.update(&cpu_if, 1);
-    sha.update(&cpu_halted, 1);
-
-    // Hash PIC state (both PICs: irr, imr, isr)
+    // Hash PIC state (synced from engine in sync_state_from_engine)
     sha.update(&g_pics[0].irr, 1);
     sha.update(&g_pics[0].imr, 1);
     sha.update(&g_pics[0].isr, 1);
     sha.update(&g_pics[1].irr, 1);
     sha.update(&g_pics[1].imr, 1);
     sha.update(&g_pics[1].isr, 1);
+
+    // Include legends-layer event queue (scheduled events affect timing)
+    sha.update(&g_event_queue.event_count, sizeof(g_event_queue.event_count));
+    sha.update(&g_event_queue.next_event_id, sizeof(g_event_queue.next_event_id));
+    for (size_t i = 0; i < g_event_queue.event_count; ++i) {
+        sha.update(&g_event_queue.events[i].id, sizeof(g_event_queue.events[i].id));
+        sha.update(&g_event_queue.events[i].deadline, sizeof(g_event_queue.events[i].deadline));
+    }
 
     sha.finalize(hash_out);
     return LEGENDS_OK;

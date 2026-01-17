@@ -144,7 +144,7 @@ void OverlayManager::render(
     uint16_t height
 ) const {
     // Clear buffer to transparent
-    std::fill(buffer.begin(), buffer.end(), 0);
+    std::fill(buffer.begin(), buffer.end(), static_cast<uint8_t>(0));
 
     // Render each overlay in z-order
     for (const auto& overlay : overlays_) {
@@ -490,11 +490,11 @@ void draw_line(
         int e2 = 2 * err;
         if (e2 > -dy) {
             err -= dy;
-            x1 += sx;
+            x1 = static_cast<int16_t>(x1 + sx);
         }
         if (e2 < dx) {
             err += dx;
-            y1 += sy;
+            y1 = static_cast<int16_t>(y1 + sy);
         }
     }
 }

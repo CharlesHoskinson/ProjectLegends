@@ -480,9 +480,15 @@ legends_error_t legends_mouse_event(
  * - CPU registers, memory
  * - PIC/PIT state and event queue
  * - Timing indices and cycle counters
- * - Input buffers
+ * - Input buffers (unified queue with sequence numbers)
  *
  * Format is versioned. Load rejects incompatible versions.
+ *
+ * @note The size returned by the query call (buffer=NULL) is an estimate.
+ *       The actual written size may differ slightly. Always check size_out
+ *       after a successful save to get the exact size written.
+ *       If LEGENDS_ERR_BUFFER_TOO_SMALL is returned, size_out contains
+ *       the required buffer size.
  *
  * @param handle Valid handle
  * @param[out] buffer Output buffer (NULL to query size)

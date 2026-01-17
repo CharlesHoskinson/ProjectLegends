@@ -3,6 +3,10 @@
  * @brief Unit tests for exception hierarchy.
  */
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4127) // conditional expression is constant
+#endif
+
 #include <gtest/gtest.h>
 #include <legends/exceptions.h>
 
@@ -382,14 +386,15 @@ TEST(ExceptionHierarchyTest, AllDeriveFromStdException) {
 }
 
 TEST(ExceptionHierarchyTest, CanCatchByBase) {
+    bool caught = false;
     try {
         throw IllegalCpuStateException("test", 0x1000, 0x08);
     } catch (const EmulatorException& e) {
         // Should be caught here
         EXPECT_NE(std::string(e.what()).find("CPU state"), std::string::npos);
-        return;
+        caught = true;
     }
-    FAIL() << "Exception was not caught by base class";
+    EXPECT_TRUE(caught) << "Exception was not caught by base class";
 }
 
 TEST(ExceptionHierarchyTest, CanDistinguishByType) {
@@ -447,22 +452,26 @@ TEST(AiboxAbortTest, ThrowsFatalException) {
 }
 
 TEST(AiboxAbortTest, MessageIncluded) {
+    bool caught = false;
     try {
         LEGENDS_ABORT("custom message");
-        FAIL() << "Should have thrown";
     } catch (const FatalException& e) {
         EXPECT_NE(std::string(e.what()).find("custom message"), std::string::npos);
+        caught = true;
     }
+    EXPECT_TRUE(caught) << "Should have thrown";
 }
 
 TEST(AiboxAbortTest, LocationIncluded) {
+    bool caught = false;
     try {
         LEGENDS_ABORT("test");
-        FAIL() << "Should have thrown";
     } catch (const FatalException& e) {
         EXPECT_NE(e.file(), nullptr);
         EXPECT_GT(e.line(), 0);
+        caught = true;
     }
+    EXPECT_TRUE(caught) << "Should have thrown";
 }
 
 #endif // LEGENDS_LIBRARY_MODE

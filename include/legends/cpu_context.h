@@ -236,6 +236,10 @@ public:
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4201) // nameless struct/union
+#endif
 
     union {
         uint32_t eax = 0;
@@ -292,6 +296,9 @@ public:
 
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
+#endif
+#ifdef _MSC_VER
+#pragma warning(pop)
 #endif
 
     CpuFlags flags;

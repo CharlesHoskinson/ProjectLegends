@@ -18,6 +18,14 @@ project(ProjectLegends
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Module Graph (Sprint 3)
+# ─────────────────────────────────────────────────────────────────────────────
+# Load module definitions and DAG constraints early.
+# See cmake/ModuleManifest.cmake for module boundaries.
+include(cmake/ModuleManifest.cmake)
+include(cmake/ModuleDAG.cmake)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Build Options
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -358,6 +366,8 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_edge_cases.cpp
         tests/unit/test_stress.cpp
         tests/unit/test_negative.cpp
+        # Portable Serialization Tests
+        tests/unit/test_portable_serialize.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
@@ -469,6 +479,9 @@ if(LEGENDS_BUILD_TESTS)
         tests/integration/test_workflow_saveload.cpp
         tests/integration/test_workflow_input.cpp
         tests/integration/test_workflow_llm.cpp
+        # Input/SaveState Tests (Issues 1, 3, 4, 5)
+        tests/integration/test_input_injection.cpp
+        tests/integration/test_save_state_safety.cpp
     )
 
     legends_set_strict_cxx_standard(legends_integration_tests)
@@ -623,3 +636,23 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/LegendsConfigVersion.cmake"
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Legends
 )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Module DAG Verification (Sprint 3)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Verify static library DAG at configure time.
+# This ensures:
+#   - No circular dependencies between internal libraries
+#   - Only allowed dependencies are linked
+#   - Clean module boundaries are enforced
+#
+# See cmake/ModuleManifest.cmake for module definitions.
+# See cmake/ModuleDAG.cmake for verification logic.
+
+legends_verify_all_dags()
+
+# Optional: Print the graph during verbose builds
+if(CMAKE_VERBOSE_MAKEFILE)
+    legends_print_dag()
+endif()

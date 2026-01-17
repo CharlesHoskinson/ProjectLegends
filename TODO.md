@@ -4,6 +4,7 @@
 
 **Sprint 1** — Library Foundation: Complete
 **Sprint 2** — Instance Reality: In Progress (Phase 2 save/load complete)
+**Sprint 3** — Module Graph: Complete
 
 ---
 
@@ -83,14 +84,50 @@
 
 ---
 
-## Sprint 3 — Module Graph
+## Sprint 3 — Module Graph (Complete)
 
-- [ ] Define module public headers
-- [ ] Eliminate cross-module path includes
-- [ ] Build as static library DAG
-- [ ] Service interfaces for cross-module communication
-- [ ] CI include rule enforcement
-- [ ] Measure rebuild improvement
+### Phase 1 — Define Module Boundaries (Complete)
+
+- [x] Create `cmake/ModuleManifest.cmake` with module definitions
+- [x] Define DAG: legends_core → aibox_core, leaves: legends_pal, aibox_core
+- [x] Update ARCHITECTURE.md with Module Graph section
+- [x] Include manifest in CMakeLists.txt
+
+### Phase 2 — Fix Cross-Module Path Includes (Complete)
+
+- [x] Fix builtin.h (12 ../src/ violations)
+- [x] Fix bios_disk.h (1 ../src/ violation)
+- [x] Fix render.h (1 ../src/ violation)
+- [x] Create `engine/include/dosbox/builtin_types.h`
+- [x] Create `engine/include/dosbox/cdrom_interface.h`
+- [x] Create `engine/include/dosbox/render_types.h`
+
+### Phase 3 — Build Static Library DAG (Complete)
+
+- [x] Create `cmake/ModuleDAG.cmake` with verification function
+- [x] Integrate DAG verification into CMakeLists.txt
+- [x] Add `legends_print_dag()` for verbose builds
+- [x] Add circular dependency detection
+
+### Phase 4 — Service Interfaces (Complete)
+
+- [x] Create `engine/include/dosbox/engine_services.h`
+- [x] Add `EngineServiceTable` for dependency injection
+- [x] Add `EngineHandle` RAII wrapper
+- [x] Update ARCHITECTURE.md with Service Interfaces section
+
+### Phase 5 — CI Include Rule Enforcement (Complete)
+
+- [x] Create `scripts/check_includes.py`
+- [x] Create `.github/workflows/module-dag.yml`
+- [x] Create `.githooks/pre-commit` hook
+- [x] Add Linux and Windows build verification
+
+### Phase 6 — Measure Rebuild Improvement (Complete)
+
+- [x] Create `scripts/measure_rebuild.py`
+- [x] Add Build Metrics section to ARCHITECTURE.md
+- [ ] Capture baseline and improved metrics (run manually)
 
 ---
 

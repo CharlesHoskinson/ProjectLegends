@@ -214,7 +214,7 @@ void CaptureEngine::render_text_mode(Span<uint8_t> output, uint16_t width, uint1
     (void)height;  // Reserved for future font rendering
     // Text mode rendering is complex - for now, fill with a pattern
     // Full implementation would need font data
-    std::fill(output.begin(), output.end(), 0);
+    std::fill(output.begin(), output.end(), static_cast<uint8_t>(0));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

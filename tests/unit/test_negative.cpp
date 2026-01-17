@@ -73,7 +73,7 @@ TEST_F(NegativeTest, DestroyNullHandleIsOk) {
 
 TEST_F(NegativeTest, InvalidFakeHandle) {
     // Create a fake handle that was never returned by create
-    legends_handle fake = reinterpret_cast<legends_handle>(0xDEADBEEF);
+    legends_handle fake = reinterpret_cast<legends_handle>(static_cast<uintptr_t>(0xDEADBEEF));
 
     // Operations should fail gracefully (or succeed if implementation doesn't validate)
     // The key is no crash

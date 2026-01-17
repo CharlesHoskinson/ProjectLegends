@@ -1,0 +1,14 @@
+#!/bin/bash
+# Pre-commit hook for Sprint 3 include rules
+# Install: git config core.hooksPath .githooks
+
+echo "Checking include rules..."
+
+if ! python scripts/check_includes.py --path . >/dev/null 2>&1; then
+    echo "ERROR: Include rule violations found!"
+    echo "Run 'python scripts/check_includes.py --path .' for details"
+    exit 1
+fi
+
+echo "Include rules: OK"
+exit 0

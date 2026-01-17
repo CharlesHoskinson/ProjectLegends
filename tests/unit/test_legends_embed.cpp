@@ -1273,8 +1273,8 @@ TEST_F(DosboxxSaveStateTest, SaveLoadEngineStateRoundTripDeterminism) {
         << "Replay from saved state should be deterministic";
 }
 
-TEST_F(DosboxxSaveStateTest, SaveStateVersionIs2) {
-    // Version 2 includes engine state
+TEST_F(DosboxxSaveStateTest, SaveStateVersionIs3) {
+    // Version 3 adds unified input queue and portable serialization
     legends_step_cycles(handle_, 1000, nullptr);
 
     size_t size = 0;
@@ -1285,7 +1285,7 @@ TEST_F(DosboxxSaveStateTest, SaveStateVersionIs2) {
     // Check version in header
     uint32_t version = 0;
     std::memcpy(&version, buffer.data() + 4, sizeof(version));  // version is at offset 4
-    EXPECT_EQ(version, 2u) << "Save state version should be 2 (includes engine state)";
+    EXPECT_EQ(version, 3u) << "Save state version should be 3 (unified input queue, portable serialization)";
 }
 
 TEST_F(DosboxxSaveStateTest, MultipleEngineStateRoundTrips) {
@@ -1338,8 +1338,8 @@ TEST_F(DosboxxSaveStateTest, EngineStatePreservesAllSubsystems) {
     // Significantly diverge state
     legends_step_cycles(handle_, 50000, nullptr);
     for (int i = 0; i < 10; ++i) {
-        legends_key_event(handle_, 0x30 + i, 1);  // Various keys
-        legends_key_event(handle_, 0x30 + i, 0);
+        legends_key_event(handle_, static_cast<uint8_t>(0x30 + i), 1);  // Various keys
+        legends_key_event(handle_, static_cast<uint8_t>(0x30 + i), 0);
     }
 
     // Load saved state
@@ -1653,8 +1653,8 @@ TEST_F(DosboxxFuzzTest, RapidSteppingStable) {
 TEST_F(DosboxxFuzzTest, InvalidHandlesRejected) {
     legends_handle invalid_handles[] = {
         nullptr,
-        reinterpret_cast<legends_handle>(0xDEADBEEF),
-        reinterpret_cast<legends_handle>(0xFFFFFFFF),
+        reinterpret_cast<legends_handle>(static_cast<uintptr_t>(0xDEADBEEF)),
+        reinterpret_cast<legends_handle>(static_cast<uintptr_t>(0xFFFFFFFF)),
     };
 
     for (auto invalid : invalid_handles) {

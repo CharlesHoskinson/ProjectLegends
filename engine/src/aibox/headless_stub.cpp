@@ -24,6 +24,21 @@
 #include <span>
 #include <vector>
 
+// Cross-platform weak symbol support
+// On GCC/Clang: __attribute__((weak)) allows override at link time
+// On MSVC: selectany provides similar semantics for functions
+#if defined(_MSC_VER)
+    #define WEAK_SYMBOL __declspec(selectany)
+    // MSVC doesn't support weak functions directly, use inline+selectany pattern
+    #define WEAK_FUNCTION inline
+#elif defined(__GNUC__) || defined(__clang__)
+    #define WEAK_SYMBOL __attribute__((weak))
+    #define WEAK_FUNCTION __attribute__((weak))
+#else
+    #define WEAK_SYMBOL
+    #define WEAK_FUNCTION
+#endif
+
 namespace aibox {
 namespace headless {
 
@@ -432,7 +447,7 @@ void MAPPER_Check() {
  *
  * @return Current virtual tick count (milliseconds)
  */
-__attribute__((weak)) uint32_t SDL_GetTicks() {
+WEAK_FUNCTION uint32_t SDL_GetTicks() {
     uint64_t ticks = aibox::headless::GetTicks();
     // Wrap at 32-bit boundary like real SDL_GetTicks
     return static_cast<uint32_t>(ticks & 0xFFFFFFFF);
@@ -448,7 +463,7 @@ __attribute__((weak)) uint32_t SDL_GetTicks() {
  *
  * @param ms Milliseconds to delay
  */
-__attribute__((weak)) void SDL_Delay(uint32_t ms) {
+WEAK_FUNCTION void SDL_Delay(uint32_t ms) {
     auto* provider = aibox::headless::GetTimingProvider();
     if (provider && !provider->is_deterministic()) {
         // Non-deterministic timing - actually delay

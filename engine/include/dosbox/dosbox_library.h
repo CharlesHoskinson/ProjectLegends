@@ -339,6 +339,80 @@ dosbox_lib_error_t dosbox_lib_set_log_callback(
     void* userdata
 );
 
+/* =========================================================================
+ * INPUT INJECTION API
+ * ========================================================================= */
+
+/**
+ * @brief Inject keyboard scancode into the emulator.
+ *
+ * Forwards keyboard input directly to the engine's keyboard controller.
+ * Called by legends layer to drain input queue before stepping.
+ *
+ * @param handle Valid handle
+ * @param scancode AT scancode (set 1)
+ * @param pressed 1 for key press, 0 for key release
+ * @param extended 1 for E0-prefixed keys (arrows, etc.)
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_inject_key(
+    dosbox_lib_handle_t handle,
+    uint8_t scancode,
+    int pressed,
+    int extended
+);
+
+/**
+ * @brief Inject mouse movement and button state into the emulator.
+ *
+ * Forwards mouse input directly to the engine's PS/2 aux port.
+ * Called by legends layer to drain input queue before stepping.
+ *
+ * @param handle Valid handle
+ * @param delta_x Relative X movement
+ * @param delta_y Relative Y movement
+ * @param buttons Button bitmask (bit 0=left, 1=right, 2=middle)
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_inject_mouse(
+    dosbox_lib_handle_t handle,
+    int16_t delta_x,
+    int16_t delta_y,
+    uint8_t buttons
+);
+
+/* =========================================================================
+ * PIC STATE API
+ * ========================================================================= */
+
+/**
+ * @brief PIC (Programmable Interrupt Controller) state structure.
+ *
+ * Used to sync PIC state from engine to legends layer for hash consistency.
+ */
+typedef struct {
+    uint8_t master_irr;  /**< Master PIC Interrupt Request Register */
+    uint8_t master_imr;  /**< Master PIC Interrupt Mask Register */
+    uint8_t master_isr;  /**< Master PIC In-Service Register */
+    uint8_t slave_irr;   /**< Slave PIC Interrupt Request Register */
+    uint8_t slave_imr;   /**< Slave PIC Interrupt Mask Register */
+    uint8_t slave_isr;   /**< Slave PIC In-Service Register */
+} dosbox_lib_pic_state_t;
+
+/**
+ * @brief Get current PIC state from the engine.
+ *
+ * Used by legends layer to sync PIC state for deterministic hashing.
+ *
+ * @param handle Valid handle
+ * @param state_out Receives PIC state
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_get_pic_state(
+    dosbox_lib_handle_t handle,
+    dosbox_lib_pic_state_t* state_out
+);
+
 #ifdef __cplusplus
 }
 #endif

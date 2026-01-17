@@ -1,0 +1,202 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Module DAG Verification Workflow (Sprint 3)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This workflow enforces module boundaries and DAG integrity:
+# 1. Include rule verification (no ../src/ in public headers)
+# 2. CMake DAG verification (dependency validation)
+# 3. Build verification (ensure changes compile)
+#
+# STRICT ENFORCEMENT FROM DAY 1:
+# - All violations block PRs immediately
+# - No warn-only phase
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: Module DAG
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'include/**'
+      - 'engine/include/**'
+      - 'src/**'
+      - 'engine/src/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'engine/CMakeLists.txt'
+      - 'scripts/check_includes.py'
+      - '.github/workflows/module-dag.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'include/**'
+      - 'engine/include/**'
+      - 'src/**'
+      - 'engine/src/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'engine/CMakeLists.txt'
+      - 'scripts/check_includes.py'
+      - '.github/workflows/module-dag.yml'
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Include Rules Check
+  # ─────────────────────────────────────────────────────────────────────────────
+  include-rules:
+    name: Include Rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check Include Rules
+        run: |
+          python scripts/check_includes.py --path . --verbose
+
+      - name: Verify No ../src/ in Public Headers
+        run: |
+          echo "Checking for ../src/ includes in public headers..."
+
+          # Check engine public headers (dosbox/, aibox/)
+          if grep -rn '../src/' engine/include/dosbox/ engine/include/aibox/ 2>/dev/null; then
+            echo "::error::Found ../src/ includes in engine public headers!"
+            exit 1
+          fi
+
+          # Check legends public headers
+          if grep -rn '../src/' include/legends/ include/pal/ 2>/dev/null; then
+            echo "::error::Found ../src/ includes in legends public headers!"
+            exit 1
+          fi
+
+          echo "✓ No forbidden includes found in public headers"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # CMake DAG Verification
+  # ─────────────────────────────────────────────────────────────────────────────
+  cmake-dag:
+    name: CMake DAG
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Configure CMake (DAG Verification)
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEGENDS_BUILD_TESTS=OFF \
+            -DLEGENDS_HEADLESS=ON \
+            -DPAL_BACKEND_HEADLESS=ON
+
+      - name: Verify DAG Output
+        run: |
+          # Check that DAG verification ran
+          if ! grep -q "Module DAG Verification" build/CMakeCache.txt 2>/dev/null; then
+            # DAG messages go to stderr/stdout, not cache
+            # The configure step would have failed if DAG was violated
+            echo "✓ CMake configuration succeeded (DAG verified)"
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build Verification (Linux)
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-linux:
+    name: Build (Linux)
+    runs-on: ubuntu-latest
+    needs: [include-rules, cmake-dag]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++-13
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON \
+            -DPAL_BACKEND_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run Tests
+        run: ctest --test-dir build --output-on-failure
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build Verification (Windows)
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-windows:
+    name: Build (Windows)
+    runs-on: windows-latest
+    needs: [include-rules, cmake-dag]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 `
+            -DLEGENDS_BUILD_TESTS=ON `
+            -DLEGENDS_HEADLESS=ON `
+            -DPAL_BACKEND_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Run Tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Summary
+  # ─────────────────────────────────────────────────────────────────────────────
+  summary:
+    name: Summary
+    runs-on: ubuntu-latest
+    needs: [include-rules, cmake-dag, build-linux, build-windows]
+    if: always()
+
+    steps:
+      - name: Check Results
+        run: |
+          echo "Module DAG Verification Summary"
+          echo "==============================="
+          echo ""
+          echo "Include Rules: ${{ needs.include-rules.result }}"
+          echo "CMake DAG:     ${{ needs.cmake-dag.result }}"
+          echo "Build Linux:   ${{ needs.build-linux.result }}"
+          echo "Build Windows: ${{ needs.build-windows.result }}"
+          echo ""
+
+          if [ "${{ needs.include-rules.result }}" != "success" ] || \
+             [ "${{ needs.cmake-dag.result }}" != "success" ] || \
+             [ "${{ needs.build-linux.result }}" != "success" ] || \
+             [ "${{ needs.build-windows.result }}" != "success" ]; then
+            echo "::error::One or more checks failed!"
+            exit 1
+          fi
+
+          echo "✓ All module DAG checks passed"

@@ -17,6 +17,7 @@
 #include "aibox/headless_stub.h"
 
 #include <cstring>
+#include <algorithm>
 
 #include <atomic>
 #include <memory>
@@ -707,6 +708,132 @@ dosbox_lib_error_t dosbox_lib_set_log_callback(
 
     g_log_state.callback = callback;
     g_log_state.userdata = userdata;
+    return DOSBOX_LIB_OK;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Input Injection API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_inject_key(
+    dosbox_lib_handle_t handle,
+    uint8_t scancode,
+    int pressed,
+    int extended
+) {
+    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    // Notify headless input provider (optional telemetry)
+    uint16_t keycode = scancode;
+    if (extended) {
+        keycode |= 0x100;  // Mark as E0-prefixed
+    }
+    aibox::headless::PushKeyEvent(keycode, pressed != 0);
+
+    const size_t needed = extended ? 2u : 1u;
+    if (KEYBOARD_BufferSpaceAvail() < needed) {
+        g_last_error = "Keyboard buffer full";
+        return DOSBOX_LIB_ERR_BUFFER_TOO_SMALL;
+    }
+
+    if (extended) {
+        KEYBOARD_AddBuffer(0xE0);
+    }
+    uint8_t code = pressed ? scancode : (scancode | 0x80);
+    KEYBOARD_AddBuffer(code);
+
+    // Mirror into context keyboard buffer for deterministic hashing/save-state
+    if (g_context != nullptr) {
+        if (extended && g_context->keyboard.buffer_used < g_context->keyboard.BUFFER_SIZE) {
+            size_t idx = (g_context->keyboard.buffer_pos + g_context->keyboard.buffer_used) % g_context->keyboard.BUFFER_SIZE;
+            g_context->keyboard.buffer[idx] = 0xE0;
+            g_context->keyboard.buffer_used++;
+        }
+        if (g_context->keyboard.buffer_used < g_context->keyboard.BUFFER_SIZE) {
+            size_t idx = (g_context->keyboard.buffer_pos + g_context->keyboard.buffer_used) % g_context->keyboard.BUFFER_SIZE;
+            g_context->keyboard.buffer[idx] = code;
+            g_context->keyboard.buffer_used++;
+            g_context->keyboard.p60data = code;
+            g_context->keyboard.p60changed = true;
+        }
+    }
+
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_inject_mouse(
+    dosbox_lib_handle_t handle,
+    int16_t delta_x,
+    int16_t delta_y,
+    uint8_t buttons
+) {
+    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    // Use the headless stub input functions which integrate with the PAL input system
+    // Push motion and button events separately
+    if (delta_x != 0 || delta_y != 0) {
+        aibox::headless::PushMouseMotion(delta_x, delta_y);
+    }
+
+    // Handle button state changes (provider notification only)
+    static uint8_t last_buttons = 0;
+    const bool buttons_changed = (buttons != last_buttons);
+    if ((buttons & 0x01) != (last_buttons & 0x01)) {
+        aibox::headless::PushMouseButton(0, (buttons & 0x01) != 0);  // Left button
+    }
+    if ((buttons & 0x02) != (last_buttons & 0x02)) {
+        aibox::headless::PushMouseButton(1, (buttons & 0x02) != 0);  // Right button
+    }
+    if ((buttons & 0x04) != (last_buttons & 0x04)) {
+        aibox::headless::PushMouseButton(2, (buttons & 0x04) != 0);  // Middle button
+    }
+
+    const bool has_motion = (delta_x != 0 || delta_y != 0);
+    if (has_motion || buttons_changed) {
+        if (KEYBOARD_BufferSpaceAvail() <= 4) {
+            g_last_error = "Keyboard buffer full";
+            return DOSBOX_LIB_ERR_BUFFER_TOO_SMALL;
+        }
+        KEYBOARD_AUX_Event(static_cast<float>(delta_x),
+                           static_cast<float>(delta_y),
+                           static_cast<Bitu>(buttons),
+                           0);
+    }
+
+    last_buttons = buttons;
+
+    return DOSBOX_LIB_OK;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PIC State API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_get_pic_state(
+    dosbox_lib_handle_t handle,
+    dosbox_lib_pic_state_t* state_out
+) {
+    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(state_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    // Read PIC state from engine context
+    // Note: irq_check contains the pending IRQ bitmap (similar to IRR)
+    state_out->master_irr = static_cast<uint8_t>(g_context->pic.irq_check & 0xFF);
+    state_out->master_imr = g_context->pic.master_imr;
+    state_out->master_isr = g_context->pic.master_isr;
+    state_out->slave_irr = static_cast<uint8_t>((g_context->pic.irq_check >> 8) & 0xFF);
+    state_out->slave_imr = g_context->pic.slave_imr;
+    state_out->slave_isr = g_context->pic.slave_isr;
+
     return DOSBOX_LIB_OK;
 }
 

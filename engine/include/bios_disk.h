@@ -21,7 +21,7 @@
 
 #include "dos_inc.h"
 #include "logging.h"
-#include "../src/dos/cdrom.h"
+#include "dosbox/cdrom_interface.h"
 
 /* The Section handling Bios Disk Access */
 #define BIOS_MAX_DISK 10
