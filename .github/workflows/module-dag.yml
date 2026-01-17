@@ -78,7 +78,7 @@ jobs:
             exit 1
           fi
 
-          echo "✓ No forbidden includes found in public headers"
+          echo "OK: No forbidden includes found in public headers"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # CMake DAG Verification
@@ -110,7 +110,7 @@ jobs:
           if ! grep -q "Module DAG Verification" build/CMakeCache.txt 2>/dev/null; then
             # DAG messages go to stderr/stdout, not cache
             # The configure step would have failed if DAG was violated
-            echo "✓ CMake configuration succeeded (DAG verified)"
+            echo "OK: CMake configuration succeeded (DAG verified)"
           fi
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -199,4 +199,4 @@ jobs:
             exit 1
           fi
 
-          echo "✓ All module DAG checks passed"
+          echo "OK: All module DAG checks passed"

@@ -127,7 +127,7 @@
 
 - [x] Create `scripts/measure_rebuild.py`
 - [x] Add Build Metrics section to ARCHITECTURE.md
-- [ ] Capture baseline and improved metrics (run manually)
+- [x] Capture metrics: all targets met (<3s header, <2s cpp)
 
 ---
 

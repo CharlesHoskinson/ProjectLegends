@@ -263,7 +263,7 @@ def main():
         print(f"Summary: {len(errors)} error(s), {len(warnings)} warning(s)")
         print("=" * 70)
     else:
-        print("✓ All include rules passed")
+        print("OK: All include rules passed")
 
     # Exit code
     if errors:

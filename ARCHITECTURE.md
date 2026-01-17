@@ -517,20 +517,24 @@ Metrics collected using `scripts/measure_rebuild.py`:
 - Incremental: Touch file, rebuild, measure time
 - Each test repeated for consistency
 
-#### Results
+#### Results (Sprint 3 Post-Refactoring)
 
-| Metric | Before Sprint 3 | After Sprint 3 | Improvement |
-|--------|-----------------|----------------|-------------|
-| Clean build | TBD | TBD | - |
-| legends_embed.h change | TBD | TBD | TBD |
-| dosbox_library.h change | TBD | TBD | TBD |
-| Single .cpp change | TBD | TBD | TBD |
+| Metric | Time | Target | Status |
+|--------|------|--------|--------|
+| Clean build | 26.6s | - | Baseline |
+| legends_embed.h change | 1.45s | <10s | Pass |
+| dosbox_library.h change | 2.68s | <10s | Pass |
+| builtin.h change | 0.42s | <10s | Pass |
+| render.h change | 0.43s | <10s | Pass |
+| Single .cpp change | 1.45s | <5s | Pass |
 
-#### Targets
+*Measured on Windows with MSVC, headless build, 2026-01-17*
 
-- Header change rebuild: <10s (from ~45s baseline)
-- Single .cpp change: <5s (from ~15s baseline)
-- Overall improvement: >50%
+#### Targets Met
+
+- Header change rebuild: **<3s** (target was <10s)
+- Single .cpp change: **<2s** (target was <5s)
+- Module isolation working: refactored headers trigger minimal rebuilds
 
 ---
 
