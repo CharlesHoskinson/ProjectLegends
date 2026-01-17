@@ -47,35 +47,26 @@ protected:
     void load_state(const std::vector<uint8_t>& state) {
         legends_load_state(h_, state.data(), state.size());
     }
-
-    std::vector<legends_text_cell_t> capture_screen() {
-        size_t count = 0;
-        legends_capture_text(h_, nullptr, 0, &count, nullptr);
-        std::vector<legends_text_cell_t> cells(count);
-        legends_capture_text(h_, cells.data(), count, &count, nullptr);
-        return cells;
-    }
 };
 
 // Verify key events affect engine state (not just time)
 TEST_F(InputInjectionTest, KeyEventForwardedToEngine) {
     // Baseline: step with no input
     auto state0 = save_state();
-    legends_step_ms(h_, 100, nullptr);
-    auto screen_no_input = capture_screen();
+    legends_step_cycles(h_, 1000, nullptr);
+    uint8_t hash_no_input[32];
+    get_hash(hash_no_input);
 
     // Restore and step with input using same cycles
     load_state(state0);
     legends_key_event(h_, 0x1E, 1);    // Press
     legends_key_event(h_, 0x1E, 0);    // Release
-    legends_step_ms(h_, 100, nullptr);
-    auto screen_with_input = capture_screen();
+    legends_step_cycles(h_, 1000, nullptr);
+    uint8_t hash_with_input[32];
+    get_hash(hash_with_input);
 
-    // If input is forwarded to engine, frames should differ
-    ASSERT_EQ(screen_no_input.size(), screen_with_input.size());
-    EXPECT_NE(std::memcmp(screen_no_input.data(),
-                          screen_with_input.data(),
-                          screen_no_input.size() * sizeof(legends_text_cell_t)), 0);
+    // If input is forwarded to engine, hashes should differ
+    EXPECT_NE(memcmp(hash_no_input, hash_with_input, 32), 0);
 }
 
 // Verify state hash accounts for pending input contents

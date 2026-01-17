@@ -257,7 +257,11 @@ dosbox_lib_error_t dosbox_lib_init(dosbox_lib_handle_t handle) {
 
     try {
         // Initialize the context
-        g_context->initialize();
+        auto init_result = g_context->initialize();
+        if (!init_result.has_value()) {
+            g_last_error = init_result.error().message();
+            return DOSBOX_LIB_ERR_INTERNAL;
+        }
 
         // Sprint 2 Phase 1: No longer set thread-local context
         // Platform providers are wired directly through the context
@@ -303,7 +307,11 @@ dosbox_lib_error_t dosbox_lib_reset(dosbox_lib_handle_t handle) {
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
     try {
-        g_context->reset();
+        auto reset_result = g_context->reset();
+        if (!reset_result.has_value()) {
+            g_last_error = reset_result.error().message();
+            return DOSBOX_LIB_ERR_INTERNAL;
+        }
         g_time_state.reset();
         g_last_error.clear();
         return DOSBOX_LIB_OK;
@@ -731,35 +739,27 @@ dosbox_lib_error_t dosbox_lib_inject_key(
     if (extended) {
         keycode |= 0x100;  // Mark as E0-prefixed
     }
-    aibox::headless::PushKeyEvent(keycode, pressed != 0);
+    static_cast<void>(aibox::headless::PushKeyEvent(keycode, pressed != 0));
 
-    const size_t needed = extended ? 2u : 1u;
-    if (KEYBOARD_BufferSpaceAvail() < needed) {
-        g_last_error = "Keyboard buffer full";
-        return DOSBOX_LIB_ERR_BUFFER_TOO_SMALL;
-    }
+    auto& kb = g_context->keyboard;
+    auto push_byte = [&](uint16_t data) {
+        if (kb.buffer_used >= kb.BUFFER_SIZE) {
+            kb.buffer_pos = (kb.buffer_pos + 1) % kb.BUFFER_SIZE;
+            kb.buffer_used = kb.BUFFER_SIZE - 1;
+        }
+        size_t idx = (kb.buffer_pos + kb.buffer_used) % kb.BUFFER_SIZE;
+        kb.buffer[idx] = data;
+        kb.buffer_used++;
+        kb.p60data = static_cast<uint8_t>(data & 0xFF);
+        kb.p60changed = true;
+        kb.auxchanged = ((data & 0x100) != 0);
+    };
 
     if (extended) {
-        KEYBOARD_AddBuffer(0xE0);
+        push_byte(0xE0);
     }
     uint8_t code = pressed ? scancode : (scancode | 0x80);
-    KEYBOARD_AddBuffer(code);
-
-    // Mirror into context keyboard buffer for deterministic hashing/save-state
-    if (g_context != nullptr) {
-        if (extended && g_context->keyboard.buffer_used < g_context->keyboard.BUFFER_SIZE) {
-            size_t idx = (g_context->keyboard.buffer_pos + g_context->keyboard.buffer_used) % g_context->keyboard.BUFFER_SIZE;
-            g_context->keyboard.buffer[idx] = 0xE0;
-            g_context->keyboard.buffer_used++;
-        }
-        if (g_context->keyboard.buffer_used < g_context->keyboard.BUFFER_SIZE) {
-            size_t idx = (g_context->keyboard.buffer_pos + g_context->keyboard.buffer_used) % g_context->keyboard.BUFFER_SIZE;
-            g_context->keyboard.buffer[idx] = code;
-            g_context->keyboard.buffer_used++;
-            g_context->keyboard.p60data = code;
-            g_context->keyboard.p60changed = true;
-        }
-    }
+    push_byte(code);
 
     return DOSBOX_LIB_OK;
 }
@@ -778,32 +778,57 @@ dosbox_lib_error_t dosbox_lib_inject_mouse(
     // Use the headless stub input functions which integrate with the PAL input system
     // Push motion and button events separately
     if (delta_x != 0 || delta_y != 0) {
-        aibox::headless::PushMouseMotion(delta_x, delta_y);
+        static_cast<void>(aibox::headless::PushMouseMotion(delta_x, delta_y));
     }
 
     // Handle button state changes (provider notification only)
     static uint8_t last_buttons = 0;
     const bool buttons_changed = (buttons != last_buttons);
     if ((buttons & 0x01) != (last_buttons & 0x01)) {
-        aibox::headless::PushMouseButton(0, (buttons & 0x01) != 0);  // Left button
+        static_cast<void>(aibox::headless::PushMouseButton(0, (buttons & 0x01) != 0));  // Left button
     }
     if ((buttons & 0x02) != (last_buttons & 0x02)) {
-        aibox::headless::PushMouseButton(1, (buttons & 0x02) != 0);  // Right button
+        static_cast<void>(aibox::headless::PushMouseButton(1, (buttons & 0x02) != 0));  // Right button
     }
     if ((buttons & 0x04) != (last_buttons & 0x04)) {
-        aibox::headless::PushMouseButton(2, (buttons & 0x04) != 0);  // Middle button
+        static_cast<void>(aibox::headless::PushMouseButton(2, (buttons & 0x04) != 0));  // Middle button
     }
 
     const bool has_motion = (delta_x != 0 || delta_y != 0);
     if (has_motion || buttons_changed) {
-        if (KEYBOARD_BufferSpaceAvail() <= 4) {
-            g_last_error = "Keyboard buffer full";
-            return DOSBOX_LIB_ERR_BUFFER_TOO_SMALL;
-        }
-        KEYBOARD_AUX_Event(static_cast<float>(delta_x),
-                           static_cast<float>(delta_y),
-                           static_cast<Bitu>(buttons),
-                           0);
+        auto& kb = g_context->keyboard;
+        int x = static_cast<int>(delta_x);
+        int y = -static_cast<int>(delta_y);
+        if (x < -256) x = -256;
+        else if (x > 255) x = 255;
+        if (y < -256) y = -256;
+        else if (y > 255) y = 255;
+
+        uint8_t status = 0x08;
+        if (x == -256 || x == 255) status |= 0x40;
+        if (y == -256 || y == 255) status |= 0x80;
+        if (x & 0x100) status |= 0x10;
+        if (y & 0x100) status |= 0x20;
+        if (buttons & 0x01) status |= 0x01;
+        if (buttons & 0x02) status |= 0x02;
+        if (buttons & 0x04) status |= 0x04;
+
+        auto push_aux = [&](uint8_t byte) {
+            if (kb.buffer_used >= kb.BUFFER_SIZE) {
+                kb.buffer_pos = (kb.buffer_pos + 1) % kb.BUFFER_SIZE;
+                kb.buffer_used = kb.BUFFER_SIZE - 1;
+            }
+            size_t idx = (kb.buffer_pos + kb.buffer_used) % kb.BUFFER_SIZE;
+            kb.buffer[idx] = static_cast<uint16_t>(0x100 | byte);
+            kb.buffer_used++;
+            kb.p60data = byte;
+            kb.p60changed = true;
+            kb.auxchanged = true;
+        };
+
+        push_aux(status);
+        push_aux(static_cast<uint8_t>(x & 0xFF));
+        push_aux(static_cast<uint8_t>(y & 0xFF));
     }
 
     last_buttons = buttons;
