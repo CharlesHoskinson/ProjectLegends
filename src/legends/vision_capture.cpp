@@ -4,6 +4,7 @@
  */
 
 #include "legends/vision_capture.h"
+#include "legends/safe_arithmetic.h"
 #include <algorithm>
 #include <cstring>
 
@@ -45,7 +46,11 @@ Screenshot CaptureEngine::capture() {
     }
 
     // Apply palette to get RGB pixels
-    intermediate_buffer_.resize(mode.width * mode.height * 3);
+    // M26: Use safe multiplication to prevent overflow
+    auto rgb_size = legends::safe_multiply_3(
+        static_cast<size_t>(mode.width), static_cast<size_t>(mode.height), size_t{3});
+    if (!rgb_size) return shot;  // Return empty screenshot on overflow
+    intermediate_buffer_.resize(*rgb_size);
     apply_palette(indexed_pixels, Span<uint8_t>(intermediate_buffer_.data(), intermediate_buffer_.size()));
 
     // Scale if needed
@@ -123,6 +128,9 @@ void CaptureEngine::apply_palette(
     Span<const uint8_t> indexed,
     Span<uint8_t> output
 ) {
+    // M25: Validate output buffer has enough space for RGB triplets
+    if (output.size() < indexed.size() * 3) return;
+
     const VgaPalette& palette = fb_.get_palette();
 
     for (size_t i = 0; i < indexed.size(); ++i) {

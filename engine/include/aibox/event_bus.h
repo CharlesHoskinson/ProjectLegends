@@ -13,11 +13,13 @@
 #include "function_ref.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -193,6 +195,9 @@ class InternalEventBus {
 public:
     InternalEventBus() = default;
 
+    // M22: Set alive_ sentinel false on destruction to detect dangling tokens
+    ~InternalEventBus() { alive_ = false; }
+
     // Non-copyable, non-movable (contains subscriptions)
     InternalEventBus(const InternalEventBus&) = delete;
     InternalEventBus& operator=(const InternalEventBus&) = delete;
@@ -284,11 +289,14 @@ private:
     mutable std::mutex mutex_;
     std::vector<EventSubscription> subscriptions_;
     uint32_t next_id_{1};
+    bool alive_ = true;  // M22: Lifetime sentinel for dangling token detection
 };
 
 // Inline implementation of EventSubscriptionToken::release
 inline void EventSubscriptionToken::release() {
     if (bus_) {
+        // M22: Assert bus is still alive in debug builds
+        assert(bus_->alive_ && "EventSubscriptionToken::release() called after bus destroyed");
         bus_->unsubscribe(id_);
         bus_ = nullptr;
     }
@@ -389,6 +397,7 @@ public:
     void subscribe(events::EventType type,
                    ExternalEventCallback callback,
                    void* user_data) {
+        if (!callback) return;  // F7: reject null callbacks
         std::lock_guard lock(mutex_);
         subscriptions_.push_back(ExternalSubscription{
             type, callback, user_data, true
@@ -482,6 +491,15 @@ private:
         pending_events_.push(std::move(ext));
     }
 
+    /**
+     * @brief Serialize an internal event to an external (FFI-safe) event.
+     *
+     * M18: Uses raw memcpy for serialization. This is only safe for same-process,
+     * same-architecture communication. The serialized data is NOT portable across
+     * different compilers, platforms, or struct layouts. For cross-process or
+     * persistent serialization, a proper format (protobuf, flatbuffers, etc.)
+     * should be used instead.
+     */
     ExternalEvent serialize_event(const InternalEvent& event) {
         ExternalEvent ext;
         ext.type = get_event_type(event);
@@ -489,6 +507,10 @@ private:
         std::visit([&ext](auto&& e) {
             using T = std::decay_t<decltype(e.get())>;
             const auto& data = e.get();
+
+            // M18: Ensure type is safe for raw memcpy serialization
+            static_assert(std::is_trivially_copyable_v<T>,
+                "Event types must be trivially copyable for memcpy serialization");
 
             // Get timestamp
             if constexpr (std::is_same_v<T, events::TextModeScreen>) {
@@ -525,12 +547,14 @@ private:
         }
 
         for (const auto& sub : subs_copy) {
-            sub.callback(
-                static_cast<int>(event.type),
-                event.data.data(),
-                event.data.size(),
-                sub.user_data
-            );
+            if (sub.callback) {  // F7: defense-in-depth null check
+                sub.callback(
+                    static_cast<int>(event.type),
+                    event.data.data(),
+                    event.data.size(),
+                    sub.user_data
+                );
+            }
         }
     }
 

@@ -27,6 +27,7 @@
 #include "exceptions.h"
 
 #include <gsl/gsl-lite.hpp>
+#include <cassert>
 #include <memory>
 #include <cstdint>
 #include <cstddef>
@@ -527,9 +528,14 @@ public:
 
     /**
      * @brief Get raw pointer to memory.
-     * @return Pointer to first byte, or nullptr if empty
+     * @return Pointer to first byte, or nullptr if empty or const
      */
-    [[nodiscard]] uint8_t* data() noexcept { return ptr_; }
+    [[nodiscard]] uint8_t* data() noexcept {
+        // M19: Prevent mutable access to const views
+        assert(!const_ && "mutable data() called on const MemoryView");
+        if (const_) return nullptr;
+        return ptr_;
+    }
 
     /**
      * @brief Get const pointer to memory.
@@ -582,6 +588,10 @@ public:
             return MemoryView();  // Empty view
         }
         size_t actual_len = std::min(len, size_ - offset);
+        // M19: Propagate const_ flag to subview
+        if (const_) {
+            return MemoryView(static_cast<const uint8_t*>(ptr_ + offset), actual_len);
+        }
         return MemoryView(ptr_ + offset, actual_len);
     }
 
@@ -701,7 +711,8 @@ public:
      * @brief Check if range overlaps this region.
      */
     [[nodiscard]] bool overlaps(uint32_t addr, size_t len) const noexcept {
-        uint32_t range_end = addr + static_cast<uint32_t>(len);
+        // M20: Use 64-bit arithmetic to prevent overflow
+        uint64_t range_end = static_cast<uint64_t>(addr) + len;
         return addr < end() && range_end > base_;
     }
 

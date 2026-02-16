@@ -266,6 +266,10 @@ void OverlayManager::composite(
     size_t out_bpp = bytes_per_pixel(output_format);
     size_t num_pixels = static_cast<size_t>(width) * height;
 
+    // Validate spans before indexing (H3 safety fix)
+    if (overlay_buffer.size() < num_pixels * 4) return;
+    if (output_buffer.size() < num_pixels * out_bpp) return;
+
     for (size_t i = 0; i < num_pixels; ++i) {
         // Get overlay pixel (RGBA)
         uint8_t ov_r = overlay_buffer[i * 4 + 0];

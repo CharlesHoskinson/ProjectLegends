@@ -4,6 +4,7 @@
  */
 
 #include "aibox/vision_capture.h"
+#include "aibox/safe_arithmetic.h"
 #include <algorithm>
 #include <cstring>
 
@@ -29,7 +30,12 @@ Screenshot CaptureEngine::capture() {
     shot.frame_number = frame_number_++;
 
     // Handle indexed format (no palette application)
+    // Indexed8 always uses native dimensions — scaling is not applicable
+    // to raw indexed pixels. Override any scaled dimensions to prevent
+    // width/height vs pixels.size() invariant break (F3 safety fix).
     if (config_.format == PixelFormat::Indexed8) {
+        shot.width = mode.width;
+        shot.height = mode.height;
         shot.pixels.resize(indexed_pixels.size());
         std::copy(indexed_pixels.begin(), indexed_pixels.end(), shot.pixels.begin());
 
@@ -40,7 +46,11 @@ Screenshot CaptureEngine::capture() {
     }
 
     // Apply palette to get RGB pixels
-    intermediate_buffer_.resize(mode.width * mode.height * 3);
+    // M26: Use safe multiplication to prevent overflow
+    auto rgb_size = aibox::safe_multiply_3(
+        static_cast<size_t>(mode.width), static_cast<size_t>(mode.height), size_t{3});
+    if (!rgb_size) return shot;  // Return empty screenshot on overflow
+    intermediate_buffer_.resize(*rgb_size);
     apply_palette(indexed_pixels, Span<uint8_t>(intermediate_buffer_.data(), intermediate_buffer_.size()));
 
     // Scale if needed
@@ -118,6 +128,9 @@ void CaptureEngine::apply_palette(
     Span<const uint8_t> indexed,
     Span<uint8_t> output
 ) {
+    // M25: Validate output buffer has enough space for RGB triplets
+    if (output.size() < indexed.size() * 3) return;
+
     const VgaPalette& palette = fb_.get_palette();
 
     for (size_t i = 0; i < indexed.size(); ++i) {
@@ -157,7 +170,22 @@ void CaptureEngine::scale_image(
             }
             break;
 
-        case ScaleMode::Bilinear:
+        case ScaleMode::Bilinear: {
+            // Fall back to nearest-neighbor for degenerate dimensions (F4 safety fix)
+            if (out_w <= 1 || out_h <= 1) {
+                for (uint16_t y = 0; y < out_h; ++y) {
+                    for (uint16_t x = 0; x < out_w; ++x) {
+                        uint16_t src_x = (out_w > 1) ? x * in_w / out_w : 0;
+                        uint16_t src_y = (out_h > 1) ? y * in_h / out_h : 0;
+                        size_t src_off = (src_y * in_w + src_x) * 3;
+                        size_t dst_off = (y * out_w + x) * 3;
+                        output[dst_off + 0] = input[src_off + 0];
+                        output[dst_off + 1] = input[src_off + 1];
+                        output[dst_off + 2] = input[src_off + 2];
+                    }
+                }
+                break;
+            }
             // Bilinear interpolation
             for (uint16_t y = 0; y < out_h; ++y) {
                 for (uint16_t x = 0; x < out_w; ++x) {
@@ -191,6 +219,7 @@ void CaptureEngine::scale_image(
                 }
             }
             break;
+        }
     }
 }
 

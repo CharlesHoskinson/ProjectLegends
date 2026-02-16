@@ -13,6 +13,7 @@
 #include <array>
 #include <optional>
 #include <ranges>
+#include <string>
 #include <string_view>
 #include <cstdint>
 #include <cassert>
@@ -38,7 +39,7 @@ using FastCallback = uint32_t (*)(void* userdata);
 struct CallbackEntry {
     FastCallback handler = nullptr;
     void* userdata = nullptr;
-    const char* description = "";
+    std::string description;  // M21: Own the string to prevent dangling
     bool active = false;
 };
 
@@ -143,6 +144,9 @@ public:
 
     CallbackRegistry() = default;
 
+    // M22: Set alive_ sentinel false on destruction to detect dangling tokens
+    ~CallbackRegistry() { alive_ = false; }
+
     // Non-copyable (owns callback state)
     CallbackRegistry(const CallbackRegistry&) = delete;
     CallbackRegistry& operator=(const CallbackRegistry&) = delete;
@@ -162,7 +166,7 @@ public:
     [[nodiscard]] std::optional<CallbackToken> register_callback(
         FastCallback handler,
         void* userdata = nullptr,
-        const char* description = ""
+        std::string_view description = ""
     ) {
         if (!handler) {
             return std::nullopt;
@@ -176,7 +180,7 @@ public:
 
         it->handler = handler;
         it->userdata = userdata;
-        it->description = description;
+        it->description = std::string(description);
         it->active = true;
         ++active_count_;
 
@@ -250,11 +254,14 @@ private:
 
     std::array<CallbackEntry, MaxCallbacks> entries_{};
     size_t active_count_ = 0;
+    bool alive_ = true;  // M22: Lifetime sentinel for dangling token detection
 };
 
 // Inline implementation of CallbackToken::release
 inline void CallbackToken::release() {
     if (registry_) {
+        // M22: Assert registry is still alive in debug builds
+        assert(registry_->alive_ && "CallbackToken::release() called after registry destroyed");
         registry_->unregister(id_);
         registry_ = nullptr;
     }
