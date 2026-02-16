@@ -50,24 +50,11 @@ typedef int32_t               MemHandle;
 
 // MemBase/MemSize accessors via context in library mode
 #ifdef DOSBOX_LIBRARY_MODE
-#include "dosbox/dosbox_context.h"
 
-// Accessor functions for memory base/size
-inline uint8_t*& MEM_GetBaseRef() {
-    static uint8_t* fallback = nullptr;
-    if (dosbox::has_current_context()) {
-        return dosbox::current_context().memory.base;
-    }
-    return fallback;
-}
-
-inline size_t& MEM_GetSizeRef() {
-    static size_t fallback = 0;
-    if (dosbox::has_current_context()) {
-        return dosbox::current_context().memory.size;
-    }
-    return fallback;
-}
+// Out-of-line accessors defined in memory_compat.cpp
+// (No current_context() calls in headers — Sprint 2 PR #9 policy)
+uint8_t*& MEM_GetBaseRef();
+size_t&   MEM_GetSizeRef();
 
 #define MemBase (MEM_GetBaseRef())
 #define MemSize (MEM_GetSizeRef())

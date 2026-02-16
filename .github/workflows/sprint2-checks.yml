@@ -5,12 +5,14 @@ on:
     paths:
       - 'engine/**'
       - 'scripts/**'
+      - 'tests/**'
       - '.github/workflows/sprint2-checks.yml'
       - '.github/baseline_globals.yaml'
   pull_request:
     paths:
       - 'engine/**'
       - 'scripts/**'
+      - 'tests/**'
       - '.github/workflows/sprint2-checks.yml'
       - '.github/baseline_globals.yaml'
 
@@ -29,11 +31,34 @@ jobs:
       - name: Install dependencies
         run: pip install pyyaml
 
-      - name: Check current_context() usage
-        run: python scripts/check_current_context.py
+      - name: Check current_context() usage (cpp + headers)
+        run: python scripts/check_current_context.py --path .
 
       - name: Check migration status
         run: python scripts/check_migration_status.py
 
-      - name: Check globals registry
-        run: python scripts/check_globals.py
+      - name: Check globals registry (with baseline enforcement)
+        run: python scripts/check_globals.py --path .
+
+  multi-instance-tests:
+    name: Multi-Instance Smoke Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure build
+        run: >
+          cmake -B build -G Ninja
+          -DLEGENDS_BUILD_TESTS=ON
+          -DLEGENDS_HEADLESS=ON
+          -DLEGENDS_LIBRARY_MODE=ON
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build unit tests
+        run: cmake --build build --target legends_unit_tests
+
+      - name: Run multi-instance tests
+        run: ./build/legends_unit_tests --gtest_filter="MultiInstance*:Sprint2*"
+
+      - name: Run full test suite
+        run: ./build/legends_unit_tests

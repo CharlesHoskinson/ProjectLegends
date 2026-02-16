@@ -507,6 +507,12 @@ dosbox_lib_error_t dosbox_lib_save_state(
     offset += sizeof(dosbox::EngineStatePic);
 
     header->keyboard_offset = static_cast<uint32_t>(offset);
+    offset += sizeof(dosbox::EngineStateKeyboard);
+
+    header->cpu_offset = static_cast<uint32_t>(offset);
+    offset += sizeof(dosbox::EngineStateCpu);
+
+    header->memory_offset = static_cast<uint32_t>(offset);
 
     // Serialize timing state
     auto* timing = reinterpret_cast<dosbox::EngineStateTiming*>(ptr + header->timing_offset);
@@ -534,24 +540,97 @@ dosbox_lib_error_t dosbox_lib_save_state(
     pic->auto_eoi = ctx->pic.auto_eoi ? 1 : 0;
     pic->in_event_service = ctx->pic.in_event_service ? 1 : 0;
 
-    // Serialize keyboard state
+    // Serialize keyboard state (V2: all hashed fields)
     auto* kbd = reinterpret_cast<dosbox::EngineStateKeyboard*>(ptr + header->keyboard_offset);
     std::memset(kbd, 0, sizeof(dosbox::EngineStateKeyboard));
+    // Main buffer contents
+    for (size_t i = 0; i < 16; ++i) {
+        kbd->buffer[i] = ctx->keyboard.buffer[i];
+    }
+    kbd->buffer_used = ctx->keyboard.buffer_used;
+    kbd->buffer_pos = ctx->keyboard.buffer_pos;
+    kbd->pending_key = ctx->keyboard.pending_key;
+    // Repeat state
+    kbd->repeat_key = ctx->keyboard.repeat.key;
+    kbd->repeat_wait = ctx->keyboard.repeat.wait;
+    kbd->repeat_pause = ctx->keyboard.repeat.pause;
+    kbd->repeat_rate = ctx->keyboard.repeat.rate;
+    kbd->led_state = ctx->keyboard.led_state;
+    // 8042 buffer
+    std::memcpy(kbd->buf8042, ctx->keyboard.buf8042, 8);
+    kbd->buf8042_len = ctx->keyboard.buf8042_len;
+    kbd->buf8042_pos = ctx->keyboard.buf8042_pos;
+    // Single-byte fields
     kbd->scanset = ctx->keyboard.scanset;
     kbd->enabled = ctx->keyboard.enabled ? 1 : 0;
     kbd->active = ctx->keyboard.active ? 1 : 0;
-    kbd->command = ctx->keyboard.command;
     kbd->p60data = ctx->keyboard.p60data;
     kbd->p60changed = ctx->keyboard.p60changed ? 1 : 0;
-    kbd->scanning = ctx->keyboard.scanning ? 1 : 0;
-    kbd->scheduled = ctx->keyboard.scheduled ? 1 : 0;
-    kbd->buffer_used = ctx->keyboard.buffer_used;
-    kbd->buffer_pos = ctx->keyboard.buffer_pos;
-    kbd->led_state = ctx->keyboard.led_state;
     kbd->num_lock = ctx->keyboard.num_lock ? 1 : 0;
     kbd->caps_lock = ctx->keyboard.caps_lock ? 1 : 0;
     kbd->scroll_lock = ctx->keyboard.scroll_lock ? 1 : 0;
+    kbd->command = ctx->keyboard.command;
+    kbd->expecting_data = ctx->keyboard.expecting_data ? 1 : 0;
+    kbd->scanning = ctx->keyboard.scanning ? 1 : 0;
+    kbd->auxactive = ctx->keyboard.auxactive ? 1 : 0;
+    kbd->scheduled = ctx->keyboard.scheduled ? 1 : 0;
+    kbd->auxchanged = ctx->keyboard.auxchanged ? 1 : 0;
+    kbd->pending_key_state = ctx->keyboard.pending_key_state ? 1 : 0;
+    kbd->cb_override_inhibit = ctx->keyboard.cb_override_inhibit ? 1 : 0;
+    kbd->cb_irq12 = ctx->keyboard.cb_irq12 ? 1 : 0;
+    kbd->cb_irq1 = ctx->keyboard.cb_irq1 ? 1 : 0;
     kbd->cb_xlat = ctx->keyboard.cb_xlat ? 1 : 0;
+    kbd->cb_sys = ctx->keyboard.cb_sys ? 1 : 0;
+    kbd->ps2_mouse_enabled = ctx->keyboard.ps2_mouse_enabled ? 1 : 0;
+    kbd->a20_gate = ctx->keyboard.a20_gate ? 1 : 0;
+    kbd->leftalt_pressed = ctx->keyboard.leftalt_pressed ? 1 : 0;
+    kbd->rightalt_pressed = ctx->keyboard.rightalt_pressed ? 1 : 0;
+    kbd->leftctrl_pressed = ctx->keyboard.leftctrl_pressed ? 1 : 0;
+    kbd->rightctrl_pressed = ctx->keyboard.rightctrl_pressed ? 1 : 0;
+    kbd->leftshift_pressed = ctx->keyboard.leftshift_pressed ? 1 : 0;
+    kbd->rightshift_pressed = ctx->keyboard.rightshift_pressed ? 1 : 0;
+
+    // Serialize CPU state [V2]
+    auto* cpu = reinterpret_cast<dosbox::EngineStateCpu*>(ptr + header->cpu_offset);
+    std::memset(cpu, 0, sizeof(dosbox::EngineStateCpu));
+    cpu->cycles = ctx->cpu_state.cycles;
+    cpu->cycle_left = ctx->cpu_state.cycle_left;
+    cpu->cycle_max = ctx->cpu_state.cycle_max;
+    cpu->cycle_old_max = ctx->cpu_state.cycle_old_max;
+    cpu->cycle_percent_used = ctx->cpu_state.cycle_percent_used;
+    cpu->cycle_limit = ctx->cpu_state.cycle_limit;
+    cpu->cycle_up = ctx->cpu_state.cycle_up;
+    cpu->cycle_down = ctx->cpu_state.cycle_down;
+    cpu->cycles_set = ctx->cpu_state.cycles_set;
+    cpu->io_delay_removed = ctx->cpu_state.io_delay_removed;
+    cpu->extflags_toggle = ctx->cpu_state.extflags_toggle;
+    cpu->cycle_auto_adjust = ctx->cpu_state.cycle_auto_adjust ? 1 : 0;
+    cpu->skip_cycle_auto_adjust = ctx->cpu_state.skip_cycle_auto_adjust ? 1 : 0;
+    cpu->nmi_gate = ctx->cpu_state.nmi_gate ? 1 : 0;
+    cpu->nmi_active = ctx->cpu_state.nmi_active ? 1 : 0;
+    cpu->nmi_pending = ctx->cpu_state.nmi_pending ? 1 : 0;
+    cpu->halted = ctx->cpu_state.halted ? 1 : 0;
+
+    // Serialize Memory state [V2]
+    auto* mem = reinterpret_cast<dosbox::EngineStateMemory*>(ptr + header->memory_offset);
+    std::memset(mem, 0, sizeof(dosbox::EngineStateMemory));
+    mem->size = ctx->memory.size;
+    mem->pages = ctx->memory.pages;
+    mem->handler_pages = ctx->memory.handler_pages;
+    mem->reported_pages = ctx->memory.reported_pages;
+    mem->reported_pages_4gb = ctx->memory.reported_pages_4gb;
+    mem->lfb_start_page = ctx->memory.lfb.start_page;
+    mem->lfb_end_page = ctx->memory.lfb.end_page;
+    mem->lfb_pages = ctx->memory.lfb.pages;
+    mem->lfb_mmio_start_page = ctx->memory.lfb_mmio.start_page;
+    mem->lfb_mmio_end_page = ctx->memory.lfb_mmio.end_page;
+    mem->lfb_mmio_pages = ctx->memory.lfb_mmio.pages;
+    mem->mem_alias_pagemask = ctx->memory.mem_alias_pagemask;
+    mem->mem_alias_pagemask_active = ctx->memory.mem_alias_pagemask_active;
+    mem->address_bits = ctx->memory.address_bits;
+    mem->hw_next_assign = ctx->memory.hw_next_assign;
+    mem->a20_enabled = ctx->memory.a20.enabled ? 1 : 0;
+    mem->a20_controlport = ctx->memory.a20.controlport;
 
     // Compute checksum (over data after header)
     const uint8_t* data_start = ptr + sizeof(dosbox::EngineStateHeader);
@@ -621,7 +700,9 @@ dosbox_lib_error_t dosbox_lib_load_state(
 
     if (!validate_offset(header->timing_offset, sizeof(dosbox::EngineStateTiming)) ||
         !validate_offset(header->pic_offset, sizeof(dosbox::EngineStatePic)) ||
-        !validate_offset(header->keyboard_offset, sizeof(dosbox::EngineStateKeyboard))) {
+        !validate_offset(header->keyboard_offset, sizeof(dosbox::EngineStateKeyboard)) ||
+        !validate_offset(header->cpu_offset, sizeof(dosbox::EngineStateCpu)) ||
+        !validate_offset(header->memory_offset, sizeof(dosbox::EngineStateMemory))) {
         g_last_error = "Invalid section offset";
         return DOSBOX_LIB_ERR_INVALID_STATE;
     }
@@ -652,23 +733,94 @@ dosbox_lib_error_t dosbox_lib_load_state(
     ctx->pic.auto_eoi = pic->auto_eoi != 0;
     ctx->pic.in_event_service = pic->in_event_service != 0;
 
-    // Deserialize keyboard state
+    // Deserialize keyboard state (V2: all hashed fields)
     const auto* kbd = reinterpret_cast<const dosbox::EngineStateKeyboard*>(ptr + header->keyboard_offset);
+    // Main buffer contents
+    for (size_t i = 0; i < 16; ++i) {
+        ctx->keyboard.buffer[i] = kbd->buffer[i];
+    }
+    ctx->keyboard.buffer_used = kbd->buffer_used;
+    ctx->keyboard.buffer_pos = kbd->buffer_pos;
+    ctx->keyboard.pending_key = kbd->pending_key;
+    // Repeat state
+    ctx->keyboard.repeat.key = kbd->repeat_key;
+    ctx->keyboard.repeat.wait = kbd->repeat_wait;
+    ctx->keyboard.repeat.pause = kbd->repeat_pause;
+    ctx->keyboard.repeat.rate = kbd->repeat_rate;
+    ctx->keyboard.led_state = kbd->led_state;
+    // 8042 buffer
+    std::memcpy(ctx->keyboard.buf8042, kbd->buf8042, 8);
+    ctx->keyboard.buf8042_len = kbd->buf8042_len;
+    ctx->keyboard.buf8042_pos = kbd->buf8042_pos;
+    // Single-byte fields
     ctx->keyboard.scanset = kbd->scanset;
     ctx->keyboard.enabled = kbd->enabled != 0;
     ctx->keyboard.active = kbd->active != 0;
-    ctx->keyboard.command = kbd->command;
     ctx->keyboard.p60data = kbd->p60data;
     ctx->keyboard.p60changed = kbd->p60changed != 0;
-    ctx->keyboard.scanning = kbd->scanning != 0;
-    ctx->keyboard.scheduled = kbd->scheduled != 0;
-    ctx->keyboard.buffer_used = kbd->buffer_used;
-    ctx->keyboard.buffer_pos = kbd->buffer_pos;
-    ctx->keyboard.led_state = kbd->led_state;
     ctx->keyboard.num_lock = kbd->num_lock != 0;
     ctx->keyboard.caps_lock = kbd->caps_lock != 0;
     ctx->keyboard.scroll_lock = kbd->scroll_lock != 0;
+    ctx->keyboard.command = kbd->command;
+    ctx->keyboard.expecting_data = kbd->expecting_data != 0;
+    ctx->keyboard.scanning = kbd->scanning != 0;
+    ctx->keyboard.auxactive = kbd->auxactive != 0;
+    ctx->keyboard.scheduled = kbd->scheduled != 0;
+    ctx->keyboard.auxchanged = kbd->auxchanged != 0;
+    ctx->keyboard.pending_key_state = kbd->pending_key_state != 0;
+    ctx->keyboard.cb_override_inhibit = kbd->cb_override_inhibit != 0;
+    ctx->keyboard.cb_irq12 = kbd->cb_irq12 != 0;
+    ctx->keyboard.cb_irq1 = kbd->cb_irq1 != 0;
     ctx->keyboard.cb_xlat = kbd->cb_xlat != 0;
+    ctx->keyboard.cb_sys = kbd->cb_sys != 0;
+    ctx->keyboard.ps2_mouse_enabled = kbd->ps2_mouse_enabled != 0;
+    ctx->keyboard.a20_gate = kbd->a20_gate != 0;
+    ctx->keyboard.leftalt_pressed = kbd->leftalt_pressed != 0;
+    ctx->keyboard.rightalt_pressed = kbd->rightalt_pressed != 0;
+    ctx->keyboard.leftctrl_pressed = kbd->leftctrl_pressed != 0;
+    ctx->keyboard.rightctrl_pressed = kbd->rightctrl_pressed != 0;
+    ctx->keyboard.leftshift_pressed = kbd->leftshift_pressed != 0;
+    ctx->keyboard.rightshift_pressed = kbd->rightshift_pressed != 0;
+
+    // Deserialize CPU state [V2]
+    const auto* cpu = reinterpret_cast<const dosbox::EngineStateCpu*>(ptr + header->cpu_offset);
+    ctx->cpu_state.cycles = cpu->cycles;
+    ctx->cpu_state.cycle_left = cpu->cycle_left;
+    ctx->cpu_state.cycle_max = cpu->cycle_max;
+    ctx->cpu_state.cycle_old_max = cpu->cycle_old_max;
+    ctx->cpu_state.cycle_percent_used = cpu->cycle_percent_used;
+    ctx->cpu_state.cycle_limit = cpu->cycle_limit;
+    ctx->cpu_state.cycle_up = cpu->cycle_up;
+    ctx->cpu_state.cycle_down = cpu->cycle_down;
+    ctx->cpu_state.cycles_set = cpu->cycles_set;
+    ctx->cpu_state.io_delay_removed = cpu->io_delay_removed;
+    ctx->cpu_state.extflags_toggle = cpu->extflags_toggle;
+    ctx->cpu_state.cycle_auto_adjust = cpu->cycle_auto_adjust != 0;
+    ctx->cpu_state.skip_cycle_auto_adjust = cpu->skip_cycle_auto_adjust != 0;
+    ctx->cpu_state.nmi_gate = cpu->nmi_gate != 0;
+    ctx->cpu_state.nmi_active = cpu->nmi_active != 0;
+    ctx->cpu_state.nmi_pending = cpu->nmi_pending != 0;
+    ctx->cpu_state.halted = cpu->halted != 0;
+
+    // Deserialize Memory state [V2]
+    const auto* mem = reinterpret_cast<const dosbox::EngineStateMemory*>(ptr + header->memory_offset);
+    ctx->memory.size = static_cast<size_t>(mem->size);
+    ctx->memory.pages = mem->pages;
+    ctx->memory.handler_pages = mem->handler_pages;
+    ctx->memory.reported_pages = mem->reported_pages;
+    ctx->memory.reported_pages_4gb = mem->reported_pages_4gb;
+    ctx->memory.lfb.start_page = mem->lfb_start_page;
+    ctx->memory.lfb.end_page = mem->lfb_end_page;
+    ctx->memory.lfb.pages = mem->lfb_pages;
+    ctx->memory.lfb_mmio.start_page = mem->lfb_mmio_start_page;
+    ctx->memory.lfb_mmio.end_page = mem->lfb_mmio_end_page;
+    ctx->memory.lfb_mmio.pages = mem->lfb_mmio_pages;
+    ctx->memory.mem_alias_pagemask = mem->mem_alias_pagemask;
+    ctx->memory.mem_alias_pagemask_active = mem->mem_alias_pagemask_active;
+    ctx->memory.address_bits = mem->address_bits;
+    ctx->memory.hw_next_assign = mem->hw_next_assign;
+    ctx->memory.a20.enabled = mem->a20_enabled != 0;
+    ctx->memory.a20.controlport = mem->a20_controlport;
 
     // Also update g_time_state for consistency with library API
     g_time_state.total_cycles = timing->total_cycles;

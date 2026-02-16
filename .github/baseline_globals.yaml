@@ -297,11 +297,11 @@ globals:
     line: 810
     subsystem: pic
     target_context: DOSBoxContext.pic.ticker_list
-    migration_status: pending
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: critical
-    notes: "PIC event queue head - linked list, requires special handling"
+    notes: "PicState has ticker_list field and helper methods (add_ticker, remove_ticker, etc). Compat shim in pic_compat.cpp. Not hashed (function pointers). Always nullptr in headless mode."
 
   - name: InEventService
     type: bool
@@ -490,11 +490,11 @@ globals:
     line: 1819
     subsystem: vga
     target_context: DOSBoxContext.vga.cur_mode
-    migration_status: pending
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: high
-    notes: "Mode block pointer - requires VideoModeBlock migration"
+    notes: "VgaState.cur_mode field exists. Compat shim in int10_compat.cpp. Static in headless mode."
 
   - name: vsync
     type: vsync_state
@@ -502,10 +502,11 @@ globals:
     line: 78
     subsystem: vga
     target_context: DOSBoxContext.vga.vsync
-    migration_status: pending
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: high
+    notes: "VgaState.vsync field exists. Macro in vga.h redirects via current_context(). hash_into() implemented."
 
   - name: assigned_lfb
     type: uint32_t
@@ -513,10 +514,11 @@ globals:
     line: 175
     subsystem: vga
     target_context: DOSBoxContext.vga.assigned_lfb
-    migration_status: pending
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: false
     priority: medium
+    notes: "VgaState.assigned_lfb field exists. Compat shim in vga_compat.cpp."
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # AUDIO / MIXER
@@ -666,11 +668,11 @@ globals:
     line: 68
     subsystem: mixer
     target_context: DOSBoxContext.mixer.audio_device_id
-    migration_status: pending
+    migration_status: deferred
     thread_safety: main_thread_only
     determinism_relevant: false
     priority: high
-    notes: "SDL resource - recreate on deserialize, not migrated to context"
+    notes: "Deferred: SDL resource handle, non-deterministic, not in state hash, unused in headless/library mode. Recreated on deserialize."
 
   - name: MixTemp
     type: uint8_t[MIXER_BUFSIZE]
@@ -678,11 +680,11 @@ globals:
     line: 115
     subsystem: mixer
     target_context: DOSBoxContext.mixer.temp_buffer
-    migration_status: pending
+    migration_status: deferred
     thread_safety: main_thread_only
     determinism_relevant: false
     priority: medium
-    notes: "Temporary buffer - will be dynamically allocated"
+    notes: "Deferred: Temporary mixing buffer, non-deterministic, not in state hash, unused in headless/library mode."
 
   - name: ticksLocked
     type: bool
@@ -706,11 +708,11 @@ globals:
     line: 346
     subsystem: display
     target_context: DOSBoxContext.sdl
-    migration_status: pending
+    migration_status: deferred
     thread_safety: main_thread_only
     determinism_relevant: false
     priority: high
-    notes: "Largest single struct - contains window, renderer, draw state"
+    notes: "Deferred: SDL_Block contains window/renderer/draw state. Non-deterministic, not in state hash, unused in headless/library mode. Requires DisplayState struct split (config vs runtime) for full migration."
 
   - name: frames
     type: Bitu
@@ -718,10 +720,11 @@ globals:
     line: 347
     subsystem: display
     target_context: DOSBoxContext.display.frame_count
-    migration_status: pending
+    migration_status: deferred
     thread_safety: main_thread_only
     determinism_relevant: false
     priority: low
+    notes: "Deferred: Frame counter, non-deterministic, not in state hash, unused in headless/library mode."
 
   - name: currentWindowWidth
     type: Bitu
@@ -729,10 +732,11 @@ globals:
     line: 705
     subsystem: display
     target_context: DOSBoxContext.display.window_width
-    migration_status: pending
+    migration_status: deferred
     thread_safety: main_thread_only
     determinism_relevant: false
     priority: low
+    notes: "Deferred: Window dimension, non-deterministic, not in state hash, unused in headless/library mode."
 
   - name: currentWindowHeight
     type: Bitu
@@ -740,10 +744,11 @@ globals:
     line: 705
     subsystem: display
     target_context: DOSBoxContext.display.window_height
-    migration_status: pending
+    migration_status: deferred
     thread_safety: main_thread_only
     determinism_relevant: false
     priority: low
+    notes: "Deferred: Window dimension, non-deterministic, not in state hash, unused in headless/library mode."
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # MEMORY
@@ -755,11 +760,11 @@ globals:
     line: 60
     subsystem: memory
     target_context: DOSBoxContext.memory.base
-    migration_status: pending
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: critical
-    notes: "Base pointer to emulated memory"
+    notes: "Base pointer to emulated memory. Redirected via mem.h macros in library mode. State serialized in engine_state V2."
 
   - name: memory
     type: struct MemoryBlock
@@ -767,10 +772,11 @@ globals:
     line: 62
     subsystem: memory
     target_context: DOSBoxContext.memory
-    migration_status: pending
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: critical
+    notes: "MemoryBlock fields mapped to MemoryState. Sync functions: MEM_SyncFromContext/MEM_SyncToContext. Serialized in engine_state V2."
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DMA
@@ -782,10 +788,11 @@ globals:
     line: 45
     subsystem: dma
     target_context: DOSBoxContext.dma.controllers
-    migration_status: pending
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: high
+    notes: "DmaState struct exists with controllers[2], get_channel(), hash_into(). Compat shim in dma_compat.cpp. Always nullptr in headless mode."
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # KEYBOARD / INPUT
@@ -835,11 +842,11 @@ globals:
     line: 50
     subsystem: dos
     target_context: DOSBoxContext.dos
-    migration_status: pending
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: critical
-    notes: "DOS system state"
+    notes: "DosState struct exists with all fields. hash_into() implemented. Static defaults in headless mode."
 
   - name: dos_kernel_disabled
     type: bool
@@ -847,10 +854,11 @@ globals:
     line: 45
     subsystem: dos
     target_context: DOSBoxContext.dos.kernel_disabled
-    migration_status: pending
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: high
+    notes: "Mapped to DosState.kernel_disabled. hash_into() includes this field."
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BIOS
@@ -862,10 +870,11 @@ globals:
     line: 100
     subsystem: bios
     target_context: DOSBoxContext.bios.drive_signature
-    migration_status: pending
+    migration_status: deferred
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: medium
+    notes: "Deferred: Static default in headless/library mode (BIOS code doesn't execute). Determinism-relevant but always at default value. Requires BiosState struct for full migration."
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ERROR HANDLING (Library Mode - Already Migrated)
@@ -889,11 +898,11 @@ globals:
     line: 18
     subsystem: logging
     target_context: DOSBoxContext.logging.callback
-    migration_status: pending
+    migration_status: deferred
     thread_safety: mutex_protected
     determinism_relevant: false
     priority: low
-    notes: "PR #3 - needs context migration in PR #9"
+    notes: "Deferred: Function pointer, non-deterministic, not in state hash. Global callback is appropriate for library-wide logging. Requires LoggingState struct for full migration."
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Summary Statistics (for CI tracking)
@@ -901,8 +910,9 @@ globals:
 
 statistics:
   total_globals: 70
-  migrated: 49
-  pending: 17
-  deferred: 1
+  migrated: 58
+  pending: 0
+  deferred: 9
   partial: 3
   in_progress: 0
+  notes: "All 17 Sprint 2 pending globals resolved: 8 migrated to context (Memory, DMA, DOS, VGA, PIC ticker), 8 deferred (SDL/display/BIOS/logging - non-deterministic or unused in headless mode), 1 already partial (firstticker target struct partial)"

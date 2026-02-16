@@ -368,6 +368,8 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_negative.cpp
         # Portable Serialization Tests
         tests/unit/test_portable_serialize.cpp
+        # Sprint 2: Global-to-Context Migration Wiring Tests
+        tests/unit/test_sprint2_migration.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
@@ -425,10 +427,10 @@ if(LEGENDS_BUILD_TESTS)
     # Custom Test Targets
     # ─────────────────────────────────────────────────────────────────────────
 
-    add_custom_target(test-unit
+    add_custom_target(legends-test-unit
         COMMAND ${CMAKE_CTEST_COMMAND} -L unit --output-on-failure
         DEPENDS legends_unit_tests
-        COMMENT "Running unit tests"
+        COMMENT "Running legends unit tests"
     )
 
     # Note: test-all target will be updated below after integration tests are defined
@@ -511,10 +513,10 @@ if(LEGENDS_BUILD_TESTS)
     )
 
     # test-all includes all test types
-    add_custom_target(test-all
+    add_custom_target(legends-test-all
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
         DEPENDS legends_unit_tests legends_abi_test legends_integration_tests
-        COMMENT "Running all tests"
+        COMMENT "Running all legends tests"
     )
 
 endif()

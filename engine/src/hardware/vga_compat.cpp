@@ -10,8 +10,10 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-#include "dosbox.h"
 #include "dosbox/dosbox_context.h"
+#include "vga.h"
+
+#include <cstddef>
 
 using namespace dosbox;
 
@@ -28,4 +30,30 @@ uint32_t& vga_get_assigned_lfb() {
         return current_context().vga.assigned_lfb;
     }
     return fallback_assigned_lfb;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VSync State Compatibility Shim
+// ═══════════════════════════════════════════════════════════════════════════════
+// Provides access to vsync state via current_context().
+// Previously an inline macro in vga.h, moved here to eliminate
+// current_context() calls from header files (PR #9 cleanup).
+//
+// The context's VgaState::VsyncState and vga.h's vsync_state have
+// identical data layout (double + 3 bools). The reinterpret_cast
+// is safe because both are standard-layout types with matching members.
+
+// Verify layout compatibility at compile time
+static_assert(sizeof(VgaState::VsyncState) >= sizeof(vsync_state),
+    "VsyncState must be at least as large as vsync_state");
+static_assert(offsetof(vsync_state, period) == 0,
+    "vsync_state::period must be at offset 0");
+
+static vsync_state fallback_vsync = {};
+
+vsync_state& vga_get_vsync() {
+    if (has_current_context()) {
+        return reinterpret_cast<vsync_state&>(current_context().vga.vsync);
+    }
+    return fallback_vsync;
 }

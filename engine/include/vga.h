@@ -75,9 +75,10 @@ struct vsync_state {
 	bool faithful;		// use faithful framerate adjustment
 };
 
-// VSync state accessor via context
-#include "dosbox/dosbox_context.h"
-#define vsync (dosbox::current_context().vga.vsync)
+// VSync state accessor — out-of-line compat shim in vga_compat.cpp
+// (No current_context() calls in headers — Sprint 2 PR #9 policy)
+vsync_state& vga_get_vsync();
+#define vsync (vga_get_vsync())
 
 extern float uservsyncjolt;
 

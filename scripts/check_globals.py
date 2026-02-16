@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Validate globals_registry.yaml statistics and report status.
+Validate globals_registry.yaml and enforce baseline.
 
-This script verifies that the statistics section matches the actual
-counts in the registry and provides a summary of migration progress.
+This script:
+1. Verifies the statistics section matches actual counts
+2. Compares against baseline to prevent regressions and unapproved additions
+3. Reports migration progress
 
 Exit codes:
-  0 - Registry valid
-  1 - Statistics mismatch or error
+  0 - Registry valid, no regressions
+  1 - Statistics mismatch, regression, or unapproved addition
 """
 
 import argparse
@@ -22,17 +24,19 @@ except ImportError:
     sys.exit(1)
 
 
-def find_registry(start_path: Path) -> Path:
-    """Find globals_registry.yaml."""
-    candidates = [
-        start_path / 'engine' / 'globals_registry.yaml',
-        Path('engine/globals_registry.yaml'),
-        Path('globals_registry.yaml'),
-    ]
+def find_file(start_path: Path, *candidates: str) -> Path:
+    """Find a file by trying multiple candidate paths."""
     for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return Path('engine/globals_registry.yaml')
+        path = start_path / candidate
+        if path.exists():
+            return path
+    # Try relative to script
+    script_dir = Path(__file__).parent
+    for candidate in candidates:
+        path = script_dir.parent / candidate
+        if path.exists():
+            return path
+    return start_path / candidates[0]
 
 
 def load_registry(path: Path) -> dict:
@@ -41,9 +45,29 @@ def load_registry(path: Path) -> dict:
         return yaml.safe_load(f) or {}
 
 
+def extract_globals_info(registry: dict) -> dict:
+    """Extract name -> status mapping from registry."""
+    result = {}
+    for g in registry.get('globals', []):
+        name = g.get('name', '')
+        status = g.get('migration_status', 'pending')
+        result[name] = status
+    return result
+
+
+# Status ordering: higher = more migrated
+STATUS_ORDER = {
+    'pending': 0,
+    'in_progress': 1,
+    'partial': 2,
+    'deferred': 3,  # Intentionally left as global — acceptable endpoint
+    'migrated': 4,
+}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description='Validate globals registry statistics'
+        description='Validate globals registry and enforce baseline'
     )
     parser.add_argument(
         '--path',
@@ -57,6 +81,11 @@ def main() -> int:
         help='Path to globals_registry.yaml'
     )
     parser.add_argument(
+        '--baseline',
+        type=Path,
+        help='Path to baseline_globals.yaml'
+    )
+    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Show detailed breakdown'
@@ -64,7 +93,11 @@ def main() -> int:
     args = parser.parse_args()
 
     # Find registry
-    registry_path = args.registry or find_registry(args.path)
+    registry_path = args.registry or find_file(
+        args.path,
+        'engine/globals_registry.yaml',
+        'globals_registry.yaml',
+    )
 
     if not registry_path.exists():
         print(f"ERROR: Registry not found: {registry_path}")
@@ -96,7 +129,9 @@ def main() -> int:
 
     total_globals = len(globals_list)
 
-    # Verify statistics if present
+    # ─────────────────────────────────────────────────────────────────────
+    # Step 1: Verify statistics match actual counts
+    # ─────────────────────────────────────────────────────────────────────
     errors = []
     if statistics:
         stated_total = statistics.get('total_globals', 0)
@@ -109,7 +144,57 @@ def main() -> int:
             if stated != actual:
                 errors.append(f"{status}: stated {stated}, actual {actual}")
 
+    # ─────────────────────────────────────────────────────────────────────
+    # Step 2: Baseline comparison (prevent regressions and unapproved adds)
+    # ─────────────────────────────────────────────────────────────────────
+    baseline_path = args.baseline or find_file(
+        args.path,
+        '.github/baseline_globals.yaml',
+        'baseline_globals.yaml',
+    )
+
+    baseline_errors = []
+    if baseline_path.exists():
+        try:
+            baseline = load_registry(baseline_path)
+            baseline_info = extract_globals_info(baseline)
+            current_info = extract_globals_info(registry)
+
+            # Check for new globals added without baseline update
+            new_globals = set(current_info.keys()) - set(baseline_info.keys())
+            if new_globals:
+                baseline_errors.append(
+                    f"New globals added without baseline review: {sorted(new_globals)}"
+                )
+
+            # Check for regressions (status going backwards)
+            for name, current_status in current_info.items():
+                if name in baseline_info:
+                    baseline_status = baseline_info[name]
+                    current_order = STATUS_ORDER.get(current_status, 0)
+                    baseline_order = STATUS_ORDER.get(baseline_status, 0)
+                    if current_order < baseline_order:
+                        baseline_errors.append(
+                            f"Regression: {name} went from '{baseline_status}' "
+                            f"to '{current_status}'"
+                        )
+
+            # Check for removed globals
+            removed_globals = set(baseline_info.keys()) - set(current_info.keys())
+            if removed_globals:
+                baseline_errors.append(
+                    f"Globals removed without baseline update: {sorted(removed_globals)}"
+                )
+
+        except Exception as e:
+            print(f"Warning: Could not load baseline: {e}", file=sys.stderr)
+    else:
+        if args.verbose:
+            print(f"Note: No baseline found at {baseline_path}")
+
+    # ─────────────────────────────────────────────────────────────────────
     # Report results
+    # ─────────────────────────────────────────────────────────────────────
     print("Globals Registry Status")
     print("=" * 50)
     print()
@@ -139,18 +224,27 @@ def main() -> int:
             print(f"  {priority:10}: {count}")
 
     # Report errors
-    if errors:
+    all_errors = errors + baseline_errors
+    if all_errors:
         print()
-        print("ERROR: Statistics mismatch!")
-        print()
-        for error in errors:
-            print(f"  - {error}")
-        print()
-        print("To fix: Update the statistics section in globals_registry.yaml")
+        if errors:
+            print("ERROR: Statistics mismatch!")
+            for error in errors:
+                print(f"  - {error}")
+            print()
+            print("To fix: Update the statistics section in globals_registry.yaml")
+
+        if baseline_errors:
+            print("ERROR: Baseline violations!")
+            for error in baseline_errors:
+                print(f"  - {error}")
+            print()
+            print("To fix: Update .github/baseline_globals.yaml after review")
+
         return 1
 
     print()
-    print("OK: Globals registry validation complete")
+    print("OK: Globals registry validation complete (no regressions)")
     return 0
 
 

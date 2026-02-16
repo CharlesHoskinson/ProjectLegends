@@ -178,6 +178,8 @@ set(AIBOX_CORE_SOURCES
     src/aibox/vision_annotations.cpp
     # Sprint 2 Phase 3: DMA Compatibility Shim
     src/hardware/dma_compat.cpp
+    # Sprint 2 PR #9: Memory accessor compat shim (MEM_GetBaseRef/MEM_GetSizeRef)
+    src/hardware/memory_compat.cpp
 )
 
 # Add headless stub when building without SDL
