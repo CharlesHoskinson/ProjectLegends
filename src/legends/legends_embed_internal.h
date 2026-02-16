@@ -13,60 +13,16 @@
 #ifndef LEGENDS_EMBED_INTERNAL_H
 #define LEGENDS_EMBED_INTERNAL_H
 
-#include <cstdint>
-#include <cstddef>
+// All types are now defined in instance_state.h (Sprint 2 extraction)
+#include "internal/instance_state.h"
 
 namespace legends::internal {
 
 // ============================================================================
-// Wire Format Constants (must match legends_embed_api.cpp)
+// Capacity Constants (convenience aliases)
 // ============================================================================
 
-constexpr size_t WIRE_INPUT_EVENT_SIZE = 24;  // type(1) + pad(7) + sequence(8) + data(8)
-constexpr size_t WIRE_DMA_CHANNEL_SIZE = 4;   // count(2) + flags(1) + pad(1)
-
-// ============================================================================
-// Input Event Types (must match legends_embed_api.cpp)
-// ============================================================================
-
-enum class InputEventType : uint8_t {
-    Key = 0,
-    Mouse = 1
-};
-
-struct InputEvent {
-    InputEventType type;
-    uint64_t sequence;
-    union {
-        struct {
-            uint8_t scancode;
-            bool is_down;
-            bool is_extended;
-        } key;
-        struct {
-            int16_t delta_x;
-            int16_t delta_y;
-            uint8_t buttons;
-        } mouse;
-    };
-};
-
-// ============================================================================
-// Serialization Functions (for testing portable format)
-// These are declared here but implemented in legends_embed_api.cpp
-// Link against the legends library to use them in tests.
-// ============================================================================
-
-// Portable serialization for InputEvent
-void serialize_input_event(uint8_t* dst, const InputEvent& evt);
-InputEvent deserialize_input_event(const uint8_t* src);
-
-// ============================================================================
-// Capacity Constants
-// ============================================================================
-
-constexpr size_t MAX_INPUT_EVENTS = 320;
-constexpr size_t EFFECTIVE_INPUT_CAPACITY = MAX_INPUT_EVENTS - 1;  // 319
+constexpr size_t EFFECTIVE_INPUT_CAPACITY = InputState::EFFECTIVE_CAPACITY;  // 319
 
 } // namespace legends::internal
 

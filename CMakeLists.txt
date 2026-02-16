@@ -370,6 +370,8 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_portable_serialize.cpp
         # Sprint 2: Global-to-Context Migration Wiring Tests
         tests/unit/test_sprint2_migration.cpp
+        # Sprint 2: Instance Migration TDD Tests
+        tests/unit/test_instance_migration.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)

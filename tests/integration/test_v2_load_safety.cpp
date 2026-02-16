@@ -19,9 +19,8 @@
  * - MAX_TEXT_CELLS = 80 * 50 = 4000
  * - MAX_INDEXED_PIXELS_SIZE = 4 * 1024 * 1024
  *
- * These tests are expected to FAIL initially because the V2 loader currently
- * lacks the bounds checks that the V3 loader has (e.g., the total_size
- * underflow check at line 2374 is V3-only).
+ * These tests guard against V2 regressions by exercising malformed buffers
+ * that previously slipped past legacy validation.
  */
 
 #include <gtest/gtest.h>
@@ -63,6 +62,33 @@ protected:
         // Set total_size
         std::memcpy(buf.data() + 8, &total_size, 4);
         return buf;
+    }
+
+    static void write_u16_le(std::vector<uint8_t>& buf, size_t offset, uint16_t value) {
+        buf[offset + 0] = static_cast<uint8_t>(value & 0xFF);
+        buf[offset + 1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+    }
+
+    static void write_u32_le(std::vector<uint8_t>& buf, size_t offset, uint32_t value) {
+        buf[offset + 0] = static_cast<uint8_t>(value & 0xFF);
+        buf[offset + 1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+        buf[offset + 2] = static_cast<uint8_t>((value >> 16) & 0xFF);
+        buf[offset + 3] = static_cast<uint8_t>((value >> 24) & 0xFF);
+    }
+
+    static uint32_t crc32_ieee(const uint8_t* data, size_t len) {
+        uint32_t crc = 0xFFFFFFFFu;
+        for (size_t i = 0; i < len; ++i) {
+            crc ^= data[i];
+            for (int bit = 0; bit < 8; ++bit) {
+                if (crc & 1u) {
+                    crc = (crc >> 1) ^ 0xEDB88320u;
+                } else {
+                    crc >>= 1;
+                }
+            }
+        }
+        return crc ^ 0xFFFFFFFFu;
     }
 };
 
@@ -185,5 +211,71 @@ TEST_F(V2LoadSafetyTest, RejectsExcessiveGfxDimensions) {
     std::memcpy(buf.data() + 8, &total_size, 4);
 
     auto err = legends_load_state(h_, buf.data(), buf.size());
+    EXPECT_NE(err, LEGENDS_OK);
+}
+
+// ---------------------------------------------------------------------------
+// Event queue payload must be fully inside declared total_size.
+// This crafts a valid V2 layout where event_queue header is in-bounds, but
+// event payload bytes start exactly at total_size (outside verified region).
+// ---------------------------------------------------------------------------
+TEST_F(V2LoadSafetyTest, RejectsEventQueuePayloadOutsideDeclaredSize) {
+    constexpr uint32_t total_size = 192;
+    constexpr uint32_t header_size = 64;
+
+    auto make_state = [=](uint32_t event_count) {
+        std::vector<uint8_t> buf(256, 0);  // Larger than declared total_size on purpose
+
+        // SaveStateHeader
+        V2LoadSafetyTest::write_u32_le(buf, 0, 0x53584244u);     // magic "DBXS"
+        V2LoadSafetyTest::write_u32_le(buf, 4, 2u);              // version V2
+        V2LoadSafetyTest::write_u32_le(buf, 8, total_size);      // declared verified size
+        V2LoadSafetyTest::write_u32_le(buf, 16, 64u);            // time_offset
+        V2LoadSafetyTest::write_u32_le(buf, 20, 88u);            // cpu_offset
+        V2LoadSafetyTest::write_u32_le(buf, 24, 104u);           // pic_offset
+        V2LoadSafetyTest::write_u32_le(buf, 28, 120u);           // dma_offset
+        V2LoadSafetyTest::write_u32_le(buf, 32, 184u);           // event_queue_offset (header fits, payload does not)
+        V2LoadSafetyTest::write_u32_le(buf, 36, 174u);           // input_offset (V2 input header)
+        V2LoadSafetyTest::write_u32_le(buf, 40, 152u);           // frame_offset
+        V2LoadSafetyTest::write_u32_le(buf, 44, 0u);             // engine_offset
+        V2LoadSafetyTest::write_u32_le(buf, 48, 0u);             // engine_size
+
+        // SaveStateFrameHeader at offset 152
+        buf[152] = 1;                          // is_text_mode
+        buf[153] = 1;                          // columns
+        buf[154] = 1;                          // rows
+        buf[155] = 0;                          // cursor_x
+        buf[156] = 0;                          // cursor_y
+        buf[157] = 1;                          // cursor_visible
+        buf[158] = 0;                          // active_page
+        buf[159] = 0;                          // _pad
+        V2LoadSafetyTest::write_u16_le(buf, 160, 0);             // gfx_width
+        V2LoadSafetyTest::write_u16_le(buf, 162, 0);             // gfx_height
+        V2LoadSafetyTest::write_u32_le(buf, 164, 2u);            // text_buffer_size
+        V2LoadSafetyTest::write_u32_le(buf, 168, 0u);            // indexed_pixels_size
+        V2LoadSafetyTest::write_u16_le(buf, 172, 0x0720u);       // one text cell
+
+        // SaveStateInputHeader_V2 at offset 174
+        V2LoadSafetyTest::write_u32_le(buf, 174, 0u);            // key_queue_size
+        V2LoadSafetyTest::write_u32_le(buf, 178, 0u);            // mouse_queue_size
+
+        // SaveStateEventQueueHeader at offset 184
+        V2LoadSafetyTest::write_u32_le(buf, 184, event_count);   // event_count
+        V2LoadSafetyTest::write_u32_le(buf, 188, 1u);            // next_event_id
+
+        // Checksum over [header_size, total_size)
+        const uint32_t checksum = V2LoadSafetyTest::crc32_ieee(buf.data() + header_size, total_size - header_size);
+        V2LoadSafetyTest::write_u32_le(buf, 12, checksum);
+
+        return buf;
+    };
+
+    // Control case: zero events means no event payload bytes required.
+    auto safe_state = make_state(0);
+    EXPECT_EQ(legends_load_state(h_, safe_state.data(), safe_state.size()), LEGENDS_OK);
+
+    // Failing case: one event requires payload bytes that are outside total_size.
+    auto unsafe_state = make_state(1);
+    auto err = legends_load_state(h_, unsafe_state.data(), unsafe_state.size());
     EXPECT_NE(err, LEGENDS_OK);
 }

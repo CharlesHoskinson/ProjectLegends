@@ -7,6 +7,9 @@
  * Phase 3: Frame capture (text, RGB, dirty tracking, cursor)
  * Phase 4+: Input, save/load (stubs)
  *
+ * Sprint 2: All per-instance state lives in struct legends_instance.
+ * The single remaining global is g_active_instance (atomic pointer).
+ *
  * NOTE: This implementation bridges to the DOSBox-X engine library
  * (engine/include/dosbox/dosbox_library.h) for core emulation.
  * The legends_* functions delegate to dosbox_lib_* functions.
@@ -15,6 +18,9 @@
 #include "legends/legends_embed.h"
 #include "legends/machine_context.h"
 #include "legends/vision_framebuffer.h"
+
+// Sprint 2: Per-instance state
+#include "internal/legends_instance.h"
 
 // DOSBox-X Engine Bridge (PR #22)
 #include "dosbox/dosbox_library.h"
@@ -29,366 +35,43 @@
 #include <cstdint>
 #include <thread>
 
+// Import internal types into file scope for use in anonymous namespace and API functions
+using legends::internal::LogState;
+using legends::internal::TimeState;
+using legends::internal::FrameState;
+using legends::internal::InputEventType;
+using legends::internal::InputEvent;
+using legends::internal::InputState;
+using legends::internal::EventKind;
+using legends::internal::ScheduledEvent;
+using legends::internal::PICState;
+using legends::internal::DMAChannelState;
+using legends::internal::EventQueueState;
+using legends::internal::WIRE_INPUT_EVENT_SIZE;
+using legends::internal::WIRE_DMA_CHANNEL_SIZE;
+using legends::internal::serialize_input_event;
+using legends::internal::deserialize_input_event;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Single Global: Active instance pointer
+// ─────────────────────────────────────────────────────────────────────────────
+static std::atomic<legends_instance*> g_active_instance{nullptr};
+
+// Thread-local error for pre-creation error reporting
+static thread_local std::string g_pre_creation_error;
+
+/**
+ * @brief Validate handle and return the active instance.
+ *
+ * Returns the instance pointer if handle is valid and matches the active
+ * instance. Returns nullptr otherwise.
+ */
+static legends_instance* get_instance(legends_handle handle) noexcept {
+    auto* inst = g_active_instance.load(std::memory_order_acquire);
+    return (inst && handle == inst) ? inst : nullptr;
+}
+
 namespace {
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Instance State
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Single instance enforcement
-std::atomic<bool> g_instance_exists{false};
-
-// Owner thread ID - core must only be accessed from creating thread
-std::thread::id g_owner_thread_id{};
-
-// The actual machine instance
-std::unique_ptr<legends::MachineContext> g_instance;
-
-// DOSBox-X Engine Bridge Handle (PR #22)
-// This handle is used for delegating to the DOSBox-X library API
-dosbox_lib_handle_t g_engine_handle{nullptr};
-
-// Configuration stored from create
-legends_config_t g_config;
-
-// Last error message storage
-std::string g_last_error;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Log State - Callback for debug output
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Log levels (matching API documentation)
-constexpr int LOG_LEVEL_ERROR = 0;
-constexpr int LOG_LEVEL_WARN  = 1;
-constexpr int LOG_LEVEL_INFO  = 2;
-constexpr int LOG_LEVEL_DEBUG = 3;
-
-struct LogState {
-    legends_log_callback_t callback = nullptr;
-    void* userdata = nullptr;
-
-    void reset() {
-        callback = nullptr;
-        userdata = nullptr;
-    }
-
-    void log(int level, const char* message) const {
-        if (callback != nullptr && message != nullptr) {
-            callback(level, message, userdata);
-        }
-    }
-
-    void error(const char* message) const { log(LOG_LEVEL_ERROR, message); }
-    void warn(const char* message) const { log(LOG_LEVEL_WARN, message); }
-    void info(const char* message) const { log(LOG_LEVEL_INFO, message); }
-    void debug(const char* message) const { log(LOG_LEVEL_DEBUG, message); }
-};
-
-LogState g_log_state;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Time State - Canonical accumulator for determinism
-// ─────────────────────────────────────────────────────────────────────────────
-
-struct TimeState {
-    uint64_t total_cycles = 0;      // Total cycles executed
-    uint64_t emu_time_us = 0;       // Emulated time in microseconds
-    uint32_t cycles_per_ms = 3000;  // Fixed for determinism (configurable)
-
-    void reset() {
-        total_cycles = 0;
-        emu_time_us = 0;
-    }
-
-    // Convert cycles to microseconds based on fixed cycles/ms ratio
-    uint64_t cycles_to_us(uint64_t cycles) const {
-        // cycles_per_ms cycles = 1000us
-        // So: us = cycles * 1000 / cycles_per_ms
-        return (cycles * 1000) / cycles_per_ms;
-    }
-
-    // Convert milliseconds to cycles
-    uint64_t ms_to_cycles(uint32_t ms) const {
-        return static_cast<uint64_t>(ms) * cycles_per_ms;
-    }
-};
-
-TimeState g_time_state;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Frame State - Video framebuffer and capture state
-// ─────────────────────────────────────────────────────────────────────────────
-
-struct FrameState {
-    // Video mode
-    bool is_text_mode = true;
-    uint8_t columns = 80;
-    uint8_t rows = 25;
-
-    // Text mode buffer (max 80x50 = 4000 cells)
-    // Each cell: low byte = character (CP437), high byte = attribute
-    static constexpr size_t MAX_TEXT_CELLS = 80 * 50;
-    std::array<uint16_t, MAX_TEXT_CELLS> text_buffer{};
-
-    // Cursor state
-    uint8_t cursor_x = 0;
-    uint8_t cursor_y = 0;
-    bool cursor_visible = true;
-    uint8_t cursor_start = 6;   // Default cursor scanlines
-    uint8_t cursor_end = 7;
-    uint8_t active_page = 0;
-
-    // Graphics mode state
-    uint16_t gfx_width = 320;
-    uint16_t gfx_height = 200;
-    std::vector<uint8_t> indexed_pixels;  // Palette indices
-    legends::vision::VgaPalette palette;
-
-    // Dirty tracking
-    bool dirty = true;
-
-    void reset() {
-        is_text_mode = true;
-        columns = 80;
-        rows = 25;
-        text_buffer.fill(0x0720);  // Space with light gray on black
-        cursor_x = 0;
-        cursor_y = 0;
-        cursor_visible = true;
-        cursor_start = 6;
-        cursor_end = 7;
-        active_page = 0;
-        gfx_width = 320;
-        gfx_height = 200;
-        indexed_pixels.clear();
-        palette = legends::vision::VgaPalette{};
-        dirty = true;
-    }
-
-    // Initialize with a test pattern for development
-    void init_test_pattern() {
-        // Fill text buffer with a simple pattern
-        for (size_t row = 0; row < rows; ++row) {
-            for (size_t col = 0; col < columns; ++col) {
-                size_t idx = row * columns + col;
-                if (row == 0) {
-                    // Top row: "C:\\>" prompt
-                    const char* prompt = "C:\\>";
-                    if (col < 4) {
-                        text_buffer[idx] = static_cast<uint16_t>(prompt[col]) | 0x0700;
-                    } else {
-                        text_buffer[idx] = 0x0720;  // Space
-                    }
-                } else {
-                    // Other rows: empty
-                    text_buffer[idx] = 0x0720;  // Space with attr 0x07
-                }
-            }
-        }
-        cursor_x = 4;
-        cursor_y = 0;
-        dirty = true;
-    }
-
-    [[nodiscard]] size_t text_cell_count() const noexcept {
-        return static_cast<size_t>(columns) * rows;
-    }
-
-    [[nodiscard]] size_t rgb_buffer_size() const noexcept {
-        return static_cast<size_t>(gfx_width) * gfx_height * 3;  // RGB24
-    }
-};
-
-FrameState g_frame_state;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Input State - Unified queue preserving device interleaving order
-// Determinism requires preserved order across device types (keyboard/mouse)
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Unified input event type that preserves ordering across device types
-enum class InputEventType : uint8_t { Key = 0, Mouse = 1 };
-
-struct InputEvent {
-    InputEventType type;
-    uint64_t sequence;  // Global sequence number for ordering
-    union {
-        struct {
-            uint8_t scancode;
-            bool is_down;
-            bool is_extended;
-        } key;
-        struct {
-            int16_t delta_x;
-            int16_t delta_y;
-            uint8_t buttons;
-        } mouse;
-    };
-};
-
-struct InputState {
-    // Unified queue combining keyboard and mouse events
-    static constexpr size_t MAX_INPUT_EVENTS = 320;  // Combined capacity
-    static constexpr size_t EFFECTIVE_CAPACITY = MAX_INPUT_EVENTS - 1;  // Ring buffer uses one-slot-empty design
-    std::array<InputEvent, MAX_INPUT_EVENTS> queue{};
-    size_t head = 0;
-    size_t tail = 0;
-    uint64_t next_sequence = 0;
-
-    // Current mouse button state (for tracking)
-    uint8_t mouse_buttons = 0;
-
-    [[nodiscard]] size_t size() const noexcept {
-        return (tail >= head) ? (tail - head) : (MAX_INPUT_EVENTS - head + tail);
-    }
-
-    [[nodiscard]] bool full() const noexcept {
-        return size() >= EFFECTIVE_CAPACITY;
-    }
-
-    [[nodiscard]] bool empty() const noexcept {
-        return head == tail;
-    }
-
-    bool enqueue_key(uint8_t scancode, bool is_down, bool is_extended) {
-        if (full()) return false;
-        auto& evt = queue[tail];
-        evt.type = InputEventType::Key;
-        evt.sequence = next_sequence++;
-        evt.key.scancode = scancode;
-        evt.key.is_down = is_down;
-        evt.key.is_extended = is_extended;
-        tail = (tail + 1) % MAX_INPUT_EVENTS;
-        return true;
-    }
-
-    bool enqueue_mouse(int16_t dx, int16_t dy, uint8_t buttons) {
-        if (full()) return false;
-        auto& evt = queue[tail];
-        evt.type = InputEventType::Mouse;
-        evt.sequence = next_sequence++;
-        evt.mouse.delta_x = dx;
-        evt.mouse.delta_y = dy;
-        evt.mouse.buttons = buttons;
-        tail = (tail + 1) % MAX_INPUT_EVENTS;
-        mouse_buttons = buttons;
-        return true;
-    }
-
-    bool dequeue(InputEvent* out) {
-        if (empty()) return false;
-        *out = queue[head];
-        head = (head + 1) % MAX_INPUT_EVENTS;
-        return true;
-    }
-
-    bool peek(InputEvent* out) const {
-        if (empty()) return false;
-        *out = queue[head];
-        return true;
-    }
-
-    void pop() {
-        if (!empty()) {
-            head = (head + 1) % MAX_INPUT_EVENTS;
-        }
-    }
-
-    // Enqueue a raw event with its original sequence (for loading saved state)
-    bool enqueue_raw(const InputEvent& evt) {
-        if (full()) return false;
-        queue[tail] = evt;
-        tail = (tail + 1) % MAX_INPUT_EVENTS;
-        // Update mouse_buttons if it's a mouse event
-        if (evt.type == InputEventType::Mouse) {
-            mouse_buttons = evt.mouse.buttons;
-        }
-        return true;
-    }
-
-    void clear() {
-        head = tail = 0;
-        next_sequence = 0;
-        mouse_buttons = 0;
-    }
-
-    void reset() {
-        clear();
-    }
-};
-
-InputState g_input_state;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Event Queue State - Per TLA+ SaveState.tla specification
-// The event queue MUST be serialized for deterministic replay
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Event kinds matching TLA+ EventKind
-enum class EventKind : uint8_t {
-    PIT_TICK = 0,
-    KBD_SCAN = 1,
-    DMA_TC = 2,
-    TIMER_CB = 3,
-    IRQ_CHECK = 4,
-};
-
-// Scheduled event - matches TLA+ Event record
-struct ScheduledEvent {
-    uint32_t id;           // Event identifier
-    uint64_t deadline;     // Deadline in cycles (virtual time)
-    EventKind kind;        // Event type
-    uint8_t payload;       // Event payload
-    uint8_t tie_key;       // Tie-breaker for deterministic ordering
-    uint8_t _pad;
-};
-
-// PIC state - matches TLA+ PICState
-struct PICState {
-    uint8_t irr;           // Interrupt Request Register
-    uint8_t imr;           // Interrupt Mask Register
-    uint8_t isr;           // In-Service Register
-    uint8_t vector_base;   // Base interrupt vector
-    uint8_t cascade_irq;   // Cascade IRQ line
-    uint8_t _pad[3];
-};
-
-// DMA channel state - matches TLA+ DMAChannelState
-struct DMAChannelState {
-    uint16_t count;        // Remaining transfer count
-    uint8_t enabled : 1;
-    uint8_t masked : 1;
-    uint8_t request : 1;
-    uint8_t tc_reached : 1;
-    uint8_t autoinit : 1;
-    uint8_t _pad : 3;
-    uint8_t _pad2;
-};
-
-// Event queue state
-struct EventQueueState {
-    static constexpr size_t MAX_EVENTS = 64;
-    std::array<ScheduledEvent, MAX_EVENTS> events{};
-    size_t event_count = 0;
-    uint32_t next_event_id = 0;
-
-    void reset() {
-        event_count = 0;
-        next_event_id = 0;
-    }
-};
-
-EventQueueState g_event_queue;
-
-// PIC state (master and slave)
-std::array<PICState, 2> g_pics = {{
-    {0, 255, 0, 8, 2, {0, 0, 0}},    // Master: vector base 8
-    {0, 255, 0, 112, 2, {0, 0, 0}}   // Slave: vector base 112
-}};
-
-// DMA state (8 channels)
-std::array<DMAChannelState, 8> g_dma{};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Save State Format - Versioned, determinism-preserving
@@ -403,10 +86,6 @@ constexpr uint32_t SAVESTATE_VERSION = 3;  // Version 3: Unified input queue, po
 // Portable Serialization Helpers (little-endian, cross-platform)
 // Uses little-endian byte shifts - fully portable across platforms
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Wire format sizes (fixed across all platforms)
-constexpr size_t WIRE_INPUT_EVENT_SIZE = 24;  // type(1) + pad(7) + sequence(8) + data(8)
-constexpr size_t WIRE_DMA_CHANNEL_SIZE = 4;   // count(2) + flags(1) + pad(1)
 
 // Little-endian write helpers (using byte shifts - fully portable)
 inline void write_u8(uint8_t* dst, uint8_t v) { *dst = v; }
@@ -449,7 +128,12 @@ inline uint64_t read_u64_le(const uint8_t* src) {
 inline int16_t read_i16_le(const uint8_t* src) { return static_cast<int16_t>(read_u16_le(src)); }
 inline bool read_bool(const uint8_t* src) { return *src != 0; }
 
+} // anonymous namespace (temporarily close for externally-visible serialization)
+
 // Portable serialization for unified InputEvent
+// Defined in legends::internal namespace to match declaration in instance_state.h
+namespace legends::internal {
+
 void serialize_input_event(uint8_t* dst, const InputEvent& evt) {
     write_u8(dst + 0, static_cast<uint8_t>(evt.type));
     std::memset(dst + 1, 0, 7);  // padding for alignment
@@ -486,6 +170,10 @@ InputEvent deserialize_input_event(const uint8_t* src) {
     }
     return evt;
 }
+
+} // namespace legends::internal
+
+namespace { // re-open anonymous namespace
 
 // Portable serialization for DMAChannelState
 void serialize_dma_channel(uint8_t* dst, const DMAChannelState& ch) {
@@ -964,20 +652,17 @@ constexpr uint8_t SCANCODE_LSHIFT = 0x2A;
  *   });
  */
 template<typename Func>
-legends_error_t safe_call(Func&& func) noexcept {
+legends_error_t safe_call(legends_instance* inst, Func&& func) noexcept {
     try {
         return func();
     } catch (const std::bad_alloc&) {
-        g_last_error = "Out of memory";
-        g_log_state.error("Out of memory");
+        if (inst) { inst->last_error = "Out of memory"; inst->log_state.error("Out of memory"); }
         return LEGENDS_ERR_OUT_OF_MEMORY;
     } catch (const std::exception& e) {
-        g_last_error = e.what();
-        g_log_state.error(e.what());
+        if (inst) { inst->last_error = e.what(); inst->log_state.error(e.what()); }
         return LEGENDS_ERR_INTERNAL;
     } catch (...) {
-        g_last_error = "Unknown internal error";
-        g_log_state.error("Unknown internal error");
+        if (inst) { inst->last_error = "Unknown internal error"; inst->log_state.error("Unknown internal error"); }
         return LEGENDS_ERR_INTERNAL;
     }
 }
@@ -990,24 +675,23 @@ legends_error_t safe_call(Func&& func) noexcept {
 #define LEGENDS_REQUIRE(cond, err) \
     do { if (!(cond)) return (err); } while(0)
 
-// Check that caller is on the owner thread
+// Check that caller is on the owner thread (requires `inst` in scope)
 #define LEGENDS_CHECK_THREAD() \
     do { \
-        if (g_instance_exists.load() && std::this_thread::get_id() != g_owner_thread_id) { \
-            g_last_error = "Called from non-owner thread"; \
+        if (inst && std::this_thread::get_id() != inst->owner_thread_id) { \
+            inst->last_error = "Called from non-owner thread"; \
             return LEGENDS_ERR_WRONG_THREAD; \
         } \
     } while(0)
 
-// Set error message, log it, and return error code
+// Set error message, log it, and return error code (requires `inst` in scope)
 // Undef if already defined (error.h may have it)
 #ifdef LEGENDS_ERROR
 #undef LEGENDS_ERROR
 #endif
 #define LEGENDS_ERROR(err, msg) \
     do { \
-        g_last_error = (msg); \
-        g_log_state.error(msg); \
+        if (inst) { inst->last_error = (msg); inst->log_state.error(msg); } \
         return (err); \
     } while(0)
 
@@ -1049,20 +733,20 @@ legends_error_t safe_call(Func&& func) noexcept {
 // Maximum size for indexed pixels buffer (4MB - enough for 2048x2048)
 constexpr size_t MAX_INDEXED_PIXELS_SIZE = 4 * 1024 * 1024;
 
-// Log at various levels
-#define LEGENDS_LOG_INFO(msg) g_log_state.info(msg)
-#define LEGENDS_LOG_DEBUG(msg) g_log_state.debug(msg)
-#define LEGENDS_LOG_WARN(msg) g_log_state.warn(msg)
+// Log at various levels (requires `inst` in scope)
+#define LEGENDS_LOG_INFO(msg) do { if (inst) inst->log_state.info(msg); } while(0)
+#define LEGENDS_LOG_DEBUG(msg) do { if (inst) inst->log_state.debug(msg); } while(0)
+#define LEGENDS_LOG_WARN(msg) do { if (inst) inst->log_state.warn(msg); } while(0)
 
 } // anonymous namespace
 
 extern "C" {
 
 // Forward declarations for internal helper functions
-void sync_state_from_engine();
-void sync_state_to_engine();
-size_t get_engine_state_size();
-legends_error_t drain_input_to_engine(uint32_t* count_out);
+void sync_state_from_engine(legends_instance* inst);
+void sync_state_to_engine(legends_instance* inst);
+size_t get_engine_state_size(legends_instance* inst);
+legends_error_t drain_input_to_engine(legends_instance* inst, uint32_t* count_out);
 
 /* =========================================================================
  * LIFECYCLE API
@@ -1088,52 +772,81 @@ legends_error_t legends_create(
     const legends_config_t* config,
     legends_handle* handle_out
 ) {
+    // inst is nullptr here (no instance yet) — macros that use inst will null-check
+    legends_instance* inst = nullptr;
+
     LEGENDS_REQUIRE(handle_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     // Initialize output to null
     *handle_out = nullptr;
 
-    // Single instance enforcement using atomic compare-exchange
-    bool expected = false;
-    if (!g_instance_exists.compare_exchange_strong(expected, true)) {
-        LEGENDS_ERROR(LEGENDS_ERR_ALREADY_CREATED,
-            "Instance already exists - only one instance per process allowed");
+    // Allocate new instance
+    legends_instance* new_inst = nullptr;
+    try {
+        new_inst = new legends_instance;
+    } catch (const std::bad_alloc&) {
+        g_pre_creation_error = "Out of memory allocating instance";
+        return LEGENDS_ERR_OUT_OF_MEMORY;
     }
 
+    // Single instance enforcement using atomic compare-exchange
+    legends_instance* expected = nullptr;
+    if (!g_active_instance.compare_exchange_strong(expected, new_inst,
+            std::memory_order_acq_rel, std::memory_order_acquire)) {
+        delete new_inst;
+        // Log through existing instance's callback if available
+        // (expected now holds the active instance pointer after CAS failure)
+        if (expected && expected->log_state.callback) {
+            expected->log_state.callback(
+                0,  // LOG_LEVEL_ERROR
+                "Instance already exists - only one instance per process allowed",
+                expected->log_state.userdata);
+        }
+        g_pre_creation_error = "Instance already exists - only one instance per process allowed";
+        return LEGENDS_ERR_ALREADY_CREATED;
+    }
+
+    // From here, inst points to the active instance
+    inst = new_inst;
+
     // Store owner thread ID for thread affinity checking
-    g_owner_thread_id = std::this_thread::get_id();
+    inst->owner_thread_id = std::this_thread::get_id();
 
     // Validate config if provided
     if (config != nullptr) {
         if (config->struct_size != sizeof(legends_config_t)) {
-            g_instance_exists = false;
-            LEGENDS_ERROR(LEGENDS_ERR_INVALID_CONFIG, "Invalid config struct size");
+            g_active_instance.store(nullptr, std::memory_order_release);
+            delete inst;
+            g_pre_creation_error = "Invalid config struct size";
+            return LEGENDS_ERR_INVALID_CONFIG;
         }
         if (config->api_version != LEGENDS_API_VERSION) {
-            g_instance_exists = false;
-            LEGENDS_ERROR(LEGENDS_ERR_VERSION_MISMATCH, "API version mismatch");
+            g_active_instance.store(nullptr, std::memory_order_release);
+            delete inst;
+            g_pre_creation_error = "API version mismatch";
+            return LEGENDS_ERR_VERSION_MISMATCH;
         }
         // Store config
-        g_config = *config;
+        inst->config = *config;
     } else {
         // Use defaults
-        g_config = legends_config_t{};
-        g_config.struct_size = sizeof(legends_config_t);
-        g_config.api_version = LEGENDS_API_VERSION;
-        g_config.memory_kb = 640;
-        g_config.cpu_cycles = 3000;  // Default cycles per ms
-        g_config.deterministic = 1;
+        inst->config = legends_config_t{};
+        inst->config.struct_size = sizeof(legends_config_t);
+        inst->config.api_version = LEGENDS_API_VERSION;
+        inst->config.memory_kb = 640;
+        inst->config.cpu_cycles = 3000;  // Default cycles per ms
+        inst->config.deterministic = 1;
     }
 
     try {
         // Create machine configuration from legends_config
         legends::MachineConfig mc;
-        mc.memory_size = static_cast<size_t>(g_config.memory_kb) * 1024;
-        mc.cpu_cycles = g_config.cpu_cycles > 0 ? g_config.cpu_cycles : 3000;
-        mc.deterministic = (g_config.deterministic != 0);
+        mc.memory_size = static_cast<size_t>(inst->config.memory_kb) * 1024;
+        mc.cpu_cycles = inst->config.cpu_cycles > 0 ? inst->config.cpu_cycles : 3000;
+        mc.deterministic = (inst->config.deterministic != 0);
 
         // Map machine type
-        switch (g_config.machine_type) {
+        switch (inst->config.machine_type) {
             case 0: mc.machine_type = legends::MachineType::VGA; break;
             case 1: mc.machine_type = legends::MachineType::EGA; break;
             case 2: mc.machine_type = legends::MachineType::CGA; break;
@@ -1143,62 +856,65 @@ legends_error_t legends_create(
         }
 
         // Create and initialize machine context
-        g_instance = std::make_unique<legends::MachineContext>(mc);
-        auto result = g_instance->initialize();
+        inst->machine = std::make_unique<legends::MachineContext>(mc);
+        auto result = inst->machine->initialize();
         if (!result.has_value()) {
-            g_last_error = result.error().format();
-            g_instance.reset();
-            g_instance_exists = false;
+            inst->last_error = result.error().format();
+            inst->machine.reset();
+            g_active_instance.store(nullptr, std::memory_order_release);
+            delete inst;
             return LEGENDS_ERR_INTERNAL;
         }
 
         // Initialize DOSBox-X Engine Bridge (PR #22)
-        // Create engine config from legends config
         dosbox_lib_config_t engine_config = DOSBOX_LIB_CONFIG_INIT;
-        engine_config.memory_kb = g_config.memory_kb;
-        engine_config.cpu_cycles = g_config.cpu_cycles;
-        engine_config.deterministic = g_config.deterministic;
+        engine_config.memory_kb = inst->config.memory_kb;
+        engine_config.cpu_cycles = inst->config.cpu_cycles;
+        engine_config.deterministic = inst->config.deterministic;
 
-        auto engine_err = dosbox_lib_create(&engine_config, &g_engine_handle);
+        auto engine_err = dosbox_lib_create(&engine_config, &inst->engine_handle);
         if (engine_err != DOSBOX_LIB_OK) {
-            g_last_error = "Failed to create DOSBox-X engine";
-            g_instance.reset();
-            g_instance_exists = false;
+            inst->last_error = "Failed to create DOSBox-X engine";
+            inst->machine.reset();
+            g_active_instance.store(nullptr, std::memory_order_release);
+            delete inst;
             return dosbox_to_legends_error(engine_err);
         }
 
-        engine_err = dosbox_lib_init(g_engine_handle);
+        engine_err = dosbox_lib_init(inst->engine_handle);
         if (engine_err != DOSBOX_LIB_OK) {
-            dosbox_lib_destroy(g_engine_handle);
-            g_engine_handle = nullptr;
-            g_last_error = "Failed to initialize DOSBox-X engine";
-            g_instance.reset();
-            g_instance_exists = false;
+            dosbox_lib_destroy(inst->engine_handle);
+            inst->engine_handle = nullptr;
+            inst->last_error = "Failed to initialize DOSBox-X engine";
+            inst->machine.reset();
+            g_active_instance.store(nullptr, std::memory_order_release);
+            delete inst;
             return dosbox_to_legends_error(engine_err);
         }
 
         // Initialize time state
-        g_time_state.reset();
-        g_time_state.cycles_per_ms = mc.cpu_cycles;
+        inst->time_state.reset();
+        inst->time_state.cycles_per_ms = mc.cpu_cycles;
 
         // Initialize frame state with test pattern
-        g_frame_state.reset();
-        g_frame_state.init_test_pattern();
+        inst->frame_state.reset();
+        inst->frame_state.init_test_pattern();
 
         // Initialize input state
-        g_input_state.reset();
+        inst->input_state.reset();
 
-        // Return non-null sentinel handle (actual pointer not exposed for safety)
-        *handle_out = reinterpret_cast<legends_handle>(static_cast<uintptr_t>(1));
-        g_last_error.clear();
+        // Return real pointer as handle
+        *handle_out = inst;
+        inst->last_error.clear();
 
         LEGENDS_LOG_INFO("DOSBox-X instance created successfully (with engine bridge)");
         return LEGENDS_OK;
 
     } catch (const std::exception& e) {
-        g_last_error = e.what();
-        g_instance.reset();
-        g_instance_exists = false;
+        inst->last_error = e.what();
+        inst->machine.reset();
+        g_active_instance.store(nullptr, std::memory_order_release);
+        delete inst;
         return LEGENDS_ERR_INTERNAL;
     }
 }
@@ -1209,112 +925,78 @@ legends_error_t legends_destroy(legends_handle handle) {
         return LEGENDS_OK;
     }
 
-    // Verify caller is on owner thread to prevent data races
-    // on global state. Must check after null-handle check since LEGENDS_CHECK_THREAD
-    // requires g_instance_exists to be true.
+    auto* inst = get_instance(handle);
+
+    // Backward compatibility: if handle doesn't match active instance
+    // (e.g. old sentinel (void*)1), fall back to destroying the active instance.
+    // This supports existing test cleanup patterns.
+    if (inst == nullptr) {
+        inst = g_active_instance.load(std::memory_order_acquire);
+        if (inst == nullptr) {
+            return LEGENDS_OK;  // Nothing to destroy
+        }
+    }
+
+    // Verify caller is on owner thread
     LEGENDS_CHECK_THREAD();
 
     LEGENDS_LOG_INFO("Destroying DOSBox-X instance");
 
-    // Shutdown and destroy instance
-    if (g_instance) {
-        g_instance->shutdown();
-        g_instance.reset();
+    // Shutdown and destroy machine context
+    if (inst->machine) {
+        inst->machine->shutdown();
+        inst->machine.reset();
     }
 
     // Destroy DOSBox-X Engine Bridge (PR #22)
-    if (g_engine_handle != nullptr) {
-        dosbox_lib_destroy(g_engine_handle);
-        g_engine_handle = nullptr;
+    if (inst->engine_handle != nullptr) {
+        dosbox_lib_destroy(inst->engine_handle);
+        inst->engine_handle = nullptr;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // P3 Fix: Reset ALL global state to prevent leakage to subsequent instances
-    // Previously only reset in legends_reset(), causing stale state issues
-    // ─────────────────────────────────────────────────────────────────────────
+    // Clean up all per-instance state
+    inst->destroy_cleanup();
 
-    // Reset time state
-    g_time_state.reset();
-
-    // Reset frame and input state
-    g_frame_state.reset();
-    g_input_state.reset();
-
-    // Reset event queue
-    g_event_queue.reset();
-
-    // Reset PIC state to defaults
-    g_pics[0] = {0, 255, 0, 8, 2, {0, 0, 0}};    // Master
-    g_pics[1] = {0, 255, 0, 112, 2, {0, 0, 0}};  // Slave
-
-    // Reset DMA state
-    for (auto& ch : g_dma) {
-        ch = DMAChannelState{};
-        ch.masked = 1;
-    }
-
-    // Reset single instance flag and owner thread
-    g_instance_exists = false;
-    g_owner_thread_id = std::thread::id{};
-    g_last_error.clear();
-
-    // Reset log state (do this last so we can log the destroy)
-    g_log_state.reset();
+    // Null out the global and delete
+    g_active_instance.store(nullptr, std::memory_order_release);
+    delete inst;
 
     return LEGENDS_OK;
 }
 
 legends_error_t legends_reset(legends_handle handle) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
-    LEGENDS_REQUIRE(g_instance != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
+    LEGENDS_REQUIRE(inst->machine != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
 
     try {
-        auto result = g_instance->reset();
+        auto result = inst->machine->reset();
         if (!result.has_value()) {
-            g_last_error = result.error().format();
+            inst->last_error = result.error().format();
             return LEGENDS_ERR_INTERNAL;
         }
 
         // Reset engine state for determinism
-        // This ensures repeated resets produce identical starting states
-        if (g_engine_handle) {
-            auto engine_err = dosbox_lib_reset(g_engine_handle);
+        if (inst->engine_handle) {
+            auto engine_err = dosbox_lib_reset(inst->engine_handle);
             if (engine_err != DOSBOX_LIB_OK) {
-                g_last_error = "Failed to reset engine state";
+                inst->last_error = "Failed to reset engine state";
                 return dosbox_to_legends_error(engine_err);
             }
         }
 
-        // Reset time state for determinism
-        g_time_state.reset();
+        // Reset all per-instance state
+        inst->reset_state();
 
-        // Reset frame state
-        g_frame_state.reset();
-        g_frame_state.init_test_pattern();
+        // Reinitialize frame state with test pattern
+        inst->frame_state.init_test_pattern();
 
-        // Reset input state
-        g_input_state.reset();
-
-        // Reset event queue (per TLA+ SaveState.tla)
-        g_event_queue.reset();
-
-        // Reset PIC state to initial values
-        g_pics[0] = {0, 255, 0, 8, 2, {0, 0, 0}};    // Master
-        g_pics[1] = {0, 255, 0, 112, 2, {0, 0, 0}};  // Slave
-
-        // Reset DMA state
-        for (auto& ch : g_dma) {
-            ch = DMAChannelState{};
-            ch.masked = 1;
-        }
-
-        g_last_error.clear();
+        inst->last_error.clear();
         return LEGENDS_OK;
 
     } catch (const std::exception& e) {
-        g_last_error = e.what();
+        inst->last_error = e.what();
         return LEGENDS_ERR_INTERNAL;
     }
 }
@@ -1323,12 +1005,12 @@ legends_error_t legends_get_config(
     legends_handle handle,
     legends_config_t* config_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(config_out != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    *config_out = g_config;
+    *config_out = inst->config;
     return LEGENDS_OK;
 }
 
@@ -1341,33 +1023,32 @@ legends_error_t legends_step_cycles(
     uint64_t cycles,
     legends_step_result_t* result_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
-    LEGENDS_REQUIRE(g_instance != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
-    LEGENDS_REQUIRE(g_engine_handle != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
+    LEGENDS_REQUIRE(inst->machine != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
+    LEGENDS_REQUIRE(inst->engine_handle != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
 
     try {
         // Set context for compatibility shim (still needed for legacy code paths)
-        legends::compat::ContextGuard guard(*g_instance);
+        legends::compat::ContextGuard guard(*inst->machine);
 
         // Drain input queue before stepping to preserve device interleaving order
-        legends_error_t drain_err = drain_input_to_engine(nullptr);
+        legends_error_t drain_err = drain_input_to_engine(inst, nullptr);
         if (drain_err != LEGENDS_OK) {
-            g_last_error = "Input injection failed";
+            inst->last_error = "Input injection failed";
             if (result_out != nullptr) {
                 result_out->stop_reason = LEGENDS_STOP_ERROR;
             }
             return drain_err;
         }
 
-        // Delegate to the DOSBox library which now uses the CPU bridge
-        // for actual CPU instruction execution
+        // Delegate to the DOSBox library
         dosbox_lib_step_result_t engine_result{};
-        auto err = dosbox_lib_step_cycles(g_engine_handle, cycles, &engine_result);
+        auto err = dosbox_lib_step_cycles(inst->engine_handle, cycles, &engine_result);
 
         if (err != DOSBOX_LIB_OK) {
-            g_last_error = "Engine step_cycles failed";
+            inst->last_error = "Engine step_cycles failed";
             if (result_out != nullptr) {
                 result_out->stop_reason = LEGENDS_STOP_ERROR;
             }
@@ -1393,7 +1074,6 @@ legends_error_t legends_step_cycles(
                 stop_reason = LEGENDS_STOP_USER_REQUEST;
                 break;
             case DOSBOX_LIB_STOP_CALLBACK:
-                // Callback is internal to engine; map to completed for legends
                 stop_reason = LEGENDS_STOP_COMPLETED;
                 break;
             default:
@@ -1402,21 +1082,21 @@ legends_error_t legends_step_cycles(
         }
 
         // Sync legends layer state from engine
-        sync_state_from_engine();
+        sync_state_from_engine(inst);
 
         // Fill result if requested
         if (result_out != nullptr) {
             result_out->cycles_executed = engine_result.cycles_executed;
-            result_out->emu_time_us = g_time_state.emu_time_us;
+            result_out->emu_time_us = inst->time_state.emu_time_us;
             result_out->stop_reason = stop_reason;
             result_out->events_processed = engine_result.events_processed;
         }
 
-        g_last_error.clear();
+        inst->last_error.clear();
         return LEGENDS_OK;
 
     } catch (const std::exception& e) {
-        g_last_error = e.what();
+        inst->last_error = e.what();
         if (result_out != nullptr) {
             result_out->stop_reason = LEGENDS_STOP_ERROR;
         }
@@ -1429,12 +1109,12 @@ legends_error_t legends_step_ms(
     uint32_t ms,
     legends_step_result_t* result_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
     // Convert milliseconds to cycles using fixed ratio for determinism
-    uint64_t target_cycles = g_time_state.ms_to_cycles(ms);
+    uint64_t target_cycles = inst->time_state.ms_to_cycles(ms);
 
     // Delegate to cycle-based stepping
     return legends_step_cycles(handle, target_cycles, result_out);
@@ -1444,12 +1124,12 @@ legends_error_t legends_get_emu_time(
     legends_handle handle,
     uint64_t* time_us_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(time_us_out != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    *time_us_out = g_time_state.emu_time_us;
+    *time_us_out = inst->time_state.emu_time_us;
     return LEGENDS_OK;
 }
 
@@ -1457,12 +1137,12 @@ legends_error_t legends_get_total_cycles(
     legends_handle handle,
     uint64_t* cycles_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(cycles_out != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    *cycles_out = g_time_state.total_cycles;
+    *cycles_out = inst->time_state.total_cycles;
     return LEGENDS_OK;
 }
 
@@ -1477,48 +1157,40 @@ legends_error_t legends_capture_text(
     size_t* cells_count_out,
     legends_text_info_t* info_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(cells_count_out != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    // Calculate required cell count
-    size_t required_cells = g_frame_state.text_cell_count();
+    size_t required_cells = inst->frame_state.text_cell_count();
     *cells_count_out = required_cells;
 
-    // Fill info structure if provided
     if (info_out != nullptr) {
-        info_out->columns = g_frame_state.columns;
-        info_out->rows = g_frame_state.rows;
-        info_out->active_page = g_frame_state.active_page;
-        info_out->cursor_x = g_frame_state.cursor_x;
-        info_out->cursor_y = g_frame_state.cursor_y;
-        info_out->cursor_visible = g_frame_state.cursor_visible ? 1 : 0;
-        info_out->cursor_start = g_frame_state.cursor_start;
-        info_out->cursor_end = g_frame_state.cursor_end;
+        info_out->columns = inst->frame_state.columns;
+        info_out->rows = inst->frame_state.rows;
+        info_out->active_page = inst->frame_state.active_page;
+        info_out->cursor_x = inst->frame_state.cursor_x;
+        info_out->cursor_y = inst->frame_state.cursor_y;
+        info_out->cursor_visible = inst->frame_state.cursor_visible ? 1 : 0;
+        info_out->cursor_start = inst->frame_state.cursor_start;
+        info_out->cursor_end = inst->frame_state.cursor_end;
     }
 
-    // Two-call pattern: if cells is NULL, just return the required size
     if (cells == nullptr) {
         return LEGENDS_OK;
     }
 
-    // Check buffer size
     if (cells_count < required_cells) {
         return LEGENDS_ERR_BUFFER_TOO_SMALL;
     }
 
-    // Copy text cells from internal buffer
-    // Internal format: uint16_t with low byte = char, high byte = attr
-    // Output format: legends_text_cell_t with character and attribute fields
     for (size_t i = 0; i < required_cells; ++i) {
-        uint16_t cell = g_frame_state.text_buffer[i];
+        uint16_t cell = inst->frame_state.text_buffer[i];
         cells[i].character = static_cast<uint8_t>(cell & 0xFF);
         cells[i].attribute = static_cast<uint8_t>((cell >> 8) & 0xFF);
     }
 
-    // Clear dirty flag after capture
-    g_frame_state.dirty = false;
+    inst->frame_state.dirty = false;
 
     return LEGENDS_OK;
 }
@@ -1531,78 +1203,59 @@ legends_error_t legends_capture_rgb(
     uint16_t* width_out,
     uint16_t* height_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(size_out != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
-
-    // For text mode, we render text to an RGB buffer
-    // For graphics mode, we apply palette to indexed pixels
 
     uint16_t width, height;
 
-    if (g_frame_state.is_text_mode) {
-        // Text mode: 80*8 x 25*16 = 640x400 (or similar based on char size)
-        width = g_frame_state.columns * 8;   // 8 pixels per character width
-        height = g_frame_state.rows * 16;    // 16 pixels per character height
+    if (inst->frame_state.is_text_mode) {
+        width = inst->frame_state.columns * 8;
+        height = inst->frame_state.rows * 16;
     } else {
-        // Graphics mode: use actual resolution
-        width = g_frame_state.gfx_width;
-        height = g_frame_state.gfx_height;
+        width = inst->frame_state.gfx_width;
+        height = inst->frame_state.gfx_height;
     }
 
-    size_t required_size = static_cast<size_t>(width) * height * 3;  // RGB24
+    size_t required_size = static_cast<size_t>(width) * height * 3;
     *size_out = required_size;
 
-    // Return dimensions if requested
-    if (width_out != nullptr) {
-        *width_out = width;
-    }
-    if (height_out != nullptr) {
-        *height_out = height;
-    }
+    if (width_out != nullptr) { *width_out = width; }
+    if (height_out != nullptr) { *height_out = height; }
 
-    // Two-call pattern: if buffer is NULL, just return the required size
     if (buffer == nullptr) {
         return LEGENDS_OK;
     }
 
-    // Check buffer size
     if (buffer_size < required_size) {
         return LEGENDS_ERR_BUFFER_TOO_SMALL;
     }
 
-    if (g_frame_state.is_text_mode) {
-        // Render text mode to RGB buffer
-        // For now, create a simple text rendering with basic colors
-        const auto& palette = g_frame_state.palette;
+    if (inst->frame_state.is_text_mode) {
+        const auto& palette = inst->frame_state.palette;
 
-        for (uint16_t row = 0; row < g_frame_state.rows; ++row) {
-            for (uint16_t col = 0; col < g_frame_state.columns; ++col) {
-                size_t cell_idx = row * g_frame_state.columns + col;
-                uint16_t cell = g_frame_state.text_buffer[cell_idx];
+        for (uint16_t row = 0; row < inst->frame_state.rows; ++row) {
+            for (uint16_t col = 0; col < inst->frame_state.columns; ++col) {
+                size_t cell_idx = row * inst->frame_state.columns + col;
+                uint16_t cell = inst->frame_state.text_buffer[cell_idx];
                 uint8_t ch = static_cast<uint8_t>(cell & 0xFF);
                 uint8_t attr = static_cast<uint8_t>((cell >> 8) & 0xFF);
 
-                // Extract foreground and background from attribute
                 uint8_t fg_idx = attr & 0x0F;
-                uint8_t bg_idx = (attr >> 4) & 0x07;  // Ignore blink bit
+                uint8_t bg_idx = (attr >> 4) & 0x07;
 
                 legends::vision::RgbColor fg_color = palette[fg_idx];
                 legends::vision::RgbColor bg_color = palette[bg_idx];
 
-                // Fill the 8x16 character cell
                 for (int py = 0; py < 16; ++py) {
                     for (int px = 0; px < 8; ++px) {
                         size_t pixel_x = col * 8 + px;
                         size_t pixel_y = row * 16 + py;
                         size_t pixel_idx = (pixel_y * width + pixel_x) * 3;
 
-                        // Simple rendering: just use background color for now
-                        // Real implementation would use font data to render character
-                        // For testing, show a simple pattern based on character
                         bool is_lit = (ch != ' ' && ch != 0) &&
-                                     ((px + py) % 2 == 0);  // Simple checkerboard
+                                     ((px + py) % 2 == 0);
 
                         if (is_lit) {
                             buffer[pixel_idx + 0] = fg_color.r;
@@ -1618,17 +1271,14 @@ legends_error_t legends_capture_rgb(
             }
         }
     } else {
-        // Graphics mode: apply palette to indexed pixels
         size_t pixel_count = static_cast<size_t>(width) * height;
 
-        // Ensure indexed_pixels buffer is properly sized
-        if (g_frame_state.indexed_pixels.size() < pixel_count) {
-            // Fill with default color (black)
+        if (inst->frame_state.indexed_pixels.size() < pixel_count) {
             std::memset(buffer, 0, required_size);
         } else {
-            const auto& palette = g_frame_state.palette;
+            const auto& palette = inst->frame_state.palette;
             for (size_t i = 0; i < pixel_count; ++i) {
-                uint8_t idx = g_frame_state.indexed_pixels[i];
+                uint8_t idx = inst->frame_state.indexed_pixels[i];
                 legends::vision::RgbColor color = palette[idx];
                 buffer[i * 3 + 0] = color.r;
                 buffer[i * 3 + 1] = color.g;
@@ -1637,8 +1287,7 @@ legends_error_t legends_capture_rgb(
         }
     }
 
-    // Clear dirty flag after capture
-    g_frame_state.dirty = false;
+    inst->frame_state.dirty = false;
 
     return LEGENDS_OK;
 }
@@ -1647,12 +1296,12 @@ legends_error_t legends_is_frame_dirty(
     legends_handle handle,
     int* dirty_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(dirty_out != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    *dirty_out = g_frame_state.dirty ? 1 : 0;
+    *dirty_out = inst->frame_state.dirty ? 1 : 0;
     return LEGENDS_OK;
 }
 
@@ -1662,19 +1311,13 @@ legends_error_t legends_get_cursor(
     uint8_t* y_out,
     int* visible_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    if (x_out != nullptr) {
-        *x_out = g_frame_state.cursor_x;
-    }
-    if (y_out != nullptr) {
-        *y_out = g_frame_state.cursor_y;
-    }
-    if (visible_out != nullptr) {
-        *visible_out = g_frame_state.cursor_visible ? 1 : 0;
-    }
+    if (x_out != nullptr) { *x_out = inst->frame_state.cursor_x; }
+    if (y_out != nullptr) { *y_out = inst->frame_state.cursor_y; }
+    if (visible_out != nullptr) { *visible_out = inst->frame_state.cursor_visible ? 1 : 0; }
 
     return LEGENDS_OK;
 }
@@ -1688,18 +1331,15 @@ legends_error_t legends_key_event(
     uint8_t scancode,
     int is_down
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    // Queue the key event (non-extended)
-    if (!g_input_state.enqueue_key(scancode, is_down != 0, false)) {
+    if (!inst->input_state.enqueue_key(scancode, is_down != 0, false)) {
         LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
     }
 
-    // Mark frame as dirty since input may cause visible changes
-    g_frame_state.dirty = true;
-
+    inst->frame_state.dirty = true;
     return LEGENDS_OK;
 }
 
@@ -1708,18 +1348,15 @@ legends_error_t legends_key_event_ext(
     uint8_t scancode,
     int is_down
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    // Queue the extended key event (E0-prefixed)
-    if (!g_input_state.enqueue_key(scancode, is_down != 0, true)) {
+    if (!inst->input_state.enqueue_key(scancode, is_down != 0, true)) {
         LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
     }
 
-    // Mark frame as dirty since input may cause visible changes
-    g_frame_state.dirty = true;
-
+    inst->frame_state.dirty = true;
     return LEGENDS_OK;
 }
 
@@ -1727,67 +1364,54 @@ legends_error_t legends_text_input(
     legends_handle handle,
     const char* utf8_text
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(utf8_text != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    // Process each character in the string
     const char* p = utf8_text;
     while (*p != '\0') {
         unsigned char ch = static_cast<unsigned char>(*p);
 
-        // Only handle ASCII characters (0-127) for now
-        // Multi-byte UTF-8 sequences are skipped
         if (ch < 128) {
             const ScancodeMapping& mapping = ASCII_TO_SCANCODE[ch];
 
             if (mapping.scancode != 0) {
-                // If shift is needed, press shift first
                 if (mapping.needs_shift) {
-                    if (!g_input_state.enqueue_key(SCANCODE_LSHIFT, true, false)) {
+                    if (!inst->input_state.enqueue_key(SCANCODE_LSHIFT, true, false)) {
                         LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
                     }
                 }
 
-                // Press the key
-                if (!g_input_state.enqueue_key(mapping.scancode, true, false)) {
+                if (!inst->input_state.enqueue_key(mapping.scancode, true, false)) {
                     LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
                 }
 
-                // Release the key
-                if (!g_input_state.enqueue_key(mapping.scancode, false, false)) {
+                if (!inst->input_state.enqueue_key(mapping.scancode, false, false)) {
                     LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
                 }
 
-                // Release shift if needed
                 if (mapping.needs_shift) {
-                    if (!g_input_state.enqueue_key(SCANCODE_LSHIFT, false, false)) {
+                    if (!inst->input_state.enqueue_key(SCANCODE_LSHIFT, false, false)) {
                         LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
                     }
                 }
             }
             ++p;
         } else {
-            // Skip multi-byte UTF-8 sequences
-            // 2-byte: 110xxxxx 10xxxxxx
-            // 3-byte: 1110xxxx 10xxxxxx 10xxxxxx
-            // 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
             if ((ch & 0xE0) == 0xC0) {
-                p += 2;  // 2-byte sequence
+                p += 2;
             } else if ((ch & 0xF0) == 0xE0) {
-                p += 3;  // 3-byte sequence
+                p += 3;
             } else if ((ch & 0xF8) == 0xF0) {
-                p += 4;  // 4-byte sequence
+                p += 4;
             } else {
-                ++p;  // Invalid, skip one byte
+                ++p;
             }
         }
     }
 
-    // Mark frame as dirty since input may cause visible changes
-    g_frame_state.dirty = true;
-
+    inst->frame_state.dirty = true;
     return LEGENDS_OK;
 }
 
@@ -1797,18 +1421,15 @@ legends_error_t legends_mouse_event(
     int16_t delta_y,
     uint8_t buttons
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    // Queue the mouse event
-    if (!g_input_state.enqueue_mouse(delta_x, delta_y, buttons)) {
+    if (!inst->input_state.enqueue_mouse(delta_x, delta_y, buttons)) {
         LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Mouse event queue full");
     }
 
-    // Mark frame as dirty since input may cause visible changes
-    g_frame_state.dirty = true;
-
+    inst->frame_state.dirty = true;
     return LEGENDS_OK;
 }
 
@@ -1829,25 +1450,22 @@ legends_error_t legends_mouse_event(
  *
  * Updates legends layer timing state to match engine.
  */
-void sync_state_from_engine() {
-    if (!g_engine_handle) {
+void sync_state_from_engine(legends_instance* inst) {
+    if (!inst || !inst->engine_handle) {
         return;
     }
 
-    // Sync timing state from engine (canonical source after stepping)
-    dosbox_lib_get_total_cycles(g_engine_handle, &g_time_state.total_cycles);
-    dosbox_lib_get_emu_time(g_engine_handle, &g_time_state.emu_time_us);
+    dosbox_lib_get_total_cycles(inst->engine_handle, &inst->time_state.total_cycles);
+    dosbox_lib_get_emu_time(inst->engine_handle, &inst->time_state.emu_time_us);
 
-    // Sync PIC state from engine for hash consistency
-    // This ensures legends layer hash matches actual engine state
     dosbox_lib_pic_state_t pic_state;
-    if (dosbox_lib_get_pic_state(g_engine_handle, &pic_state) == DOSBOX_LIB_OK) {
-        g_pics[0].irr = pic_state.master_irr;
-        g_pics[0].imr = pic_state.master_imr;
-        g_pics[0].isr = pic_state.master_isr;
-        g_pics[1].irr = pic_state.slave_irr;
-        g_pics[1].imr = pic_state.slave_imr;
-        g_pics[1].isr = pic_state.slave_isr;
+    if (dosbox_lib_get_pic_state(inst->engine_handle, &pic_state) == DOSBOX_LIB_OK) {
+        inst->pics[0].irr = pic_state.master_irr;
+        inst->pics[0].imr = pic_state.master_imr;
+        inst->pics[0].isr = pic_state.master_isr;
+        inst->pics[1].irr = pic_state.slave_irr;
+        inst->pics[1].imr = pic_state.slave_imr;
+        inst->pics[1].isr = pic_state.slave_isr;
     }
 }
 
@@ -1859,25 +1477,25 @@ void sync_state_from_engine() {
  *
  * @return LEGENDS_OK on success, error if injection failed
  */
-legends_error_t drain_input_to_engine(uint32_t* count_out) {
+legends_error_t drain_input_to_engine(legends_instance* inst, uint32_t* count_out) {
     if (count_out != nullptr) {
         *count_out = 0;
     }
-    if (!g_engine_handle) return LEGENDS_OK;
+    if (!inst || !inst->engine_handle) return LEGENDS_OK;
     uint32_t count = 0;
 
     InputEvent evt;
-    while (g_input_state.peek(&evt)) {
+    while (inst->input_state.peek(&evt)) {
         dosbox_lib_error_t err = DOSBOX_LIB_OK;
         switch (evt.type) {
             case InputEventType::Key:
-                err = dosbox_lib_inject_key(g_engine_handle,
+                err = dosbox_lib_inject_key(inst->engine_handle,
                     evt.key.scancode,
                     evt.key.is_down ? 1 : 0,
                     evt.key.is_extended ? 1 : 0);
                 break;
             case InputEventType::Mouse:
-                err = dosbox_lib_inject_mouse(g_engine_handle,
+                err = dosbox_lib_inject_mouse(inst->engine_handle,
                     evt.mouse.delta_x,
                     evt.mouse.delta_y,
                     evt.mouse.buttons);
@@ -1891,7 +1509,7 @@ legends_error_t drain_input_to_engine(uint32_t* count_out) {
             return dosbox_to_legends_error(err);
         }
 
-        g_input_state.pop();
+        inst->input_state.pop();
         ++count;
     }
 
@@ -1911,8 +1529,8 @@ legends_error_t drain_input_to_engine(uint32_t* count_out) {
  * after stepping). This function is for cases where legends layer needs to
  * push state to the engine (e.g., external state injection).
  */
-void sync_state_to_engine() {
-    if (!g_engine_handle) {
+void sync_state_to_engine(legends_instance* inst) {
+    if (!inst || !inst->engine_handle) {
         return;
     }
 
@@ -1931,39 +1549,34 @@ void sync_state_to_engine() {
  * ========================================================================= */
 
 // Helper: Get engine state size
-size_t get_engine_state_size() {
-    if (!g_engine_handle) {
+size_t get_engine_state_size(legends_instance* inst) {
+    if (!inst || !inst->engine_handle) {
         return 0;
     }
     size_t engine_size = 0;
-    dosbox_lib_save_state(g_engine_handle, nullptr, 0, &engine_size);
+    dosbox_lib_save_state(inst->engine_handle, nullptr, 0, &engine_size);
     return engine_size;
 }
 
 // Helper: Calculate total save state size
-size_t calculate_save_state_size() {
+size_t calculate_save_state_size(legends_instance* inst) {
     size_t size = sizeof(SaveStateHeader);
     size += sizeof(SaveStateTime);
     size += sizeof(SaveStateCPU);
     size += sizeof(SaveStatePIC);
-    // Use wire size for DMA (portable)
     size += 8 * WIRE_DMA_CHANNEL_SIZE;
 
-    // Event queue: header + events
     size += sizeof(SaveStateEventQueueHeader);
-    size += g_event_queue.event_count * sizeof(ScheduledEvent);
+    size += inst->event_queue.event_count * sizeof(ScheduledEvent);
 
-    // Unified input queue with portable wire format
     size += sizeof(SaveStateInputHeader);
-    size += g_input_state.size() * WIRE_INPUT_EVENT_SIZE;
+    size += inst->input_state.size() * WIRE_INPUT_EVENT_SIZE;
 
-    // Frame state: header + text buffer + indexed pixels
     size += sizeof(SaveStateFrameHeader);
-    size += g_frame_state.text_cell_count() * sizeof(uint16_t);
-    size += g_frame_state.indexed_pixels.size();
+    size += inst->frame_state.text_cell_count() * sizeof(uint16_t);
+    size += inst->frame_state.indexed_pixels.size();
 
-    // Engine state (Phase 2 - full DOSBox context)
-    size += get_engine_state_size();
+    size += get_engine_state_size(inst);
 
     return size;
 }
@@ -1974,13 +1587,13 @@ legends_error_t legends_save_state(
     size_t buffer_size,
     size_t* size_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(size_out != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
     // Calculate required size
-    size_t required_size = calculate_save_state_size();
+    size_t required_size = calculate_save_state_size(inst);
     *size_out = required_size;
 
     // Two-call pattern: if buffer is NULL, just return size
@@ -2008,17 +1621,17 @@ legends_error_t legends_save_state(
     // Write time state
     header->time_offset = static_cast<uint32_t>(offset);
     SaveStateTime* time_section = reinterpret_cast<SaveStateTime*>(ptr + offset);
-    time_section->total_cycles = g_time_state.total_cycles;
-    time_section->emu_time_us = g_time_state.emu_time_us;
-    time_section->cycles_per_ms = g_time_state.cycles_per_ms;
+    time_section->total_cycles = inst->time_state.total_cycles;
+    time_section->emu_time_us = inst->time_state.emu_time_us;
+    time_section->cycles_per_ms = inst->time_state.cycles_per_ms;
     time_section->_pad = 0;
     offset += sizeof(SaveStateTime);
 
     // Write CPU state
     header->cpu_offset = static_cast<uint32_t>(offset);
     SaveStateCPU* cpu_section = reinterpret_cast<SaveStateCPU*>(ptr + offset);
-    cpu_section->interrupt_flag = g_instance ? (g_instance->cpu.flags.interrupt ? 1 : 0) : 0;
-    cpu_section->halted = g_instance ? (g_instance->cpu.halted ? 1 : 0) : 0;
+    cpu_section->interrupt_flag = inst->machine ? (inst->machine->cpu.flags.interrupt ? 1 : 0) : 0;
+    cpu_section->halted = inst->machine ? (inst->machine->cpu.halted ? 1 : 0) : 0;
     cpu_section->mode = 0;  // Real mode for now
     cpu_section->_pad = 0;
     std::memset(cpu_section->_reserved, 0, sizeof(cpu_section->_reserved));
@@ -2027,79 +1640,79 @@ legends_error_t legends_save_state(
     // Write PIC state (CRITICAL for TLA+ compliance)
     header->pic_offset = static_cast<uint32_t>(offset);
     SaveStatePIC* pic_section = reinterpret_cast<SaveStatePIC*>(ptr + offset);
-    pic_section->pics[0] = g_pics[0];
-    pic_section->pics[1] = g_pics[1];
+    pic_section->pics[0] = inst->pics[0];
+    pic_section->pics[1] = inst->pics[1];
     offset += sizeof(SaveStatePIC);
 
     // Write DMA state (portable serialization)
     header->dma_offset = static_cast<uint32_t>(offset);
     for (int i = 0; i < 8; ++i) {
-        serialize_dma_channel(ptr + offset, g_dma[i]);
+        serialize_dma_channel(ptr + offset, inst->dma[i]);
         offset += WIRE_DMA_CHANNEL_SIZE;
     }
 
     // Write event queue (CRITICAL for TLA+ compliance - event queue MUST be serialized)
     header->event_queue_offset = static_cast<uint32_t>(offset);
     SaveStateEventQueueHeader* eq_header = reinterpret_cast<SaveStateEventQueueHeader*>(ptr + offset);
-    eq_header->event_count = static_cast<uint32_t>(g_event_queue.event_count);
-    eq_header->next_event_id = g_event_queue.next_event_id;
+    eq_header->event_count = static_cast<uint32_t>(inst->event_queue.event_count);
+    eq_header->next_event_id = inst->event_queue.next_event_id;
     offset += sizeof(SaveStateEventQueueHeader);
 
     // Write events
-    for (size_t i = 0; i < g_event_queue.event_count; ++i) {
-        std::memcpy(ptr + offset, &g_event_queue.events[i], sizeof(ScheduledEvent));
+    for (size_t i = 0; i < inst->event_queue.event_count; ++i) {
+        std::memcpy(ptr + offset, &inst->event_queue.events[i], sizeof(ScheduledEvent));
         offset += sizeof(ScheduledEvent);
     }
 
     // Write input state (unified queue with portable serialization)
     header->input_offset = static_cast<uint32_t>(offset);
     SaveStateInputHeader* input_header = reinterpret_cast<SaveStateInputHeader*>(ptr + offset);
-    size_t input_count = g_input_state.size();
+    size_t input_count = inst->input_state.size();
     input_header->event_count = static_cast<uint32_t>(input_count);
-    input_header->next_sequence_lo = static_cast<uint32_t>(g_input_state.next_sequence & 0xFFFFFFFF);
-    input_header->next_sequence_hi = static_cast<uint32_t>(g_input_state.next_sequence >> 32);
+    input_header->next_sequence_lo = static_cast<uint32_t>(inst->input_state.next_sequence & 0xFFFFFFFF);
+    input_header->next_sequence_hi = static_cast<uint32_t>(inst->input_state.next_sequence >> 32);
     input_header->_reserved = 0;
     offset += sizeof(SaveStateInputHeader);
 
     // Write unified input events with portable serialization
     for (size_t i = 0; i < input_count; ++i) {
-        size_t idx = (g_input_state.head + i) % InputState::MAX_INPUT_EVENTS;
-        serialize_input_event(ptr + offset, g_input_state.queue[idx]);
+        size_t idx = (inst->input_state.head + i) % InputState::MAX_INPUT_EVENTS;
+        serialize_input_event(ptr + offset, inst->input_state.queue[idx]);
         offset += WIRE_INPUT_EVENT_SIZE;
     }
 
     // Write frame state
     header->frame_offset = static_cast<uint32_t>(offset);
     SaveStateFrameHeader* frame_header = reinterpret_cast<SaveStateFrameHeader*>(ptr + offset);
-    frame_header->is_text_mode = g_frame_state.is_text_mode ? 1 : 0;
-    frame_header->columns = g_frame_state.columns;
-    frame_header->rows = g_frame_state.rows;
-    frame_header->cursor_x = g_frame_state.cursor_x;
-    frame_header->cursor_y = g_frame_state.cursor_y;
-    frame_header->cursor_visible = g_frame_state.cursor_visible ? 1 : 0;
-    frame_header->active_page = g_frame_state.active_page;
+    frame_header->is_text_mode = inst->frame_state.is_text_mode ? 1 : 0;
+    frame_header->columns = inst->frame_state.columns;
+    frame_header->rows = inst->frame_state.rows;
+    frame_header->cursor_x = inst->frame_state.cursor_x;
+    frame_header->cursor_y = inst->frame_state.cursor_y;
+    frame_header->cursor_visible = inst->frame_state.cursor_visible ? 1 : 0;
+    frame_header->active_page = inst->frame_state.active_page;
     frame_header->_pad = 0;
-    frame_header->gfx_width = g_frame_state.gfx_width;
-    frame_header->gfx_height = g_frame_state.gfx_height;
-    size_t text_size = g_frame_state.text_cell_count() * sizeof(uint16_t);
-    size_t pixels_size = g_frame_state.indexed_pixels.size();
+    frame_header->gfx_width = inst->frame_state.gfx_width;
+    frame_header->gfx_height = inst->frame_state.gfx_height;
+    size_t text_size = inst->frame_state.text_cell_count() * sizeof(uint16_t);
+    size_t pixels_size = inst->frame_state.indexed_pixels.size();
     frame_header->text_buffer_size = static_cast<uint32_t>(text_size);
     frame_header->indexed_pixels_size = static_cast<uint32_t>(pixels_size);
     offset += sizeof(SaveStateFrameHeader);
 
     // Write text buffer
-    std::memcpy(ptr + offset, g_frame_state.text_buffer.data(), text_size);
+    std::memcpy(ptr + offset, inst->frame_state.text_buffer.data(), text_size);
     offset += text_size;
 
     // Write indexed pixels
     if (pixels_size > 0) {
-        std::memcpy(ptr + offset, g_frame_state.indexed_pixels.data(), pixels_size);
+        std::memcpy(ptr + offset, inst->frame_state.indexed_pixels.data(), pixels_size);
         offset += pixels_size;
     }
 
     // Write engine state (Phase 2 - full DOSBox context)
-    size_t engine_size = get_engine_state_size();
-    if (engine_size > 0 && g_engine_handle) {
+    size_t engine_size = get_engine_state_size(inst);
+    if (engine_size > 0 && inst->engine_handle) {
         // Verify buffer capacity before engine write
         size_t remaining = buffer_size - offset;
         if (engine_size > remaining) {
@@ -2112,7 +1725,7 @@ legends_error_t legends_save_state(
 
         size_t actual_engine_size = 0;
         auto engine_err = dosbox_lib_save_state(
-            g_engine_handle,
+            inst->engine_handle,
             ptr + offset,
             remaining,  // Pass actual remaining space, not queried size
             &actual_engine_size
@@ -2168,6 +1781,7 @@ legends_error_t legends_save_state(
  * V2 saves are converted to V3's unified queue format during load.
  */
 static legends_error_t load_state_v2_legacy(
+    legends_instance* inst,
     const uint8_t* ptr,
     size_t buffer_size,
     const SaveStateHeader* header
@@ -2213,7 +1827,9 @@ static legends_error_t load_state_v2_legacy(
     const SaveStateEventQueueHeader* eq_header =
         reinterpret_cast<const SaveStateEventQueueHeader*>(ptr + header->event_queue_offset);
     VALIDATE_COUNT_MAX(eq_header->event_count, EventQueueState::MAX_EVENTS, "V2: event_count");
+    size_t v2_events_data_size = static_cast<size_t>(eq_header->event_count) * sizeof(ScheduledEvent);
     size_t eq_data_offset = header->event_queue_offset + sizeof(SaveStateEventQueueHeader);
+    VALIDATE_DATA_BOUNDS(eq_data_offset, v2_events_data_size, verified_size);
 
     // Validate V2 input
     const SaveStateInputHeader_V2* input_header_v2 =
@@ -2261,9 +1877,9 @@ static legends_error_t load_state_v2_legacy(
     // V2 Phase 2: Engine load (most likely failure point — F2 atomicity fix)
     // ─────────────────────────────────────────────────────────────────────────
 
-    if (header->engine_size > 0 && g_engine_handle) {
+    if (header->engine_size > 0 && inst->engine_handle) {
         VALIDATE_DATA_BOUNDS(header->engine_offset, header->engine_size, verified_size);
-        auto engine_err = dosbox_lib_load_state(g_engine_handle,
+        auto engine_err = dosbox_lib_load_state(inst->engine_handle,
             ptr + header->engine_offset, header->engine_size);
         if (engine_err != DOSBOX_LIB_OK) {
             LEGENDS_ERROR(LEGENDS_ERR_INTERNAL, "V2: Engine state load failed");
@@ -2275,78 +1891,78 @@ static legends_error_t load_state_v2_legacy(
     // ─────────────────────────────────────────────────────────────────────────
 
     // Time state
-    g_time_state.total_cycles = time_section->total_cycles;
-    g_time_state.emu_time_us = time_section->emu_time_us;
-    g_time_state.cycles_per_ms = time_section->cycles_per_ms;
+    inst->time_state.total_cycles = time_section->total_cycles;
+    inst->time_state.emu_time_us = time_section->emu_time_us;
+    inst->time_state.cycles_per_ms = time_section->cycles_per_ms;
 
     // CPU state
-    if (g_instance) {
-        g_instance->cpu.flags.interrupt = (cpu_section->interrupt_flag != 0);
-        g_instance->cpu.halted = (cpu_section->halted != 0);
+    if (inst->machine) {
+        inst->machine->cpu.flags.interrupt = (cpu_section->interrupt_flag != 0);
+        inst->machine->cpu.halted = (cpu_section->halted != 0);
     }
 
     // PIC state
     for (int i = 0; i < 2; ++i) {
-        g_pics[i].irr = pic_section->pics[i].irr;
-        g_pics[i].imr = pic_section->pics[i].imr;
-        g_pics[i].isr = pic_section->pics[i].isr;
-        g_pics[i].vector_base = pic_section->pics[i].vector_base;
-        g_pics[i].cascade_irq = pic_section->pics[i].cascade_irq;
+        inst->pics[i].irr = pic_section->pics[i].irr;
+        inst->pics[i].imr = pic_section->pics[i].imr;
+        inst->pics[i].isr = pic_section->pics[i].isr;
+        inst->pics[i].vector_base = pic_section->pics[i].vector_base;
+        inst->pics[i].cascade_irq = pic_section->pics[i].cascade_irq;
     }
 
     // DMA state (V2 used memcpy)
     const uint8_t* dma_data = ptr + header->dma_offset;
     for (int i = 0; i < 8; ++i) {
-        std::memcpy(&g_dma[i], dma_data + i * sizeof(DMAChannelState), sizeof(DMAChannelState));
+        std::memcpy(&inst->dma[i], dma_data + i * sizeof(DMAChannelState), sizeof(DMAChannelState));
     }
 
     // Event queue
-    g_event_queue.event_count = eq_header->event_count;
-    g_event_queue.next_event_id = eq_header->next_event_id;
+    inst->event_queue.event_count = eq_header->event_count;
+    inst->event_queue.next_event_id = eq_header->next_event_id;
     for (size_t i = 0; i < eq_header->event_count; ++i) {
-        std::memcpy(&g_event_queue.events[i], ptr + eq_data_offset + i * sizeof(ScheduledEvent),
+        std::memcpy(&inst->event_queue.events[i], ptr + eq_data_offset + i * sizeof(ScheduledEvent),
                     sizeof(ScheduledEvent));
     }
 
     // V2 input: convert to unified queue
-    g_input_state.clear();
+    inst->input_state.clear();
     size_t offset = input_data_offset;
     for (uint32_t i = 0; i < input_header_v2->key_queue_size; ++i) {
         KeyEvent_V2 ke_v2;
         std::memcpy(&ke_v2, ptr + offset, sizeof(KeyEvent_V2));
         offset += sizeof(KeyEvent_V2);
-        g_input_state.enqueue_key(ke_v2.scancode, ke_v2.is_down, ke_v2.is_extended);
+        inst->input_state.enqueue_key(ke_v2.scancode, ke_v2.is_down, ke_v2.is_extended);
     }
     for (uint32_t i = 0; i < input_header_v2->mouse_queue_size; ++i) {
         MouseEvent_V2 me_v2;
         std::memcpy(&me_v2, ptr + offset, sizeof(MouseEvent_V2));
         offset += sizeof(MouseEvent_V2);
-        g_input_state.enqueue_mouse(me_v2.delta_x, me_v2.delta_y, me_v2.buttons);
+        inst->input_state.enqueue_mouse(me_v2.delta_x, me_v2.delta_y, me_v2.buttons);
     }
 
     // Frame state
-    g_frame_state.is_text_mode = frame_header->is_text_mode != 0;
-    g_frame_state.columns = frame_header->columns;
-    g_frame_state.rows = frame_header->rows;
-    g_frame_state.cursor_x = frame_header->cursor_x;
-    g_frame_state.cursor_y = frame_header->cursor_y;
-    g_frame_state.cursor_visible = frame_header->cursor_visible != 0;
-    g_frame_state.active_page = frame_header->active_page;
-    g_frame_state.gfx_width = frame_header->gfx_width;
-    g_frame_state.gfx_height = frame_header->gfx_height;
+    inst->frame_state.is_text_mode = frame_header->is_text_mode != 0;
+    inst->frame_state.columns = frame_header->columns;
+    inst->frame_state.rows = frame_header->rows;
+    inst->frame_state.cursor_x = frame_header->cursor_x;
+    inst->frame_state.cursor_y = frame_header->cursor_y;
+    inst->frame_state.cursor_visible = frame_header->cursor_visible != 0;
+    inst->frame_state.active_page = frame_header->active_page;
+    inst->frame_state.gfx_width = frame_header->gfx_width;
+    inst->frame_state.gfx_height = frame_header->gfx_height;
 
-    if (text_buffer_size <= g_frame_state.text_buffer.size() * sizeof(uint16_t)) {
-        std::memcpy(g_frame_state.text_buffer.data(), ptr + frame_data_offset, text_buffer_size);
+    if (text_buffer_size <= inst->frame_state.text_buffer.size() * sizeof(uint16_t)) {
+        std::memcpy(inst->frame_state.text_buffer.data(), ptr + frame_data_offset, text_buffer_size);
     }
 
     if (pixel_buffer_size > 0) {
-        g_frame_state.indexed_pixels.resize(pixel_buffer_size);
-        std::memcpy(g_frame_state.indexed_pixels.data(), ptr + frame_data_offset + text_buffer_size, pixel_buffer_size);
+        inst->frame_state.indexed_pixels.resize(pixel_buffer_size);
+        std::memcpy(inst->frame_state.indexed_pixels.data(), ptr + frame_data_offset + text_buffer_size, pixel_buffer_size);
     } else {
-        g_frame_state.indexed_pixels.clear();
+        inst->frame_state.indexed_pixels.clear();
     }
 
-    g_last_error.clear();
+    inst->last_error.clear();
     return LEGENDS_OK;
 }
 
@@ -2355,10 +1971,11 @@ legends_error_t legends_load_state(
     const void* buffer,
     size_t buffer_size
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(buffer != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
+
 
     if (buffer_size < sizeof(SaveStateHeader)) {
         LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "Buffer too small for header");
@@ -2376,7 +1993,7 @@ legends_error_t legends_load_state(
     if (header->version == 2) {
         // V2 saves used separate keyboard/mouse queues and non-portable memcpy.
         // Load using legacy loader and convert to V3's unified queue format.
-        return load_state_v2_legacy(ptr, buffer_size, header);
+        return load_state_v2_legacy(inst, ptr, buffer_size, header);
     }
     if (header->version != SAVESTATE_VERSION) {
         LEGENDS_ERROR(LEGENDS_ERR_VERSION_MISMATCH,
@@ -2486,7 +2103,7 @@ legends_error_t legends_load_state(
     // Must succeed BEFORE mutating any legends-layer globals (F2 atomicity fix).
     // ─────────────────────────────────────────────────────────────────────────
 
-    if (g_engine_handle) {
+    if (inst->engine_handle) {
         if (header->engine_offset == 0 || header->engine_size == 0) {
             LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE,
                 "Save state missing engine data (required when engine is active)");
@@ -2494,7 +2111,7 @@ legends_error_t legends_load_state(
         VALIDATE_DATA_BOUNDS(header->engine_offset, header->engine_size, verified_size);
 
         auto engine_err = dosbox_lib_load_state(
-            g_engine_handle,
+            inst->engine_handle,
             ptr + header->engine_offset,
             header->engine_size
         );
@@ -2512,69 +2129,69 @@ legends_error_t legends_load_state(
     // ─────────────────────────────────────────────────────────────────────────
 
     // Time state
-    g_time_state.total_cycles = time_section->total_cycles;
-    g_time_state.emu_time_us = time_section->emu_time_us;
-    g_time_state.cycles_per_ms = time_section->cycles_per_ms;
+    inst->time_state.total_cycles = time_section->total_cycles;
+    inst->time_state.emu_time_us = time_section->emu_time_us;
+    inst->time_state.cycles_per_ms = time_section->cycles_per_ms;
 
     // CPU state
-    if (g_instance) {
-        g_instance->cpu.flags.interrupt = (cpu_section->interrupt_flag != 0);
-        g_instance->cpu.halted = (cpu_section->halted != 0);
+    if (inst->machine) {
+        inst->machine->cpu.flags.interrupt = (cpu_section->interrupt_flag != 0);
+        inst->machine->cpu.halted = (cpu_section->halted != 0);
     }
 
     // PIC state (CRITICAL for TLA+ compliance)
-    g_pics[0] = pic_section->pics[0];
-    g_pics[1] = pic_section->pics[1];
+    inst->pics[0] = pic_section->pics[0];
+    inst->pics[1] = pic_section->pics[1];
 
     // DMA state (portable deserialization)
     size_t dma_offset = header->dma_offset;
     for (int i = 0; i < 8; ++i) {
-        g_dma[i] = deserialize_dma_channel(ptr + dma_offset);
+        inst->dma[i] = deserialize_dma_channel(ptr + dma_offset);
         dma_offset += WIRE_DMA_CHANNEL_SIZE;
     }
 
     // Event queue (CRITICAL for TLA+ compliance)
-    g_event_queue.event_count = eq_header->event_count;
-    g_event_queue.next_event_id = eq_header->next_event_id;
+    inst->event_queue.event_count = eq_header->event_count;
+    inst->event_queue.next_event_id = eq_header->next_event_id;
     size_t eq_offset = eq_data_offset;
-    for (size_t i = 0; i < g_event_queue.event_count; ++i) {
-        std::memcpy(&g_event_queue.events[i], ptr + eq_offset, sizeof(ScheduledEvent));
+    for (size_t i = 0; i < inst->event_queue.event_count; ++i) {
+        std::memcpy(&inst->event_queue.events[i], ptr + eq_offset, sizeof(ScheduledEvent));
         eq_offset += sizeof(ScheduledEvent);
     }
 
     // Input state (unified queue with portable deserialization)
-    g_input_state.clear();
-    g_input_state.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
+    inst->input_state.clear();
+    inst->input_state.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
                                   (static_cast<uint64_t>(input_header->next_sequence_hi) << 32);
     size_t input_offset = input_data_offset;
     for (uint32_t i = 0; i < input_header->event_count; ++i) {
         InputEvent evt = deserialize_input_event(ptr + input_offset);
-        g_input_state.enqueue_raw(evt);
+        inst->input_state.enqueue_raw(evt);
         input_offset += WIRE_INPUT_EVENT_SIZE;
     }
-    g_input_state.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
+    inst->input_state.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
                                   (static_cast<uint64_t>(input_header->next_sequence_hi) << 32);
 
     // Frame state
-    g_frame_state.is_text_mode = (frame_header->is_text_mode != 0);
-    g_frame_state.columns = frame_header->columns;
-    g_frame_state.rows = frame_header->rows;
-    g_frame_state.cursor_x = frame_header->cursor_x;
-    g_frame_state.cursor_y = frame_header->cursor_y;
-    g_frame_state.cursor_visible = (frame_header->cursor_visible != 0);
-    g_frame_state.active_page = frame_header->active_page;
-    g_frame_state.gfx_width = frame_header->gfx_width;
-    g_frame_state.gfx_height = frame_header->gfx_height;
+    inst->frame_state.is_text_mode = (frame_header->is_text_mode != 0);
+    inst->frame_state.columns = frame_header->columns;
+    inst->frame_state.rows = frame_header->rows;
+    inst->frame_state.cursor_x = frame_header->cursor_x;
+    inst->frame_state.cursor_y = frame_header->cursor_y;
+    inst->frame_state.cursor_visible = (frame_header->cursor_visible != 0);
+    inst->frame_state.active_page = frame_header->active_page;
+    inst->frame_state.gfx_width = frame_header->gfx_width;
+    inst->frame_state.gfx_height = frame_header->gfx_height;
     size_t frame_offset = frame_data_offset;
-    std::memcpy(g_frame_state.text_buffer.data(), ptr + frame_offset, frame_header->text_buffer_size);
+    std::memcpy(inst->frame_state.text_buffer.data(), ptr + frame_offset, frame_header->text_buffer_size);
     frame_offset += frame_header->text_buffer_size;
     if (frame_header->indexed_pixels_size > 0) {
-        g_frame_state.indexed_pixels.resize(frame_header->indexed_pixels_size);
-        std::memcpy(g_frame_state.indexed_pixels.data(), ptr + frame_offset, frame_header->indexed_pixels_size);
+        inst->frame_state.indexed_pixels.resize(frame_header->indexed_pixels_size);
+        std::memcpy(inst->frame_state.indexed_pixels.data(), ptr + frame_offset, frame_header->indexed_pixels_size);
     } else {
-        g_frame_state.indexed_pixels.clear();
+        inst->frame_state.indexed_pixels.clear();
     }
-    g_frame_state.dirty = true;
+    inst->frame_state.dirty = true;
 
     return LEGENDS_OK;
 }
@@ -2583,37 +2200,37 @@ legends_error_t legends_get_state_hash(
     legends_handle handle,
     uint8_t hash_out[32]
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(hash_out != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
     // Sync state from engine first to ensure hash consistency
-    sync_state_from_engine();
+    sync_state_from_engine(inst);
 
     SHA256 sha;
 
     // Include engine's authoritative hash as primary source
     // This ensures the hash reflects actual engine state, not stale legends layer state
-    if (g_engine_handle) {
+    if (inst->engine_handle) {
         uint8_t engine_hash[32];
-        if (dosbox_lib_get_state_hash(g_engine_handle, engine_hash) == DOSBOX_LIB_OK) {
+        if (dosbox_lib_get_state_hash(inst->engine_handle, engine_hash) == DOSBOX_LIB_OK) {
             sha.update(engine_hash, 32);
         }
     }
 
     // Include legends-layer state that affects determinism
     // (pending input queue events will affect future state)
-    uint64_t input_queue_size = g_input_state.size();
+    uint64_t input_queue_size = inst->input_state.size();
     sha.update(&input_queue_size, sizeof(input_queue_size));
 
     // If there are pending input events, hash their sequence numbers
     // to catch ordering differences
     if (input_queue_size > 0) {
-        sha.update(&g_input_state.next_sequence, sizeof(g_input_state.next_sequence));
-        size_t idx = g_input_state.head;
+        sha.update(&inst->input_state.next_sequence, sizeof(inst->input_state.next_sequence));
+        size_t idx = inst->input_state.head;
         for (size_t i = 0; i < input_queue_size; ++i) {
-            const auto& evt = g_input_state.queue[idx];
+            const auto& evt = inst->input_state.queue[idx];
             const uint8_t type = static_cast<uint8_t>(evt.type);
             sha.update(&type, sizeof(type));
             sha.update(&evt.sequence, sizeof(evt.sequence));
@@ -2633,23 +2250,23 @@ legends_error_t legends_get_state_hash(
     }
 
     // Hash time (now) - these are synced from engine
-    sha.update(&g_time_state.total_cycles, sizeof(g_time_state.total_cycles));
-    sha.update(&g_time_state.emu_time_us, sizeof(g_time_state.emu_time_us));
+    sha.update(&inst->time_state.total_cycles, sizeof(inst->time_state.total_cycles));
+    sha.update(&inst->time_state.emu_time_us, sizeof(inst->time_state.emu_time_us));
 
     // Hash PIC state (synced from engine in sync_state_from_engine)
-    sha.update(&g_pics[0].irr, 1);
-    sha.update(&g_pics[0].imr, 1);
-    sha.update(&g_pics[0].isr, 1);
-    sha.update(&g_pics[1].irr, 1);
-    sha.update(&g_pics[1].imr, 1);
-    sha.update(&g_pics[1].isr, 1);
+    sha.update(&inst->pics[0].irr, 1);
+    sha.update(&inst->pics[0].imr, 1);
+    sha.update(&inst->pics[0].isr, 1);
+    sha.update(&inst->pics[1].irr, 1);
+    sha.update(&inst->pics[1].imr, 1);
+    sha.update(&inst->pics[1].isr, 1);
 
     // Include legends-layer event queue (scheduled events affect timing)
-    sha.update(&g_event_queue.event_count, sizeof(g_event_queue.event_count));
-    sha.update(&g_event_queue.next_event_id, sizeof(g_event_queue.next_event_id));
-    for (size_t i = 0; i < g_event_queue.event_count; ++i) {
-        sha.update(&g_event_queue.events[i].id, sizeof(g_event_queue.events[i].id));
-        sha.update(&g_event_queue.events[i].deadline, sizeof(g_event_queue.events[i].deadline));
+    sha.update(&inst->event_queue.event_count, sizeof(inst->event_queue.event_count));
+    sha.update(&inst->event_queue.next_event_id, sizeof(inst->event_queue.next_event_id));
+    for (size_t i = 0; i < inst->event_queue.event_count; ++i) {
+        sha.update(&inst->event_queue.events[i].id, sizeof(inst->event_queue.events[i].id));
+        sha.update(&inst->event_queue.events[i].deadline, sizeof(inst->event_queue.events[i].deadline));
     }
 
     sha.finalize(hash_out);
@@ -2661,10 +2278,11 @@ legends_error_t legends_verify_determinism(
     uint64_t test_cycles,
     int* is_deterministic_out
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(is_deterministic_out != nullptr, LEGENDS_ERR_NULL_POINTER);
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
+
 
     // Per TLA+ specification:
     // Round-trip test: save -> step N cycles -> hash1; restore -> step N cycles -> hash2
@@ -2731,12 +2349,13 @@ legends_error_t legends_get_last_error(
 ) {
     LEGENDS_REQUIRE(length_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
-    (void)handle;  // Error can be retrieved even with null handle
+    // Can be called with NULL handle for pre-creation errors
+    auto* inst = get_instance(handle);
+    const std::string& error_str = inst ? inst->last_error : g_pre_creation_error;
 
-    size_t required_len = g_last_error.size() + 1;  // Include null terminator
+    size_t required_len = error_str.size() + 1;  // Include null terminator
     *length_out = required_len;
 
-    // If just querying size, return now
     if (buffer == nullptr) {
         return LEGENDS_OK;
     }
@@ -2745,7 +2364,7 @@ legends_error_t legends_get_last_error(
         return LEGENDS_ERR_BUFFER_TOO_SMALL;
     }
 
-    std::memcpy(buffer, g_last_error.c_str(), required_len);
+    std::memcpy(buffer, error_str.c_str(), required_len);
     return LEGENDS_OK;
 }
 
@@ -2754,13 +2373,12 @@ legends_error_t legends_set_log_callback(
     legends_log_callback_t callback,
     void* userdata
 ) {
-    LEGENDS_REQUIRE(handle != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
-    LEGENDS_REQUIRE(g_instance_exists.load(), LEGENDS_ERR_NOT_INITIALIZED);
 
-    // Set or clear the log callback
-    g_log_state.callback = callback;
-    g_log_state.userdata = userdata;
+    inst->log_state.callback = callback;
+    inst->log_state.userdata = userdata;
 
     // Log that callback was set/cleared (only if setting, not clearing)
     if (callback != nullptr) {
