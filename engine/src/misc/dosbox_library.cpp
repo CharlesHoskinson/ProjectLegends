@@ -227,8 +227,16 @@ dosbox_lib_error_t dosbox_lib_create(
     }
 
     try {
-        // Create DOSBox context
-        g_context = std::make_unique<dosbox::DOSBoxContext>();
+        // Create DOSBox context with translated config (F5 fix)
+        auto ctx_config = [&]() {
+            dosbox::ContextConfig c;
+            c.memory_size = static_cast<size_t>(g_config.memory_kb) * 1024;
+            c.cpu_cycles = g_config.cpu_cycles > 0 ? g_config.cpu_cycles : 3000;
+            c.deterministic = (g_config.deterministic != 0);
+            c.sound_enabled = false;  // Library mode: headless
+            return c;
+        }();
+        g_context = std::make_unique<dosbox::DOSBoxContext>(ctx_config);
 
         // Initialize time state
         g_time_state.reset();

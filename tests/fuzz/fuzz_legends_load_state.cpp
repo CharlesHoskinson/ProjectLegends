@@ -62,17 +62,25 @@ extern "C" size_t LLVMFuzzerCustomMutator(
 
     // Occasionally fix up the magic number to get past initial validation
     // This helps explore deeper code paths
+    // SAVESTATE_MAGIC = 0x53584244 = "DBXS" in little-endian
     if ((seed % 10) == 0 && new_size >= 4) {
-        // LEGS magic: 0x4C454753
-        data[0] = 0x53;  // 'S'
-        data[1] = 0x47;  // 'G'
-        data[2] = 0x45;  // 'E'
-        data[3] = 0x4C;  // 'L'
+        data[0] = 0x44;  // 'D'
+        data[1] = 0x42;  // 'B'
+        data[2] = 0x58;  // 'X'
+        data[3] = 0x53;  // 'S'
     }
 
     // Occasionally fix up version to explore version-specific paths
     if ((seed % 20) == 0 && new_size >= 8) {
-        data[4] = 2;  // Version 2
+        data[4] = 2;  // Version 2 (V2 legacy path)
+        data[5] = 0;
+        data[6] = 0;
+        data[7] = 0;
+    }
+
+    // Also explore V3 path
+    if ((seed % 30) == 0 && new_size >= 8) {
+        data[4] = 3;  // Version 3 (current)
         data[5] = 0;
         data[6] = 0;
         data[7] = 0;

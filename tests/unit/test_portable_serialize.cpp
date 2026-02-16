@@ -38,6 +38,24 @@ protected:
     }
 };
 
+// F8: Verify byte representation of SAVESTATE_MAGIC = 0x53584244
+// In little-endian, this should be bytes [0x44, 0x42, 0x58, 0x53] = "DBXS"
+TEST_F(PortableSerializeTest, SaveStateMagic_ByteRepresentation) {
+    auto state = save_state();
+    ASSERT_GE(state.size(), 4u);
+
+    // Verify individual bytes in memory order (little-endian)
+    EXPECT_EQ(state[0], 0x44);  // 'D'
+    EXPECT_EQ(state[1], 0x42);  // 'B'
+    EXPECT_EQ(state[2], 0x58);  // 'X'
+    EXPECT_EQ(state[3], 0x53);  // 'S'
+
+    // Also verify as uint32_t
+    uint32_t magic;
+    std::memcpy(&magic, state.data(), 4);
+    EXPECT_EQ(magic, 0x53584244u);
+}
+
 // Save state header has correct magic and version
 TEST_F(PortableSerializeTest, HeaderMagicAndVersion) {
     auto state = save_state();

@@ -4,7 +4,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <legends/ffi.h>
+#include "internal/ffi.h"  // Moved from include/legends/ (F6)
 #include <string>
 #include <thread>
 #include <vector>

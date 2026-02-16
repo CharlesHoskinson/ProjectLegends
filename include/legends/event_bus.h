@@ -389,6 +389,7 @@ public:
     void subscribe(events::EventType type,
                    ExternalEventCallback callback,
                    void* user_data) {
+        if (!callback) return;  // F7: reject null callbacks
         std::lock_guard lock(mutex_);
         subscriptions_.push_back(ExternalSubscription{
             type, callback, user_data, true
@@ -525,12 +526,14 @@ private:
         }
 
         for (const auto& sub : subs_copy) {
-            sub.callback(
-                static_cast<int>(event.type),
-                event.data.data(),
-                event.data.size(),
-                sub.user_data
-            );
+            if (sub.callback) {  // F7: defense-in-depth null check
+                sub.callback(
+                    static_cast<int>(event.type),
+                    event.data.data(),
+                    event.data.size(),
+                    sub.user_data
+                );
+            }
         }
     }
 

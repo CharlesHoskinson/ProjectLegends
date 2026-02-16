@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "exceptions.h"
+#include <legends/exceptions.h>
 #include "ffi_core.h"
 #include <cstring>
 #include <format>

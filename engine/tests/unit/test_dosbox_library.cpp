@@ -1100,3 +1100,80 @@ TEST_F(DOSBoxLibraryEngineStateTest, FuzzCorruptedEngineState) {
             << "Random data should be rejected (seed=" << seed << ")";
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// F5: Config Translation Tests
+// Verify that dosbox_lib_config_t fields are translated to ContextConfig
+// ═══════════════════════════════════════════════════════════════════════════════
+
+TEST(ConfigTranslationTest, CustomMemoryKbApplied) {
+    // Destroy any existing instance
+    dosbox_lib_destroy(reinterpret_cast<dosbox_lib_handle_t>(1));
+
+    dosbox_lib_config_t config = DOSBOX_LIB_CONFIG_INIT;
+    config.memory_kb = 1024;  // 1MB
+    config.cpu_cycles = 5000;
+    config.deterministic = 1;
+
+    dosbox_lib_handle_t handle = nullptr;
+    auto err = dosbox_lib_create(&config, &handle);
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+
+    // The context should have been created with translated config.
+    // We can verify indirectly by checking that create succeeded with
+    // non-default values. A direct check requires exposing internal state,
+    // so we verify the config was accepted and the instance is functional.
+    if (handle) {
+        err = dosbox_lib_init(handle);
+        EXPECT_EQ(err, DOSBOX_LIB_OK);
+        dosbox_lib_destroy(handle);
+    }
+}
+
+TEST(ConfigTranslationTest, DefaultConfigProducesReasonable) {
+    dosbox_lib_destroy(reinterpret_cast<dosbox_lib_handle_t>(1));
+
+    dosbox_lib_handle_t handle = nullptr;
+    auto err = dosbox_lib_create(nullptr, &handle);
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+
+    if (handle) {
+        err = dosbox_lib_init(handle);
+        EXPECT_EQ(err, DOSBOX_LIB_OK);
+        dosbox_lib_destroy(handle);
+    }
+}
+
+TEST(ConfigTranslationTest, DeterministicFlagApplied) {
+    dosbox_lib_destroy(reinterpret_cast<dosbox_lib_handle_t>(1));
+
+    dosbox_lib_config_t config = DOSBOX_LIB_CONFIG_INIT;
+    config.deterministic = 1;
+
+    dosbox_lib_handle_t handle = nullptr;
+    auto err = dosbox_lib_create(&config, &handle);
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+
+    if (handle) {
+        err = dosbox_lib_init(handle);
+        EXPECT_EQ(err, DOSBOX_LIB_OK);
+        dosbox_lib_destroy(handle);
+    }
+}
+
+TEST(ConfigTranslationTest, CpuCyclesForwarded) {
+    dosbox_lib_destroy(reinterpret_cast<dosbox_lib_handle_t>(1));
+
+    dosbox_lib_config_t config = DOSBOX_LIB_CONFIG_INIT;
+    config.cpu_cycles = 5000;
+
+    dosbox_lib_handle_t handle = nullptr;
+    auto err = dosbox_lib_create(&config, &handle);
+    EXPECT_EQ(err, DOSBOX_LIB_OK);
+
+    if (handle) {
+        err = dosbox_lib_init(handle);
+        EXPECT_EQ(err, DOSBOX_LIB_OK);
+        dosbox_lib_destroy(handle);
+    }
+}

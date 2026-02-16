@@ -446,6 +446,38 @@ TEST_F(ExternalEventBridgeTest, MultipleEvents) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// F7: Null Callback Safety Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST_F(ExternalEventBridgeTest, RejectsNullCallback) {
+    ExternalEventBridge bridge(internal_bus);
+
+    // Subscribing with nullptr callback should be silently rejected
+    bridge.subscribe(EventType::Keyboard, nullptr, nullptr);
+
+    // No subscription should have been stored
+    EXPECT_EQ(bridge.subscription_count(), 0u);
+}
+
+TEST_F(ExternalEventBridgeTest, ValidCallbackStillWorks) {
+    ExternalEventBridge bridge(internal_bus);
+
+    int call_count = 0;
+    auto callback = [](int, const void*, size_t, void* user) {
+        (*static_cast<int*>(user))++;
+    };
+
+    bridge.subscribe(EventType::Keyboard, callback, &call_count);
+    EXPECT_EQ(bridge.subscription_count(), 1u);
+
+    KeyboardEvent kbd{};
+    internal_bus.emit(kbd);
+    bridge.flush();
+
+    EXPECT_EQ(call_count, 1);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // get_event_type Tests
 // ─────────────────────────────────────────────────────────────────────────────
 

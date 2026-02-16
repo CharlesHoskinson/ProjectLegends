@@ -383,6 +383,10 @@ if(LEGENDS_BUILD_TESTS)
         gsl::gsl-lite-v1  # Tests may use gsl-lite directly for testing
     )
 
+    target_include_directories(legends_unit_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/legends  # F6: internal FFI headers
+    )
+
     target_compile_definitions(legends_unit_tests PRIVATE
         LEGENDS_LIBRARY_MODE=1
     )
@@ -484,6 +488,9 @@ if(LEGENDS_BUILD_TESTS)
         # Input/SaveState Tests (Issues 1, 3, 4, 5)
         tests/integration/test_input_injection.cpp
         tests/integration/test_save_state_safety.cpp
+        # Debugging Report Remediation (F1, F2)
+        tests/integration/test_v2_load_safety.cpp
+        tests/integration/test_load_state_atomicity.cpp
     )
 
     legends_set_strict_cxx_standard(legends_integration_tests)

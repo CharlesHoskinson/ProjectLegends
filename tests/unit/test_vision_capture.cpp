@@ -655,3 +655,185 @@ TEST(EdgeCaseTest, IndexedFormatNoPalette) {
     // Raw indexed pixels should be preserved
     EXPECT_EQ(shot.pixels[0], 42);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F3: Indexed8 with scaling — must use native dimensions
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(Indexed8SafetyTest, WithScaling_UsesNativeDimensions) {
+    MockFramebuffer fb(modes::MODE_13H);  // 320x200
+    fb.fill(42);
+
+    CaptureEngine engine(fb);
+    CaptureConfig config;
+    config.format = PixelFormat::Indexed8;
+    config.scale_factor = 2;  // Would be 640x400 for other formats
+    engine.configure(config);
+
+    Screenshot shot = engine.capture();
+
+    // Indexed8 must always use native dimensions, not scaled
+    EXPECT_EQ(shot.width, 320);
+    EXPECT_EQ(shot.height, 200);
+    EXPECT_EQ(shot.size(), 320u * 200u);
+}
+
+TEST(Indexed8SafetyTest, WithTargetSize_UsesNativeDimensions) {
+    MockFramebuffer fb(modes::MODE_13H);  // 320x200
+    fb.fill(0);
+
+    CaptureEngine engine(fb);
+    CaptureConfig config;
+    config.format = PixelFormat::Indexed8;
+    config.target_width = 160;
+    config.target_height = 100;
+    engine.configure(config);
+
+    Screenshot shot = engine.capture();
+
+    // Indexed8 always returns native dimensions
+    EXPECT_EQ(shot.width, 320);
+    EXPECT_EQ(shot.height, 200);
+}
+
+TEST(Indexed8SafetyTest, WithFlipVertical_NoOOB) {
+    MockFramebuffer fb(modes::MODE_13H);  // 320x200
+    fb.fill(7);
+
+    CaptureEngine engine(fb);
+    CaptureConfig config;
+    config.format = PixelFormat::Indexed8;
+    config.scale_factor = 2;
+    config.flip_vertical = true;
+    engine.configure(config);
+
+    // Must not crash — previously this would OOB because flip_vertical
+    // used scaled dimensions (640x400) on an unscaled buffer (320x200)
+    Screenshot shot = engine.capture();
+
+    EXPECT_TRUE(shot.is_valid());
+    EXPECT_EQ(shot.width, 320);
+    EXPECT_EQ(shot.height, 200);
+}
+
+TEST(Indexed8SafetyTest, InvariantHolds) {
+    MockFramebuffer fb(modes::MODE_13H);
+    fb.fill(0);
+
+    CaptureEngine engine(fb);
+
+    // Test across multiple configurations
+    std::vector<CaptureConfig> configs;
+
+    CaptureConfig c1;
+    c1.format = PixelFormat::Indexed8;
+    c1.scale_factor = 1;
+    configs.push_back(c1);
+
+    CaptureConfig c2;
+    c2.format = PixelFormat::Indexed8;
+    c2.scale_factor = 2;
+    configs.push_back(c2);
+
+    CaptureConfig c3;
+    c3.format = PixelFormat::Indexed8;
+    c3.scale_factor = 4;
+    configs.push_back(c3);
+
+    CaptureConfig c4;
+    c4.format = PixelFormat::Indexed8;
+    c4.target_width = 160;
+    c4.target_height = 100;
+    configs.push_back(c4);
+
+    for (const auto& cfg : configs) {
+        engine.configure(cfg);
+        Screenshot shot = engine.capture();
+        EXPECT_EQ(shot.pixels.size(), shot.expected_size())
+            << "Invariant broken for scale_factor=" << static_cast<int>(cfg.scale_factor)
+            << " target=" << cfg.target_width << "x" << cfg.target_height;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F4: Bilinear scaling divide-by-zero edge cases
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(BilinearScaleTest, Scale_1x1Target_NoCrash) {
+    VgaModeInfo tiny_mode;
+    tiny_mode.width = 10;
+    tiny_mode.height = 10;
+    tiny_mode.bits_per_pixel = 8;
+
+    MockFramebuffer fb(tiny_mode);
+    fb.fill(100);
+
+    CaptureEngine engine(fb);
+    CaptureConfig config;
+    config.format = PixelFormat::RGB24;
+    config.scale_mode = ScaleMode::Bilinear;
+    config.target_width = 1;
+    config.target_height = 1;
+    engine.configure(config);
+
+    // Must not crash (was dividing by zero: out_w-1=0, out_h-1=0)
+    Screenshot shot = engine.capture();
+    EXPECT_TRUE(shot.is_valid());
+    EXPECT_EQ(shot.width, 1);
+    EXPECT_EQ(shot.height, 1);
+}
+
+TEST(BilinearScaleTest, Scale_1xNTarget_NoCrash) {
+    MockFramebuffer fb(modes::MODE_13H);
+    fb.fill(50);
+
+    CaptureEngine engine(fb);
+    CaptureConfig config;
+    config.format = PixelFormat::RGB24;
+    config.scale_mode = ScaleMode::Bilinear;
+    config.target_width = 1;
+    config.target_height = 100;
+    engine.configure(config);
+
+    Screenshot shot = engine.capture();
+    EXPECT_TRUE(shot.is_valid());
+    EXPECT_EQ(shot.width, 1);
+    EXPECT_EQ(shot.height, 100);
+}
+
+TEST(BilinearScaleTest, Scale_Nx1Target_NoCrash) {
+    MockFramebuffer fb(modes::MODE_13H);
+    fb.fill(50);
+
+    CaptureEngine engine(fb);
+    CaptureConfig config;
+    config.format = PixelFormat::RGB24;
+    config.scale_mode = ScaleMode::Bilinear;
+    config.target_width = 100;
+    config.target_height = 1;
+    engine.configure(config);
+
+    Screenshot shot = engine.capture();
+    EXPECT_TRUE(shot.is_valid());
+    EXPECT_EQ(shot.width, 100);
+    EXPECT_EQ(shot.height, 1);
+}
+
+TEST(BilinearScaleTest, NormalCase_Works) {
+    MockFramebuffer fb(modes::MODE_13H);
+    fb.fill(0);
+
+    CaptureEngine engine(fb);
+    CaptureConfig config;
+    config.format = PixelFormat::RGB24;
+    config.scale_mode = ScaleMode::Bilinear;
+    config.target_width = 160;
+    config.target_height = 100;
+    engine.configure(config);
+
+    Screenshot shot = engine.capture();
+    EXPECT_TRUE(shot.is_valid());
+    EXPECT_EQ(shot.width, 160);
+    EXPECT_EQ(shot.height, 100);
+    EXPECT_EQ(shot.size(), 160u * 100u * 3u);
+}
