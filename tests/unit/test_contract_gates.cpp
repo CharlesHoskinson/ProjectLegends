@@ -175,13 +175,13 @@ TEST(ContractGate_SideEffects, LogCallbackCapturesOutput) {
 // Verifies working directory is unchanged after stepping
 TEST(ContractGate_SideEffects, NoChdirGetenvPutenv) {
     // Capture current working directory before
-    char cwd_before[1024];
-    char cwd_after[1024];
+    char cwd_before[1024] = {};
+    char cwd_after[1024] = {};
 
 #ifdef _WIN32
     _getcwd(cwd_before, sizeof(cwd_before));
 #else
-    getcwd(cwd_before, sizeof(cwd_before));
+    char* r1 [[maybe_unused]] = getcwd(cwd_before, sizeof(cwd_before));
 #endif
 
     // Create and step the emulator
@@ -199,7 +199,7 @@ TEST(ContractGate_SideEffects, NoChdirGetenvPutenv) {
 #ifdef _WIN32
     _getcwd(cwd_after, sizeof(cwd_after));
 #else
-    getcwd(cwd_after, sizeof(cwd_after));
+    char* r2 [[maybe_unused]] = getcwd(cwd_after, sizeof(cwd_after));
 #endif
 
     EXPECT_STREQ(cwd_before, cwd_after)

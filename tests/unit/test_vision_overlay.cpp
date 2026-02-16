@@ -3,8 +3,8 @@
  * @brief Unit tests for vision_overlay.h
  */
 
-// GCC 15 has false positives with std::variant containing std::string
-#if defined(__GNUC__) && __GNUC__ >= 15
+// GCC 13+ has false positives with std::variant containing std::string
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 13
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 

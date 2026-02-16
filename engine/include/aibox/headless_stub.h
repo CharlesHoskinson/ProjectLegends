@@ -19,6 +19,7 @@
 #ifndef AIBOX_HEADLESS_STUB_H
 #define AIBOX_HEADLESS_STUB_H
 
+#include <cstddef>
 #include <cstdint>
 
 // Forward declaration to avoid circular dependency
