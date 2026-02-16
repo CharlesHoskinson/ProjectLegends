@@ -1,10 +1,10 @@
 /**
  * @file safe_arithmetic.h
- * @brief Overflow-safe arithmetic utilities.
+ * @brief Overflow-safe arithmetic utilities for aibox.
  *
- * Provides safe_multiply() returning std::expected and a
- * SAFE_MULTIPLY_OR_ERROR macro for use in FFI functions that
- * return legends_error_t via LEGENDS_ERROR.
+ * Provides safe_multiply() and safe_multiply_3() returning std::expected,
+ * and a SAFE_MULTIPLY_OR_ERROR macro for use in FFI functions that
+ * return dosboxx_error_t via DOSBOXX_ERROR.
  *
  * @copyright GPL-2.0-or-later
  */
@@ -14,9 +14,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <legends/error.h>
+#include <aibox/error.h>
 
-namespace legends {
+namespace aibox {
 
 /**
  * @brief Multiply two size_t values with overflow detection.
@@ -40,19 +40,19 @@ safe_multiply_3(std::size_t a, std::size_t b, std::size_t c) noexcept {
     return safe_multiply(*ab, c);
 }
 
-} // namespace legends
+} // namespace aibox
 
 /**
- * @brief Compute a * b into result_var, returning LEGENDS_ERR_INVALID_STATE
- *        on overflow via the file-local LEGENDS_ERROR macro.
+ * @brief Compute a * b into result_var, returning DOSBOXX_ERR_INVALID_STATE
+ *        on overflow via the file-local DOSBOXX_ERROR macro.
  *
- * Requires LEGENDS_ERROR(code, msg) and `inst` to be in scope
- * (as in legends_embed_api.cpp FFI functions).
+ * Requires DOSBOXX_ERROR(code, msg) to be in scope
+ * (as in dosboxx_embed_api.cpp FFI functions).
  */
 #define SAFE_MULTIPLY_OR_ERROR(a, b, result_var) \
     do { \
         if ((b) != 0 && (a) > SIZE_MAX / (b)) { \
-            LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, \
+            DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, \
                 "Integer overflow: " #a " * " #b); \
         } \
         (result_var) = static_cast<std::size_t>(a) * (b); \

@@ -27,6 +27,11 @@ public:
             return Result::AlreadyOpen;
         }
 
+        // Validate audio config to prevent division/modulo by zero (H6 safety fix)
+        if (config.channels == 0 || config.sample_rate == 0) {
+            return Result::InvalidParameter;
+        }
+
         config_ = config;
 
         // Calculate buffer capacity: buffer_ms worth of frames
@@ -91,6 +96,7 @@ public:
         uint32_t frames_to_write = std::min(frame_count, capacity_frames_);
         uint32_t samples_to_copy = frames_to_write * config_.channels;
         size_t buffer_size = buffer_.size();
+        if (buffer_size == 0) return Result::NotInitialized;
 
         for (uint32_t i = 0; i < samples_to_copy; ++i) {
             buffer_[(write_pos_ + i) % buffer_size] = samples[i];

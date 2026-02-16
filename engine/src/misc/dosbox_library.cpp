@@ -541,11 +541,11 @@ dosbox_lib_error_t dosbox_lib_save_state(
     pic->irq_check = ctx->pic.irq_check;
     pic->irq_check_pending = ctx->pic.irq_check_pending;
     pic->master_cascade_irq = ctx->pic.master_cascade_irq;
-    pic->master_imr = ctx->pic.master_imr;
-    pic->slave_imr = ctx->pic.slave_imr;
-    pic->master_isr = ctx->pic.master_isr;
-    pic->slave_isr = ctx->pic.slave_isr;
-    pic->auto_eoi = ctx->pic.auto_eoi ? 1 : 0;
+    pic->master_imr = ctx->pic.master_imr();
+    pic->slave_imr = ctx->pic.slave_imr();
+    pic->master_isr = ctx->pic.master_isr();
+    pic->slave_isr = ctx->pic.slave_isr();
+    pic->auto_eoi = ctx->pic.auto_eoi() ? 1 : 0;
     pic->in_event_service = ctx->pic.in_event_service ? 1 : 0;
 
     // Serialize keyboard state (V2: all hashed fields)
@@ -734,11 +734,11 @@ dosbox_lib_error_t dosbox_lib_load_state(
     ctx->pic.irq_check = pic->irq_check;
     ctx->pic.irq_check_pending = pic->irq_check_pending;
     ctx->pic.master_cascade_irq = pic->master_cascade_irq;
-    ctx->pic.master_imr = pic->master_imr;
-    ctx->pic.slave_imr = pic->slave_imr;
-    ctx->pic.master_isr = pic->master_isr;
-    ctx->pic.slave_isr = pic->slave_isr;
-    ctx->pic.auto_eoi = pic->auto_eoi != 0;
+    ctx->pic.controllers[0].imr = pic->master_imr;
+    ctx->pic.controllers[1].imr = pic->slave_imr;
+    ctx->pic.controllers[0].isr = pic->master_isr;
+    ctx->pic.controllers[1].isr = pic->slave_isr;
+    ctx->pic.controllers[0].auto_eoi = pic->auto_eoi != 0;
     ctx->pic.in_event_service = pic->in_event_service != 0;
 
     // Deserialize keyboard state (V2: all hashed fields)
@@ -1013,11 +1013,11 @@ dosbox_lib_error_t dosbox_lib_get_pic_state(
     // Read PIC state from engine context
     // Note: irq_check contains the pending IRQ bitmap (similar to IRR)
     state_out->master_irr = static_cast<uint8_t>(g_context->pic.irq_check & 0xFF);
-    state_out->master_imr = g_context->pic.master_imr;
-    state_out->master_isr = g_context->pic.master_isr;
+    state_out->master_imr = g_context->pic.master_imr();
+    state_out->master_isr = g_context->pic.master_isr();
     state_out->slave_irr = static_cast<uint8_t>((g_context->pic.irq_check >> 8) & 0xFF);
-    state_out->slave_imr = g_context->pic.slave_imr;
-    state_out->slave_isr = g_context->pic.slave_isr;
+    state_out->slave_imr = g_context->pic.slave_imr();
+    state_out->slave_isr = g_context->pic.slave_isr();
 
     return DOSBOX_LIB_OK;
 }

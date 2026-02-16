@@ -9,6 +9,7 @@
 #include "pal/audio_sink.h"
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <climits>
 #include <memory>
 #include <vector>
 
@@ -110,6 +111,11 @@ public:
 
         size_t bytes = static_cast<size_t>(frame_count) * config_.channels * sizeof(int16_t);
 
+        // M24: Clamp bytes to INT_MAX before narrowing cast to int
+        if (bytes > static_cast<size_t>(INT_MAX)) {
+            bytes = static_cast<size_t>(INT_MAX);
+        }
+
         // SDL3: Push directly to audio stream
         if (!SDL_PutAudioStreamData(stream_, samples, static_cast<int>(bytes))) {
             // If push fails despite clearing, count all as dropped
@@ -124,6 +130,8 @@ public:
             return 0;
         }
         int bytes = SDL_GetAudioStreamQueued(stream_);
+        // M23: Handle error return (negative value) from SDL
+        if (bytes < 0) return 0;
         return static_cast<uint32_t>(bytes) / (config_.channels * sizeof(int16_t));
     }
 

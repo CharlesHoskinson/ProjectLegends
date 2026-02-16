@@ -80,6 +80,12 @@ ScreenshotDiffResult ScreenshotDiff::compare_text(
     result.total_cells = static_cast<size_t>(columns) * rows;
     result.identical = true;
 
+    // M17: Guard against division by zero when total_cells is 0
+    if (result.total_cells == 0) {
+        result.total_change_percentage = 0.0f;
+        return result;
+    }
+
     // Parse lines
     auto lines_a = parse_lines(text_a, columns, rows);
     auto lines_b = parse_lines(text_b, columns, rows);

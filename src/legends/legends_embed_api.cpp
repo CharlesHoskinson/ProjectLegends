@@ -1956,7 +1956,11 @@ static legends_error_t load_state_v2_legacy(
     // Stage frame (allocations happen here — before any inst-> mutation)
     std::vector<uint8_t> staged_indexed_pixels;
     if (pixel_buffer_size > 0) {
-        staged_indexed_pixels.resize(pixel_buffer_size);
+        try {
+            staged_indexed_pixels.resize(pixel_buffer_size);
+        } catch (const std::bad_alloc&) {
+            return LEGENDS_ERR_OUT_OF_MEMORY;
+        }
         std::memcpy(staged_indexed_pixels.data(), ptr + frame_data_offset + text_buffer_size, pixel_buffer_size);
     }
 
@@ -2207,7 +2211,11 @@ legends_error_t legends_load_state(
     std::vector<uint8_t> staged_indexed_pixels;
     size_t frame_offset = frame_data_offset;
     if (frame_header->indexed_pixels_size > 0) {
-        staged_indexed_pixels.resize(frame_header->indexed_pixels_size);
+        try {
+            staged_indexed_pixels.resize(frame_header->indexed_pixels_size);
+        } catch (const std::bad_alloc&) {
+            return LEGENDS_ERR_OUT_OF_MEMORY;
+        }
         std::memcpy(staged_indexed_pixels.data(),
                     ptr + frame_offset + frame_header->text_buffer_size,
                     frame_header->indexed_pixels_size);
@@ -2349,7 +2357,12 @@ legends_error_t legends_verify_determinism(
         return err;
     }
 
-    std::vector<uint8_t> saved_state(state_size);
+    std::vector<uint8_t> saved_state;
+    try {
+        saved_state.resize(state_size);
+    } catch (const std::bad_alloc&) {
+        return LEGENDS_ERR_OUT_OF_MEMORY;
+    }
     err = legends_save_state(handle, saved_state.data(), saved_state.size(), &state_size);
     if (err != LEGENDS_OK) {
         return err;

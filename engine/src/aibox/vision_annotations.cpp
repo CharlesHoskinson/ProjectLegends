@@ -98,6 +98,15 @@ YoloAnnotation YoloAnnotation::parse_txt(
         line_ss >> det.class_id >> norm.center_x >> norm.center_y
                 >> norm.width >> norm.height;
 
+        // H8: Skip malformed lines where extraction failed
+        if (line_ss.fail()) continue;
+
+        // H8: Validate normalized coordinates are in [0, 1] range
+        if (norm.center_x < 0.0f || norm.center_x > 1.0f ||
+            norm.center_y < 0.0f || norm.center_y > 1.0f ||
+            norm.width < 0.0f || norm.width > 1.0f ||
+            norm.height < 0.0f || norm.height > 1.0f) continue;
+
         // Optional confidence
         if (line_ss >> det.confidence) {
             // Got confidence
@@ -274,14 +283,19 @@ std::vector<bool> RleEncoder::decode(
     int32_t height
 ) {
     std::vector<bool> mask;
-    mask.reserve(static_cast<size_t>(width) * height);
+    size_t max_pixels = static_cast<size_t>(width) * height;
+    mask.reserve(max_pixels);
 
     bool current_value = false;  // Start with zeros
     for (int32_t count : rle) {
-        for (int32_t i = 0; i < count; ++i) {
+        // H9: Skip negative counts and cap at max_pixels
+        if (count < 0) continue;
+        size_t to_add = std::min(static_cast<size_t>(count), max_pixels - mask.size());
+        for (size_t i = 0; i < to_add; ++i) {
             mask.push_back(current_value);
         }
         current_value = !current_value;
+        if (mask.size() >= max_pixels) break;
     }
 
     return mask;

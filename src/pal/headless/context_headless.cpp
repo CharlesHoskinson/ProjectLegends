@@ -38,10 +38,19 @@ public:
             return Result::InvalidParameter;
         }
 
+        // H7: Check for overflow in pitch calculation (width * bpp)
+        if (bpp != 0 && width > UINT32_MAX / bpp) {
+            return Result::InvalidParameter;
+        }
         // Allocate pixel buffer
         pitch_ = width * bpp;
         // Align pitch to 4 bytes for efficient access
         pitch_ = (pitch_ + 3) & ~3u;
+
+        // H7: Check for overflow in buffer size (pitch * height)
+        if (height != 0 && pitch_ > SIZE_MAX / height) {
+            return Result::InvalidParameter;
+        }
 
         try {
             buffer_.resize(static_cast<size_t>(pitch_) * height);

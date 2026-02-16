@@ -255,9 +255,11 @@ public:
     template<typename T>
     OverlayId add(T overlay) {
         overlay.id = next_id_++;
+        // M16: Save assigned ID before sort, which may reorder overlays
+        OverlayId assigned_id = overlay.id;
         overlays_.push_back(std::move(overlay));
         sort_by_z_order();
-        return get_overlay_id(overlays_.back());
+        return assigned_id;
     }
 
     /**

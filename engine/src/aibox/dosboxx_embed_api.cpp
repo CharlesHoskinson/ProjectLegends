@@ -6,6 +6,10 @@
  * Phase 2: Deterministic stepping (step_ms, step_cycles, time queries)
  * Phase 3: Frame capture (text, RGB, dirty tracking, cursor)
  * Phase 4+: Input, save/load (stubs)
+ *
+ * @deprecated This file is part of the legacy aibox engine and is not built
+ * by the current CMake configuration. It is retained for reference only.
+ * New development should use the legends/ equivalents instead.
  */
 
 #include "aibox/dosboxx_embed.h"
@@ -1669,7 +1673,10 @@ dosboxx_error_t dosboxx_load_state(
         DOSBOXX_ERROR(DOSBOXX_ERR_VERSION_MISMATCH, "Save state version mismatch");
     }
 
-    // Validate size
+    // Validate size (must be at least header size to avoid underflow in CRC calc)
+    if (header->total_size < sizeof(SaveStateHeader)) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Declared state size smaller than header");
+    }
     if (header->total_size > buffer_size) {
         DOSBOXX_ERROR(DOSBOXX_ERR_BUFFER_TOO_SMALL, "Buffer smaller than declared state size");
     }
@@ -1679,6 +1686,34 @@ dosboxx_error_t dosboxx_load_state(
     uint32_t computed_crc = crc32(data_start, header->total_size - sizeof(SaveStateHeader));
     if (computed_crc != header->checksum) {
         DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Save state checksum mismatch");
+    }
+
+    // H15: Validate all section offsets fit within declared total_size
+    auto section_fits = [&](uint32_t offset, size_t section_size) -> bool {
+        return offset <= header->total_size &&
+               section_size <= header->total_size - offset;
+    };
+
+    if (!section_fits(header->time_offset, sizeof(SaveStateTime))) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Time section offset out of bounds");
+    }
+    if (!section_fits(header->cpu_offset, sizeof(SaveStateCPU))) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "CPU section offset out of bounds");
+    }
+    if (!section_fits(header->pic_offset, sizeof(SaveStatePIC))) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "PIC section offset out of bounds");
+    }
+    if (!section_fits(header->dma_offset, sizeof(SaveStateDMA))) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "DMA section offset out of bounds");
+    }
+    if (!section_fits(header->event_queue_offset, sizeof(SaveStateEventQueueHeader))) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Event queue section offset out of bounds");
+    }
+    if (!section_fits(header->input_offset, sizeof(SaveStateInputHeader))) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Input section offset out of bounds");
+    }
+    if (!section_fits(header->frame_offset, sizeof(SaveStateFrameHeader))) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Frame section offset out of bounds");
     }
 
     // Load time state
@@ -1707,10 +1742,23 @@ dosboxx_error_t dosboxx_load_state(
 
     // Load event queue (CRITICAL for TLA+ compliance)
     const SaveStateEventQueueHeader* eq_header = reinterpret_cast<const SaveStateEventQueueHeader*>(ptr + header->event_queue_offset);
+
+    // H15: Cap event_count to prevent OOB write into fixed-size events array
+    if (eq_header->event_count > EventQueueState::MAX_EVENTS) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Event count exceeds maximum");
+    }
+
+    // H15: Validate event data fits within buffer
+    size_t eq_data_offset = header->event_queue_offset + sizeof(SaveStateEventQueueHeader);
+    size_t eq_data_size = static_cast<size_t>(eq_header->event_count) * sizeof(ScheduledEvent);
+    if (!section_fits(static_cast<uint32_t>(eq_data_offset), eq_data_size)) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Event queue data out of bounds");
+    }
+
     g_event_queue.event_count = eq_header->event_count;
     g_event_queue.next_event_id = eq_header->next_event_id;
 
-    size_t eq_offset = header->event_queue_offset + sizeof(SaveStateEventQueueHeader);
+    size_t eq_offset = eq_data_offset;
     for (size_t i = 0; i < g_event_queue.event_count; ++i) {
         std::memcpy(&g_event_queue.events[i], ptr + eq_offset, sizeof(ScheduledEvent));
         eq_offset += sizeof(ScheduledEvent);
@@ -1718,9 +1766,26 @@ dosboxx_error_t dosboxx_load_state(
 
     // Load input state
     const SaveStateInputHeader* input_header = reinterpret_cast<const SaveStateInputHeader*>(ptr + header->input_offset);
+
+    // H15: Cap input queue sizes to prevent overflow
+    if (input_header->key_queue_size > InputState::MAX_KEY_EVENTS) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Key queue size exceeds maximum");
+    }
+    if (input_header->mouse_queue_size > InputState::MAX_MOUSE_EVENTS) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Mouse queue size exceeds maximum");
+    }
+
+    // H15: Validate input data fits within buffer
+    size_t input_data_offset = header->input_offset + sizeof(SaveStateInputHeader);
+    size_t input_data_size = static_cast<size_t>(input_header->key_queue_size) * sizeof(KeyEvent)
+                           + static_cast<size_t>(input_header->mouse_queue_size) * sizeof(MouseEvent);
+    if (!section_fits(static_cast<uint32_t>(input_data_offset), input_data_size)) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Input queue data out of bounds");
+    }
+
     g_input_state.reset();
 
-    size_t input_offset = header->input_offset + sizeof(SaveStateInputHeader);
+    size_t input_offset = input_data_offset;
 
     // Load key events
     for (uint32_t i = 0; i < input_header->key_queue_size; ++i) {
@@ -1740,6 +1805,20 @@ dosboxx_error_t dosboxx_load_state(
 
     // Load frame state
     const SaveStateFrameHeader* frame_header = reinterpret_cast<const SaveStateFrameHeader*>(ptr + header->frame_offset);
+
+    // H15: Validate text_buffer_size doesn't overflow fixed array
+    if (frame_header->text_buffer_size > FrameState::MAX_TEXT_CELLS * sizeof(uint16_t)) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Text buffer size exceeds maximum");
+    }
+
+    // H15: Validate frame data (text + pixels) fits within buffer
+    size_t frame_data_offset = header->frame_offset + sizeof(SaveStateFrameHeader);
+    size_t frame_data_size = static_cast<size_t>(frame_header->text_buffer_size)
+                           + static_cast<size_t>(frame_header->indexed_pixels_size);
+    if (!section_fits(static_cast<uint32_t>(frame_data_offset), frame_data_size)) {
+        DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Frame data out of bounds");
+    }
+
     g_frame_state.is_text_mode = (frame_header->is_text_mode != 0);
     g_frame_state.columns = frame_header->columns;
     g_frame_state.rows = frame_header->rows;
@@ -1750,7 +1829,7 @@ dosboxx_error_t dosboxx_load_state(
     g_frame_state.gfx_width = frame_header->gfx_width;
     g_frame_state.gfx_height = frame_header->gfx_height;
 
-    size_t frame_offset = header->frame_offset + sizeof(SaveStateFrameHeader);
+    size_t frame_offset = frame_data_offset;
 
     // Load text buffer
     std::memcpy(g_frame_state.text_buffer.data(), ptr + frame_offset, frame_header->text_buffer_size);
@@ -1758,7 +1837,11 @@ dosboxx_error_t dosboxx_load_state(
 
     // Load indexed pixels
     if (frame_header->indexed_pixels_size > 0) {
-        g_frame_state.indexed_pixels.resize(frame_header->indexed_pixels_size);
+        try {
+            g_frame_state.indexed_pixels.resize(frame_header->indexed_pixels_size);
+        } catch (const std::bad_alloc&) {
+            DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, "Failed to allocate indexed pixel buffer");
+        }
         std::memcpy(g_frame_state.indexed_pixels.data(), ptr + frame_offset, frame_header->indexed_pixels_size);
     } else {
         g_frame_state.indexed_pixels.clear();
