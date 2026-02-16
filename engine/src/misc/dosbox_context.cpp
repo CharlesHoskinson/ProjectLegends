@@ -21,6 +21,7 @@
 #ifndef AIBOX_HEADLESS
 #include "mem.h"
 #include "dma.h"
+#include "vga.h"  // For VGA_Type_t in allocate_hw/free_hw
 #else
 // Stub memory functions for headless mode
 // In headless mode, memory is not actually allocated - we're just testing the API
@@ -231,11 +232,156 @@ void VgaState::hash_into(HashBuilder& builder) const {
     // In headless mode, VideoModeBlock not available - hash pointer presence only
     builder.update(static_cast<uint16_t>(cur_mode ? 1 : 0));
 #endif
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Full VGA Hardware State (Sprint 2 Completion)
+    // Hash determinism-relevant register subsets when hw is allocated.
+    // Deferred from hash: VGA_Draw (render-only), VGA_S3, HERC/TANDY/AMSTRAD
+    // (chip-specific), VGA_DOSBoxIG, VGA_Complexity, VGA_Override, VGA_Memory.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    builder.update(static_cast<uint8_t>(hw != nullptr ? 1 : 0));
+
+#ifndef AIBOX_HEADLESS
+    if (hw) {
+        // Mode identifiers
+        builder.update(static_cast<uint32_t>(hw->mode));
+        builder.update(static_cast<uint32_t>(hw->lastmode));
+        builder.update(hw->misc_output);
+
+        // VGA_Config (display configuration)
+        builder.update(static_cast<uint32_t>(hw->config.display_start));
+        builder.update(static_cast<uint32_t>(hw->config.real_start));
+        builder.update(hw->config.retrace);
+        builder.update(static_cast<uint32_t>(hw->config.scan_len));
+        builder.update(hw->config.chained);
+        builder.update(hw->config.compatible_chain4);
+        builder.update(hw->config.pel_panning);
+        builder.update(hw->config.read_mode);
+        builder.update(hw->config.write_mode);
+        builder.update(hw->config.read_map_select);
+        builder.update(hw->config.color_dont_care);
+        builder.update(hw->config.color_compare);
+        builder.update(hw->config.data_rotate);
+        builder.update(hw->config.raster_op);
+
+        // VGA_Seq (sequencer)
+        builder.update(hw->seq.index);
+        builder.update(hw->seq.reset);
+        builder.update(hw->seq.clocking_mode);
+        builder.update(hw->seq.map_mask);
+        builder.update(hw->seq.character_map_select);
+        builder.update(hw->seq.memory_mode);
+
+        // VGA_Attr (attribute controller)
+        for (int i = 0; i < 16; ++i) builder.update(hw->attr.palette[i]);
+        builder.update(hw->attr.mode_control);
+        builder.update(hw->attr.horizontal_pel_panning);
+        builder.update(hw->attr.overscan_color);
+        builder.update(hw->attr.color_plane_enable);
+        builder.update(hw->attr.color_select);
+        builder.update(hw->attr.index);
+        builder.update(hw->attr.disabled);
+
+        // VGA_Crtc (CRT controller - 25 register bytes)
+        builder.update(hw->crtc.horizontal_total);
+        builder.update(hw->crtc.horizontal_display_end);
+        builder.update(hw->crtc.start_horizontal_blanking);
+        builder.update(hw->crtc.end_horizontal_blanking);
+        builder.update(hw->crtc.start_horizontal_retrace);
+        builder.update(hw->crtc.end_horizontal_retrace);
+        builder.update(hw->crtc.vertical_total);
+        builder.update(hw->crtc.overflow);
+        builder.update(hw->crtc.preset_row_scan);
+        builder.update(hw->crtc.maximum_scan_line);
+        builder.update(hw->crtc.cursor_start);
+        builder.update(hw->crtc.cursor_end);
+        builder.update(hw->crtc.start_address_high);
+        builder.update(hw->crtc.start_address_low);
+        builder.update(hw->crtc.cursor_location_high);
+        builder.update(hw->crtc.cursor_location_low);
+        builder.update(hw->crtc.vertical_retrace_start);
+        builder.update(hw->crtc.vertical_retrace_end);
+        builder.update(hw->crtc.vertical_display_end);
+        builder.update(hw->crtc.offset);
+        builder.update(hw->crtc.underline_location);
+        builder.update(hw->crtc.start_vertical_blanking);
+        builder.update(hw->crtc.end_vertical_blanking);
+        builder.update(hw->crtc.mode_control);
+        builder.update(hw->crtc.line_compare);
+        builder.update(hw->crtc.index);
+
+        // VGA_Gfx (graphics controller)
+        builder.update(hw->gfx.index);
+        builder.update(hw->gfx.set_reset);
+        builder.update(hw->gfx.enable_set_reset);
+        builder.update(hw->gfx.color_compare);
+        builder.update(hw->gfx.data_rotate);
+        builder.update(hw->gfx.read_map_select);
+        builder.update(hw->gfx.mode);
+        builder.update(hw->gfx.miscellaneous);
+        builder.update(hw->gfx.color_dont_care);
+        builder.update(hw->gfx.bit_mask);
+
+        // VGA_Dac (DAC state)
+        builder.update(hw->dac.bits);
+        builder.update(hw->dac.pel_mask);
+        builder.update(hw->dac.pel_index);
+        builder.update(hw->dac.state);
+        builder.update(hw->dac.write_index);
+        builder.update(hw->dac.read_index);
+        for (int i = 0; i < 16; ++i) builder.update(hw->dac.combine[i]);
+        // Hash DAC RGB palette (256 entries x 3 bytes each)
+        for (int i = 0; i < 256; ++i) {
+            builder.update(hw->dac.rgb[i].red);
+            builder.update(hw->dac.rgb[i].green);
+            builder.update(hw->dac.rgb[i].blue);
+        }
+    }
+#endif
+}
+
+// VGA hardware state lifecycle
+void VgaState::allocate_hw() {
+#ifndef AIBOX_HEADLESS
+    if (!hw) {
+        hw = new VGA_Type_t();
+    }
+#endif
+    // In headless mode, hw stays nullptr (VGA registers not needed)
+}
+
+void VgaState::free_hw() noexcept {
+#ifndef AIBOX_HEADLESS
+    delete hw;
+#endif
+    hw = nullptr;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PicState Implementation
 // ═══════════════════════════════════════════════════════════════════════════════
+
+void PicController::hash_into(HashBuilder& builder) const {
+    builder.update(icw_words);
+    builder.update(icw_index);
+    builder.update(special);
+    builder.update(auto_eoi);
+    builder.update(rotate_on_auto_eoi);
+    builder.update(single);
+    builder.update(request_issr);
+    builder.update(vector_base);
+    builder.update(input);
+    builder.update(edge);
+    builder.update(irr);
+    builder.update(imr);
+    builder.update(imrr);
+    builder.update(isr);
+    builder.update(isrr);
+    builder.update(isr_ignore);
+    builder.update(active_irq);
+    builder.update(controller_index);
+}
 
 void PicState::hash_into(HashBuilder& builder) const {
     // All PIC state is determinism-relevant
@@ -257,12 +403,13 @@ void PicState::hash_into(HashBuilder& builder) const {
     // IRQ timing
     builder.update(irq_delay_ns);
 
-    // Controller state
-    builder.update(master_imr);
-    builder.update(slave_imr);
-    builder.update(master_isr);
-    builder.update(slave_isr);
-    builder.update(auto_eoi);
+    // Full controller state (replaces summary fields)
+    controllers[0].hash_into(builder);
+    controllers[1].hash_into(builder);
+
+    // Global PIC flags
+    builder.update(enable_slave_pic);
+    builder.update(enable_pc_xt_nmi_mask);
 
     // Note: ticker_list is NOT hashed - function pointers are runtime-dependent
 }
@@ -308,6 +455,44 @@ void PicState::shutdown_tickers() noexcept {
 // ═══════════════════════════════════════════════════════════════════════════════
 // KeyboardState Implementation
 // ═══════════════════════════════════════════════════════════════════════════════
+
+void KeyboardState::Ps2MouseState::reset() noexcept {
+    type = 0;
+    mode = 2;
+    reset_mode = 2;
+    samplerate = 80;
+    resolution = 1;
+    std::fill(std::begin(last_srate), std::end(last_srate), uint8_t{0});
+    acx = 0.0f;
+    acy = 0.0f;
+    reporting = false;
+    scale21 = false;
+    intellimouse_mode = false;
+    intellimouse_btn45 = false;
+    int33_taken = false;
+    l = false;
+    m = false;
+    r = false;
+}
+
+void KeyboardState::Ps2MouseState::hash_into(HashBuilder& builder) const {
+    builder.update(type);
+    builder.update(mode);
+    builder.update(reset_mode);
+    builder.update(samplerate);
+    builder.update(resolution);
+    for (int i = 0; i < 3; ++i) builder.update(last_srate[i]);
+    builder.update(acx);
+    builder.update(acy);
+    builder.update(reporting);
+    builder.update(scale21);
+    builder.update(intellimouse_mode);
+    builder.update(intellimouse_btn45);
+    builder.update(int33_taken);
+    builder.update(l);
+    builder.update(m);
+    builder.update(r);
+}
 
 void KeyboardState::hash_into(HashBuilder& builder) const {
     // All keyboard state is determinism-relevant
@@ -377,6 +562,14 @@ void KeyboardState::hash_into(HashBuilder& builder) const {
     builder.update(rightctrl_pressed);
     builder.update(leftshift_pressed);
     builder.update(rightshift_pressed);
+
+    // PS/2 mouse state
+    ps2mouse.hash_into(builder);
+
+    // Auxiliary port flags
+    builder.update(enable_aux);
+    builder.update(reset_state);
+    builder.update(aux_command);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -865,6 +1058,7 @@ Result<void> DOSBoxContext::initialize() {
     cpu_state.reset();
     mixer.reset();
     vga.reset();
+    vga.allocate_hw();
     pic.reset();
     keyboard.reset();
     input.reset();
@@ -934,6 +1128,9 @@ void DOSBoxContext::shutdown() noexcept {
     if (!initialized_) {
         return;
     }
+
+    // Free VGA hardware state (Sprint 2 Completion)
+    vga.free_hw();
 
     // Free guest memory (Sprint 2 Phase 2)
     MEM_FreeForContext(this);

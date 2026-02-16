@@ -792,7 +792,10 @@ void VGA_KillDrawing(void);
 
 void VGA_SetOverride(bool vga_override);
 
-extern VGA_Type vga;
+// VGA hardware state accessor — out-of-line compat shim in vga_compat.cpp
+// (Replaces `extern VGA_Type vga;` for per-instance isolation — Sprint 2 Completion)
+VGA_Type& vga_get_hw();
+#define vga (vga_get_hw())
 
 /* Support for modular SVGA implementation */
 /* Video mode extra data to be passed to FinishSetMode_SVGA().

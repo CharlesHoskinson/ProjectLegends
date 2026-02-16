@@ -231,7 +231,7 @@ Result<StateHash> get_state_hash(DOSBoxContext* ctx, HashMode mode) {
 
     // Version marker for hash stability
     // Increment when hash structure changes
-    const uint32_t hash_version = 7;  // V7: Added Memory state (Sprint 2 Phase 2)
+    const uint32_t hash_version = 8;  // V8: Keyboard PS/2 mouse + PIC controllers + VGA hw state
     builder.update(hash_version);
 
     // Mode marker

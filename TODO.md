@@ -3,27 +3,93 @@
 ## Current Status
 
 **Sprint 1** — Library Foundation: Complete
-**Sprint 2** — Instance Reality: In Progress (Phase 2 save/load complete)
+**Sprint 2** — Instance Reality: Complete
 **Sprint 3** — Module Graph: Complete
+
+### Global Migration Summary
+
+| Category | Count | % |
+|----------|-------|---|
+| Migrated | 61 | 87% |
+| Partial | 0 | 0% |
+| Deferred | 9 | 13% |
+| Pending | 0 | 0% |
+| **Total tracked** | **70** | |
 
 ---
 
-## Immediate Priorities
+## Tier 1 — Sprint 2 Completion (DONE)
 
-### 1. Build Integration
+All 3 partial global migrations are complete. Multi-instance support validated.
 
-- [x] Wire engine to top-level CMakeLists.txt
-- [x] Headless build compiles (`-DAIBOX_HEADLESS=ON -DAIBOX_LIBRARY_MODE=ON`)
-- [ ] Cross-platform verification (Linux GCC, Windows MSVC/MinGW, macOS Clang)
+### 1. ~~Complete PIC register state migration~~ DONE
 
-### 2. GUI Testing
+- `PicController` struct in `pic_types.h`, embedded as `PicState.controllers[2]`
+- Full 14-field register state per controller + `controller_index`
+- `enable_slave_pic`, `enable_pc_xt_nmi_mask` global flags added
+- Compat shims expanded in `pic_compat.cpp`
+
+### 2. ~~Complete VGA register state migration~~ DONE
+
+- `VGA_Type_t* hw` opaque pointer in `VgaState`
+- Per-instance allocation via `allocate_hw()`/`free_hw()`
+- `extern VGA_Type vga` → `#define vga (vga_get_hw())` macro redirect
+- Hash includes DAC, CRTC, Seq, Attr, Gfx, Config register subsets
+
+### 3. ~~Complete keyboard buffer state migration~~ DONE
+
+- Buffer expanded from 16 → 96 (matches KEYBUFSIZE=32*3)
+- `Ps2MouseState` sub-struct (13 fields: type, mode, samplerate, buttons, etc.)
+- `enable_aux`, `reset_state`, `aux_command` flags added
+
+### 4. Eliminate thread-local current_context() accessors
+
+- Remove all thread-local `current_context()` usage from production code
+- Accessor macros in headers (e.g., `vga.h` redirects via `current_context()`) still exist
+- Tracked by `scripts/check_current_context.py`
+- All subsystem access should use explicit context parameter passing
+
+### 5. ~~Multi-instance smoke test~~ DONE
+
+- `engine/tests/unit/test_multi_instance_smoke.cpp` (8 tests)
+- Keyboard/PIC/VGA isolation, independent hashes, clean destruction
+
+### 6. CI enforcement preventing new globals
+
+- Verify `.github/workflows/sprint2-checks.yml` fully prevents new globals
+- Ensure `baseline_globals.yaml` is up to date
+- Confirm `scripts/check_globals.py` catches regressions
+- Lock down globals registry once Sprint 2 completes
+
+### 7. Remove compat shim files after full migration
+
+- Once multi-instance is verified in production, simplify or
+  remove the compatibility shim files:
+  - `dma_compat.cpp`, `memory_compat.cpp`, `pic_compat.cpp`, `vga_compat.cpp`
+  - `int10_compat.cpp`, `state_hash_compat.cpp`
+  - `cpu_bridge.h` / `cpu_bridge.cpp`
+
+---
+
+## Tier 2 — Immediate Priorities (Parallelizable)
+
+### 8. Cross-platform build verification
+
+- [ ] Linux GCC
+- [ ] Windows MSVC/MinGW
+- [ ] macOS Clang
+- `module-dag.yml` has Linux/Windows jobs but needs end-to-end verification
+- macOS Clang not yet covered in CI
+
+### 9. GUI assessment and decision
 
 - [ ] Assess DOSBox-X GUI survival (`src/gui/` menu, mapper)
 - [ ] SDL2 backend test (window, rendering, input, fullscreen)
 - [ ] SDL3 backend test (texture rendering, audio stream)
-- [ ] GUI decision: keep DOSBox-X GUI, strip for headless-only, or replace
+- [ ] Decision: keep DOSBox-X GUI, strip for headless-only, or replace
+- Feeds into Sprint 6 frontend convergence
 
-### 3. LLM Integration
+### 10. LLM integration end-to-end testing
 
 - [ ] Frame capture test (create → step → capture text)
 - [ ] Token estimation accuracy validation
@@ -31,107 +97,32 @@
 - [ ] End-to-end agent test (boot DOS, run DIR, verify replay)
 - [ ] Game targets: Oregon Trail, Zork, Commander Keen, DOOM
 
-### 4. Engine Refactoring
+### 11. Dead code removal
 
-- [ ] Complete global migration (17 remaining per `globals_registry.yaml`)
-- [ ] Multi-instance support (requires 100% global migration)
-- [ ] Remove dead code (networking, printer/parallel if unused)
-- [ ] Performance profiling of CPU emulation hot paths
+- [ ] Networking code (unused in library mode)
+- [ ] Printer/parallel port drivers
+- [ ] Other legacy DOSBox-X subsystems unreachable in library/headless mode
+- Reduces attack surface, build times, and maintenance burden
 
----
+### 12. Machine context subsystem initialization (8 stubs)
 
-## Sprint 1 — Library Foundation (Complete)
-
-- [x] Stable C API boundary (`legends_embed.h`)
-- [x] Platform Abstraction Layer (headless, SDL2, SDL3)
-- [x] Contract gate enforcement (23 invariants)
-- [x] Determinism tests passing
-- [x] Single-instance constraint documented
-
----
-
-## Sprint 2 — Instance Reality (In Progress)
-
-### Phase 1 — CPU Bridge (Complete)
-
-- [x] `dosbox_lib_step_cycles()` wired to CPU bridge
-- [x] `execute_cycles()` implemented (stub for library mode)
-- [x] Timing state synchronization between layers
-- [x] Rounding-error fix for deterministic time computation
-
-### Phase 2 — Save/Load State (Complete)
-
-- [x] Engine state serialization format (`engine_state.h`)
-- [x] `dosbox_lib_save_state()` serializes timing, PIC, keyboard
-- [x] `dosbox_lib_load_state()` restores engine state
-- [x] Legends layer includes engine state in save format
-- [x] CRC32 integrity verification
-- [x] Security hardening (bounds validation, size checks)
-- [x] TLA+ round-trip invariant verified by tests
-
-### Phase 3 — State Synchronization
-
-- [x] `sync_state_from_engine()` after stepping
-- [x] Engine reset integrated into `legends_reset()`
-- [x] No sync after load (state already restored)
-
-### Remaining Sprint 2 Work
-
-- [ ] Eliminate thread-local `current_context()` accessors
-- [ ] Move all subsystem state to `ctx->subsystem`
-- [ ] Multi-instance smoke test (interleaved A/B stepping)
-- [ ] CI enforcement preventing new globals
+- `engine/src/aibox/machine_context.cpp` has 8 placeholder TODOs:
+  - [ ] PIC controller (line 381)
+  - [ ] PIT timer (line 386)
+  - [ ] VGA context (line 396)
+  - [ ] Keyboard controller (line 401)
+  - [ ] Mouse controller (line 402)
+  - [ ] Sound subsystem (line 407)
+  - [ ] DOS kernel (line 412)
+  - [ ] Actual emulation logic (line 228)
 
 ---
 
-## Sprint 3 — Module Graph (Complete)
+## Tier 3 — Sprints 4–6 (Sequential)
 
-### Phase 1 — Define Module Boundaries (Complete)
+### Sprint 4 — Deterministic Replay as Product
 
-- [x] Create `cmake/ModuleManifest.cmake` with module definitions
-- [x] Define DAG: legends_core → aibox_core, leaves: legends_pal, aibox_core
-- [x] Update ARCHITECTURE.md with Module Graph section
-- [x] Include manifest in CMakeLists.txt
-
-### Phase 2 — Fix Cross-Module Path Includes (Complete)
-
-- [x] Fix builtin.h (12 ../src/ violations)
-- [x] Fix bios_disk.h (1 ../src/ violation)
-- [x] Fix render.h (1 ../src/ violation)
-- [x] Create `engine/include/dosbox/builtin_types.h`
-- [x] Create `engine/include/dosbox/cdrom_interface.h`
-- [x] Create `engine/include/dosbox/render_types.h`
-
-### Phase 3 — Build Static Library DAG (Complete)
-
-- [x] Create `cmake/ModuleDAG.cmake` with verification function
-- [x] Integrate DAG verification into CMakeLists.txt
-- [x] Add `legends_print_dag()` for verbose builds
-- [x] Add circular dependency detection
-
-### Phase 4 — Service Interfaces (Complete)
-
-- [x] Create `engine/include/dosbox/engine_services.h`
-- [x] Add `EngineServiceTable` for dependency injection
-- [x] Add `EngineHandle` RAII wrapper
-- [x] Update ARCHITECTURE.md with Service Interfaces section
-
-### Phase 5 — CI Include Rule Enforcement (Complete)
-
-- [x] Create `scripts/check_includes.py`
-- [x] Create `.github/workflows/module-dag.yml`
-- [x] Create `.githooks/pre-commit` hook
-- [x] Add Linux and Windows build verification
-
-### Phase 6 — Measure Rebuild Improvement (Complete)
-
-- [x] Create `scripts/measure_rebuild.py`
-- [x] Add Build Metrics section to ARCHITECTURE.md
-- [x] Capture metrics: all targets met (<3s header, <2s cpp)
-
----
-
-## Sprint 4 — Deterministic Replay as Product
+**Blocked by:** Sprint 2 completion (multi-instance smoke test)
 
 - [ ] First-class state hash API with stability guarantees
 - [ ] Versioned snapshot schema (portable, forward-compatible)
@@ -140,9 +131,9 @@
 - [ ] Fast CI trace corpus
 - [ ] Nightly soak suite
 
----
+### Sprint 5 — True Embeddability
 
-## Sprint 5 — True Embeddability
+**Blocked by:** Sprint 4
 
 - [ ] In-memory configuration only
 - [ ] Abstracted filesystem access
@@ -150,9 +141,9 @@
 - [ ] Interactive behavior extraction
 - [ ] Sandbox compatibility verification
 
----
+### Sprint 6 — Frontend Convergence
 
-## Sprint 6 — Frontend Convergence
+**Blocked by:** GUI decision (task 9)
 
 - [ ] SDL2 deprecation
 - [ ] SDL3 performance tuning
@@ -163,20 +154,20 @@
 
 ---
 
-## Medium-Term Goals
+## Tier 4 — Medium-Term Goals
 
 ### API Refinement
 
 - [ ] Unify `legends_embed.h` and `aibox/ffi_*.h` APIs
-- [ ] Rust bindings (`legends-rs` crate)
-- [ ] Python bindings (`pylegends` package)
+- [ ] Rust bindings (`legends-rs` crate) — blocked by API unification
+- [ ] Python bindings (`pylegends` package) — blocked by API unification
 
 ### Testing Infrastructure
 
 - [ ] Golden file tests for determinism
-- [ ] Fuzzing harness for save/load
+- [ ] Expand fuzzing harness for save/load (LibFuzzer infra exists)
 - [ ] Performance regression tests
-- [ ] Memory leak detection (Valgrind/ASan)
+- [ ] Memory leak detection (Valgrind/ASan systematic coverage)
 
 ### Documentation
 
@@ -195,11 +186,29 @@
 
 ---
 
+## Dependency Graph
+
+```
+Tasks 1,2,3 (partial globals)
+    ├──→ Task 5 (multi-instance smoke test)
+    │       ├──→ Task 7 (remove compat shims)
+    │       └──→ Sprint 4 (deterministic replay)
+    │               └──→ Sprint 5 (true embeddability)
+    │
+Task 4 (eliminate current_context)
+Task 6 (CI globals enforcement)
+
+Task 9 (GUI decision) ──→ Sprint 6 (frontend convergence)
+Task 14 (API unification) ──→ Task 15 (language bindings)
+```
+
+---
+
 ## Constraints
 
 | Constraint | Description |
 |------------|-------------|
-| V1 Instance | Single instance per process (17 globals remaining) |
+| V1 Instance | Multi-instance capable (all partial globals migrated) |
 | Threading | Core spawns no threads; host owns threading |
 | Determinism | All randomness seedable; same inputs = same outputs |
 | ABI Stability | Breaking changes require major version bump |

@@ -42,3 +42,45 @@ void TIMER_ExecuteTickHandlers() {
     if (!has_current_context()) return;
     current_context().pic.execute_tickers();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PIC Controller Compatibility Shims (Sprint 2 Completion)
+// ═══════════════════════════════════════════════════════════════════════════════
+// These provide access to PIC controller state through current_context().
+// New code should use DOSBoxContext.pic.controllers[] directly.
+
+namespace {
+    // Static fallbacks for when no context is active
+    static dosbox::PicController fallback_controllers[2];
+    static bool fallback_enable_slave_pic = true;
+    static bool fallback_enable_pc_xt_nmi_mask = false;
+}
+
+dosbox::PicController& pic_get_controller(int index) {
+    if (has_current_context()) {
+        return current_context().pic.controllers[index & 1];
+    }
+    return fallback_controllers[index & 1];
+}
+
+dosbox::PicController& pic_get_master() {
+    return pic_get_controller(0);
+}
+
+dosbox::PicController& pic_get_slave() {
+    return pic_get_controller(1);
+}
+
+bool& pic_get_enable_slave_pic() {
+    if (has_current_context()) {
+        return current_context().pic.enable_slave_pic;
+    }
+    return fallback_enable_slave_pic;
+}
+
+bool& pic_get_enable_pc_xt_nmi_mask() {
+    if (has_current_context()) {
+        return current_context().pic.enable_pc_xt_nmi_mask;
+    }
+    return fallback_enable_pc_xt_nmi_mask;
+}

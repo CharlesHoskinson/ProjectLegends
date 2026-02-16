@@ -20,6 +20,7 @@
 
 #include "dosbox.h"
 #include "dosbox/dosbox_context.h"
+#include "dosbox/pic_types.h"
 #include "inout.h"
 #include "cpu.h"
 #include "callback.h"
@@ -40,26 +41,15 @@ unsigned long PIC_irq_delay_ns = 0;
 bool never_mark_cascade_in_service = false;
 bool ignore_cascade_in_service = false;
 
-struct PIC_Controller {
-    Bitu icw_words;
-    Bitu icw_index;
-    bool special;
-    bool auto_eoi;
-    bool rotate_on_auto_eoi;
-    bool single;
-    bool request_issr;
-    uint8_t vector_base;
-
-    uint8_t input;      // input signal (directly set by raise/lower irq) used to filter for edge detect
-    uint8_t edge;       // which signals are to be filtered for edge trigger
-    uint8_t irr;        // request register
-    uint8_t imr;        // mask register
-    uint8_t imrr;       // mask register reversed (makes bit tests simpler)
-    uint8_t isr;        // in service register
-    uint8_t isrr;       // in service register reversed (makes bit tests simpler)
-    uint8_t isr_ignore; // in service bits to ignore
-    uint8_t active_irq; //currently active irq
-
+/**
+ * Local PIC_Controller extends the shared PicController (from pic_types.h)
+ * with emulation-specific methods. Data fields are inherited from the shared
+ * type, enabling DOSBoxContext.pic.controllers[] to hold the same layout.
+ *
+ * The inherited controller_index field (0 = master, 1 = slave) replaces the
+ * original `this == &master` pointer comparisons.
+ */
+struct PIC_Controller : public dosbox::PicController {
 
     void set_imr(uint8_t val);
 
@@ -125,7 +115,7 @@ void PIC_Controller::check_for_irq(){
     if (possible_irq) {
         uint8_t a_irq = special?8:active_irq;
 
-        if (ignore_cascade_in_service && this == &master && a_irq == (unsigned char)master_cascade_irq)
+        if (ignore_cascade_in_service && controller_index == 0 && a_irq == (unsigned char)master_cascade_irq)
             a_irq++;
 
         for(uint8_t i = 0, s = 1; i < a_irq;i++, s<<=1){
@@ -150,7 +140,7 @@ void PIC_Controller::raise_irq(uint8_t val){
         irr|=bit;
         if((bit&imrr)&isrr) { //not masked and not in service
             if(special || val < active_irq) activate();
-            else if (ignore_cascade_in_service && this == &master && val == (unsigned char)master_cascade_irq) activate();
+            else if (ignore_cascade_in_service && controller_index == 0 && val == (unsigned char)master_cascade_irq) activate();
         }
     }
 }
@@ -173,7 +163,7 @@ void PIC_Controller::set_imr(uint8_t val) {
 
 void PIC_Controller::activate() { 
     //Stops CPU if master, signals master if slave
-    if(this == &master) {
+    if(controller_index == 0) {
         //cycles 0, take care of the port IO stuff added in raise_irq base caller.
         if (!PIC_IRQCheckPending) {
             /* NTS: PIC_AddEvent by design caps CPU_Cycles to make the event happen on time */
@@ -187,7 +177,7 @@ void PIC_Controller::activate() {
 
 void PIC_Controller::deactivate() { 
     //removes irq check value if master, signals master if slave
-    if(this == &master) {
+    if(controller_index == 0) {
         /* NTS: DOSBox code used to set PIC_IRQCheck = 0 here.
          *
          *      That's actually not the way to handle it. Here's why:
@@ -213,7 +203,7 @@ void PIC_Controller::deactivate() {
 void PIC_Controller::start_irq(uint8_t val){
     irr&=~(1<<(val));
     if (!auto_eoi) {
-        if (never_mark_cascade_in_service && this == &master && val == master_cascade_irq) {
+        if (never_mark_cascade_in_service && controller_index == 0 && val == master_cascade_irq) {
             /* do nothing */
         }
         else {
@@ -928,6 +918,7 @@ void PIC_Reset(Section *sec) {
         pics[i].edge = 0x00;
         pics[i].input = 0x00;
         pics[i].active_irq = 8;
+        pics[i].controller_index = static_cast<uint8_t>(i);
     }
 
     /* PC-98: By default (but an option otherwise)

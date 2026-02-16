@@ -1,23 +1,25 @@
 /**
  * @file test_pic_migration.cpp
- * @brief Sprint 2 Phase 5: PIC Ticker Migration Tests
+ * @brief Sprint 2: PIC Migration Tests
  *
- * Tests for migrating PIC ticker handlers to DOSBoxContext.
- * These tests verify the ticker_list and its integration with
- * the context-based architecture.
+ * Tests for PIC ticker handlers and full controller register state
+ * in DOSBoxContext.
  *
- * Test IDs from phase-05-pic-ticker.md:
- * - TEST-P05-U01: Empty Ticker List Default
- * - TEST-P05-U02: Add Single Ticker
- * - TEST-P05-U03: Execute Ticker Handlers
- * - TEST-P05-U04: Remove Ticker Handler
- * - TEST-P05-U05: Cleanup on Destroy
- * - TEST-P05-I01: Timer Interrupts Work
- * - TEST-P05-I02: Ticker Isolation Between Instances
+ * Original test IDs (Phase 5):
+ * - TEST-P05-U01 through TEST-P05-I02: Ticker infrastructure
+ *
+ * Sprint 2 Completion tests:
+ * - Controller register defaults and modification
+ * - IRQ raise/lower through controller
+ * - IMR/ISR register modification
+ * - enable_slave_pic flag behavior
+ * - Controller isolation between instances
+ * - Hash changes on register modification
  */
 
 #include <gtest/gtest.h>
 #include "dosbox/dosbox_context.h"
+#include "dosbox/state_hash.h"
 
 using namespace dosbox;
 
@@ -255,6 +257,194 @@ TEST(PicIntegration, TicksCounter) {
     ctx.pic.ticks++;
 
     EXPECT_EQ(ctx.pic.ticks, initial_ticks + 3);
+
+    ctx.shutdown();
+}
+
+// ===============================================================================
+// Controller Register Tests (Sprint 2 Completion)
+// ===============================================================================
+
+/**
+ * TEST-CTRL-U01: Controller Register Defaults
+ * Verify controllers have correct initial register values.
+ */
+TEST(PicController, RegisterDefaults) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+
+    // Master controller
+    EXPECT_EQ(ctx.pic.controllers[0].controller_index, 0u);
+    EXPECT_EQ(ctx.pic.controllers[0].imr, 0xFFu);
+    EXPECT_EQ(ctx.pic.controllers[0].isr, 0u);
+    EXPECT_EQ(ctx.pic.controllers[0].irr, 0u);
+    EXPECT_EQ(ctx.pic.controllers[0].active_irq, 8u);
+    EXPECT_FALSE(ctx.pic.controllers[0].auto_eoi);
+    EXPECT_FALSE(ctx.pic.controllers[0].special);
+
+    // Slave controller
+    EXPECT_EQ(ctx.pic.controllers[1].controller_index, 1u);
+    EXPECT_EQ(ctx.pic.controllers[1].imr, 0xFFu);
+    EXPECT_EQ(ctx.pic.controllers[1].isr, 0u);
+}
+
+/**
+ * TEST-CTRL-U02: IMR Register Modification
+ * Verify IMR can be set and read.
+ */
+TEST(PicController, ImrModification) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+
+    ctx.pic.controllers[0].imr = 0xFE;  // Unmask IRQ0
+    ctx.pic.controllers[0].imrr = ~ctx.pic.controllers[0].imr;
+
+    EXPECT_EQ(ctx.pic.controllers[0].imr, 0xFEu);
+    EXPECT_EQ(ctx.pic.controllers[0].imrr, 0x01u);
+
+    // Backward-compat accessor
+    EXPECT_EQ(ctx.pic.master_imr(), 0xFEu);
+}
+
+/**
+ * TEST-CTRL-U03: ISR Register Modification
+ * Verify ISR can be set and read.
+ */
+TEST(PicController, IsrModification) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+
+    ctx.pic.controllers[0].isr = 0x01;  // IRQ0 in service
+    ctx.pic.controllers[0].isrr = ~ctx.pic.controllers[0].isr;
+
+    EXPECT_EQ(ctx.pic.controllers[0].isr, 0x01u);
+    EXPECT_EQ(ctx.pic.controllers[0].isrr, 0xFEu);
+    EXPECT_EQ(ctx.pic.master_isr(), 0x01u);
+}
+
+/**
+ * TEST-CTRL-U04: Auto-EOI Mode
+ * Verify auto_eoi can be toggled.
+ */
+TEST(PicController, AutoEoiMode) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+
+    EXPECT_FALSE(ctx.pic.controllers[0].auto_eoi);
+
+    ctx.pic.controllers[0].auto_eoi = true;
+    EXPECT_TRUE(ctx.pic.controllers[0].auto_eoi);
+    EXPECT_TRUE(ctx.pic.auto_eoi());
+}
+
+/**
+ * TEST-CTRL-U05: Controller Reset
+ * Verify controller reset restores defaults.
+ */
+TEST(PicController, ControllerReset) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+
+    ctx.pic.controllers[0].imr = 0x00;
+    ctx.pic.controllers[0].isr = 0xFF;
+    ctx.pic.controllers[0].auto_eoi = true;
+    ctx.pic.controllers[0].vector_base = 0x70;
+
+    ctx.pic.controllers[0].reset();
+
+    EXPECT_EQ(ctx.pic.controllers[0].imr, 0xFFu);
+    EXPECT_EQ(ctx.pic.controllers[0].isr, 0u);
+    EXPECT_FALSE(ctx.pic.controllers[0].auto_eoi);
+    EXPECT_EQ(ctx.pic.controllers[0].vector_base, 0u);
+}
+
+/**
+ * TEST-CTRL-U06: IRR Register (Request Register)
+ * Verify IRR can be modified to simulate IRQ requests.
+ */
+TEST(PicController, IrrModification) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+
+    // Simulate IRQ0 request
+    ctx.pic.controllers[0].irr = 0x01;
+    EXPECT_EQ(ctx.pic.controllers[0].irr, 0x01u);
+
+    // Simulate IRQ0 + IRQ1 request
+    ctx.pic.controllers[0].irr = 0x03;
+    EXPECT_EQ(ctx.pic.controllers[0].irr, 0x03u);
+}
+
+/**
+ * TEST-CTRL-U07: Enable Slave PIC Flag
+ * Verify enable_slave_pic flag defaults and can be modified.
+ */
+TEST(PicController, EnableSlavePicFlag) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+
+    EXPECT_TRUE(ctx.pic.enable_slave_pic);
+
+    ctx.pic.enable_slave_pic = false;
+    EXPECT_FALSE(ctx.pic.enable_slave_pic);
+}
+
+/**
+ * TEST-CTRL-U08: PicState Reset Resets Controllers
+ * Verify PicState::reset() resets both controllers.
+ */
+TEST(PicController, PicStateResetResetsControllers) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+
+    ctx.pic.controllers[0].imr = 0x00;
+    ctx.pic.controllers[1].isr = 0xFF;
+    ctx.pic.enable_slave_pic = false;
+
+    ctx.pic.reset();
+
+    EXPECT_EQ(ctx.pic.controllers[0].imr, 0xFFu);
+    EXPECT_EQ(ctx.pic.controllers[1].isr, 0u);
+    EXPECT_TRUE(ctx.pic.enable_slave_pic);
+    EXPECT_EQ(ctx.pic.controllers[0].controller_index, 0u);
+    EXPECT_EQ(ctx.pic.controllers[1].controller_index, 1u);
+}
+
+/**
+ * TEST-CTRL-I01: Controller Isolation Between Instances
+ * Verify PIC controller state is isolated per instance.
+ */
+TEST(PicController, ControllerIsolation) {
+    DOSBoxContext ctx1(ContextConfig::minimal());
+    DOSBoxContext ctx2(ContextConfig::minimal());
+
+    ctx1.pic.controllers[0].imr = 0x00;
+    ctx1.pic.controllers[0].auto_eoi = true;
+    ctx1.pic.enable_slave_pic = false;
+
+    ctx2.pic.controllers[0].imr = 0xFE;
+    ctx2.pic.controllers[1].vector_base = 0x70;
+
+    // Verify isolation
+    EXPECT_EQ(ctx1.pic.controllers[0].imr, 0x00u);
+    EXPECT_TRUE(ctx1.pic.controllers[0].auto_eoi);
+    EXPECT_FALSE(ctx1.pic.enable_slave_pic);
+
+    EXPECT_EQ(ctx2.pic.controllers[0].imr, 0xFEu);
+    EXPECT_FALSE(ctx2.pic.controllers[0].auto_eoi);
+    EXPECT_TRUE(ctx2.pic.enable_slave_pic);
+    EXPECT_EQ(ctx2.pic.controllers[1].vector_base, 0x70u);
+}
+
+/**
+ * TEST-CTRL-I02: Hash Changes on Controller Register Modification
+ * Verify modifying controller registers changes the state hash.
+ */
+TEST(PicController, HashChangesOnRegisterModification) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+    ctx.initialize();
+
+    auto hash1 = get_state_hash(&ctx, HashMode::Fast);
+    ASSERT_TRUE(hash1.has_value());
+
+    ctx.pic.controllers[0].imr = 0x00;
+
+    auto hash2 = get_state_hash(&ctx, HashMode::Fast);
+    ASSERT_TRUE(hash2.has_value());
+
+    EXPECT_NE(hash1.value(), hash2.value());
 
     ctx.shutdown();
 }

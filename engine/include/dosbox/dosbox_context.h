@@ -29,6 +29,7 @@
 
 #include "dosbox/error_model.h"
 #include "dosbox/instance_handle.h"
+#include "dosbox/pic_types.h"
 #include "dosbox/platform/timing.h"
 #include "dosbox/platform/display.h"
 #include "dosbox/platform/audio.h"
@@ -525,8 +526,9 @@ enum class SvgaChip : uint8_t {
     Other = 255         ///< Other/unknown
 };
 
-// Forward declaration for current video mode
+// Forward declarations
 struct VideoModeBlock;
+struct VGA_Type_t;  // Full VGA hardware state (defined in vga.h)
 
 /**
  * @brief VGA/display subsystem state.
@@ -637,6 +639,35 @@ struct VgaState {
 
     VideoModeBlock* cur_mode = nullptr;  ///< Current video mode block
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Full VGA Hardware State (Sprint 2 Completion)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * @brief Opaque pointer to full VGA hardware state (VGA_Type).
+     *
+     * This embeds the entire ~20KB VGA_Type struct per-instance,
+     * enabling full VGA register isolation between emulator instances.
+     * The pointer is null before initialize() and after shutdown().
+     *
+     * Existing ~25 display config fields above remain as the stable
+     * API surface. The hw pointer provides access to raw registers
+     * (DAC, CRTC, Seq, Attr, Gfx, etc.) for emulation code.
+     */
+    VGA_Type_t* hw = nullptr;
+
+    /**
+     * @brief Allocate VGA hardware state.
+     * Called during context initialization.
+     */
+    void allocate_hw();
+
+    /**
+     * @brief Free VGA hardware state.
+     * Called during context shutdown.
+     */
+    void free_hw() noexcept;
+
     /**
      * @brief Reset to initial state.
      */
@@ -743,15 +774,28 @@ struct PicState {
     uint32_t irq_delay_ns = 0;       ///< IRQ propagation delay in nanoseconds
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Controller State Summary (from pics[] array)
-    // Full register state is large; we track key flags here.
+    // Full Controller State (Sprint 2 Completion)
     // ─────────────────────────────────────────────────────────────────────────
 
-    uint8_t master_imr = 0xFF;       ///< Master PIC interrupt mask register
-    uint8_t slave_imr = 0xFF;        ///< Slave PIC interrupt mask register
-    uint8_t master_isr = 0;          ///< Master PIC in-service register
-    uint8_t slave_isr = 0;           ///< Slave PIC in-service register
-    bool auto_eoi = false;           ///< Auto end-of-interrupt mode
+    PicController controllers[2];     ///< controllers[0]=master, controllers[1]=slave
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Global PIC Flags
+    // ─────────────────────────────────────────────────────────────────────────
+
+    bool enable_slave_pic = true;         ///< Emulate slave PIC with cascade
+    bool enable_pc_xt_nmi_mask = false;   ///< PC/XT NMI mask behavior
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Backward-Compatible Accessors (delegate to controllers[])
+    // These are deprecated; new code should use controllers[] directly.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [[nodiscard]] uint8_t master_imr() const noexcept { return controllers[0].imr; }
+    [[nodiscard]] uint8_t slave_imr() const noexcept { return controllers[1].imr; }
+    [[nodiscard]] uint8_t master_isr() const noexcept { return controllers[0].isr; }
+    [[nodiscard]] uint8_t slave_isr() const noexcept { return controllers[1].isr; }
+    [[nodiscard]] bool auto_eoi() const noexcept { return controllers[0].auto_eoi; }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Ticker Infrastructure (Sprint 2 Phase 5)
@@ -792,11 +836,14 @@ struct PicState {
         in_event_service = false;
         srv_lag = 0.0;
         irq_delay_ns = 0;
-        master_imr = 0xFF;
-        slave_imr = 0xFF;
-        master_isr = 0;
-        slave_isr = 0;
-        auto_eoi = false;
+        // Reset both controllers
+        controllers[0].reset();
+        controllers[0].controller_index = 0;
+        controllers[1].reset();
+        controllers[1].controller_index = 1;
+        // Global PIC flags
+        enable_slave_pic = true;
+        enable_pc_xt_nmi_mask = false;
         // Note: ticker_list is NOT reset here - use shutdown_tickers() for cleanup
     }
 
@@ -836,7 +883,7 @@ struct KeyboardState {
     // Main Keyboard Buffer
     // ─────────────────────────────────────────────────────────────────────────
 
-    static constexpr size_t BUFFER_SIZE = 16;  ///< Keyboard buffer size
+    static constexpr size_t BUFFER_SIZE = 96;  ///< Keyboard buffer size (KEYBUFSIZE=32*3)
     uint16_t buffer[BUFFER_SIZE] = {};         ///< Keyboard scan code buffer
     uint32_t buffer_used = 0;                  ///< Bytes used in buffer
     uint32_t buffer_pos = 0;                   ///< Current buffer read position
@@ -902,6 +949,47 @@ struct KeyboardState {
 
     bool ps2_mouse_enabled = false;  ///< PS/2 mouse port enabled
     bool a20_gate = true;            ///< A20 gate state
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PS/2 Mouse State (from keyboard.cpp global keyb struct)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * @brief PS/2 mouse hardware state.
+     *
+     * Contains all fields from the global keyb struct's PS/2 mouse subsection.
+     * Includes type, mode, sample rate, resolution, button state, and
+     * accumulated movement counters.
+     */
+    struct Ps2MouseState {
+        uint8_t type = 0;              ///< Mouse type (0=standard, 3=intellimouse, 4=intellimouse+)
+        uint8_t mode = 2;              ///< Operating mode (2=stream)
+        uint8_t reset_mode = 2;        ///< Mode to restore on reset
+        uint8_t samplerate = 80;       ///< Sample rate in Hz
+        uint8_t resolution = 1;        ///< Resolution (0-3)
+        uint8_t last_srate[3] = {};    ///< Last 3 sample rates (for intellimouse detection)
+        float acx = 0.0f;              ///< Accumulated X movement
+        float acy = 0.0f;              ///< Accumulated Y movement
+        bool reporting = false;        ///< Data reporting enabled
+        bool scale21 = false;          ///< 2:1 scaling enabled
+        bool intellimouse_mode = false;///< IntelliMouse extensions active
+        bool intellimouse_btn45 = false;///< IntelliMouse 5-button mode
+        bool int33_taken = false;      ///< INT 33h mouse driver has taken over
+        bool l = false;                ///< Left button pressed
+        bool m = false;                ///< Middle button pressed
+        bool r = false;                ///< Right button pressed
+
+        void reset() noexcept;
+        void hash_into(class HashBuilder& builder) const;
+    } ps2mouse;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Auxiliary Port Flags (from keyboard.cpp global keyb struct)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    bool enable_aux = false;         ///< Auxiliary (mouse) port enabled
+    bool reset_state = false;        ///< Keyboard reset in progress
+    uint8_t aux_command = 0;         ///< Pending auxiliary command byte
 
     // ─────────────────────────────────────────────────────────────────────────
     // Modifier Key Tracking
@@ -970,6 +1058,14 @@ struct KeyboardState {
         // PS/2 state
         ps2_mouse_enabled = false;
         a20_gate = true;
+
+        // PS/2 mouse
+        ps2mouse.reset();
+
+        // Auxiliary port flags
+        enable_aux = false;
+        reset_state = false;
+        aux_command = 0;
 
         // Modifier keys
         leftalt_pressed = false;

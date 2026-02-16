@@ -2,11 +2,13 @@
  * @file test_vga_migration.cpp
  * @brief Unit tests for VGA state in DOSBoxContext.
  *
- * Tests for VGA state members: vsync, assigned_lfb, cur_mode.
+ * Tests for VGA state members: vsync, assigned_lfb, cur_mode,
+ * and full VGA hardware state (Sprint 2 Completion).
  */
 
 #include <gtest/gtest.h>
 #include "dosbox/dosbox_context.h"
+#include "dosbox/state_hash.h"
 
 using namespace dosbox;
 
@@ -206,6 +208,118 @@ TEST(VgaIntegration, ContextInitializesWithVga) {
     EXPECT_FALSE(ctx.vga.vsync.manual);
     EXPECT_EQ(ctx.vga.assigned_lfb, 0);
     // cur_mode may or may not be set depending on initialization
+
+    ctx.shutdown();
+}
+
+// ===============================================================================
+// VGA Hardware State Tests (Sprint 2 Completion)
+// ===============================================================================
+
+/**
+ * TEST-HW-U01: HW is Null Before Init
+ * Verify hw pointer is null before initialization.
+ */
+TEST(VgaHardware, HwNullBeforeInit) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+    EXPECT_EQ(ctx.vga.hw, nullptr);
+}
+
+/**
+ * TEST-HW-U02: HW is Non-Null After Init
+ * Verify hw pointer is allocated after initialization.
+ */
+TEST(VgaHardware, HwNonNullAfterInit) {
+    DOSBoxContext ctx(ContextConfig::defaults());
+    ctx.initialize();
+
+    // In headless mode, hw may stay nullptr (VGA registers not needed)
+    // In full mode, hw should be non-null
+#ifndef AIBOX_HEADLESS
+    EXPECT_NE(ctx.vga.hw, nullptr);
+#endif
+
+    ctx.shutdown();
+}
+
+/**
+ * TEST-HW-U03: HW Deallocated on Shutdown
+ * Verify hw pointer is null after shutdown.
+ */
+TEST(VgaHardware, HwDeallocatedOnShutdown) {
+    DOSBoxContext ctx(ContextConfig::defaults());
+    ctx.initialize();
+    ctx.shutdown();
+
+    EXPECT_EQ(ctx.vga.hw, nullptr);
+}
+
+/**
+ * TEST-HW-U04: Existing Display Config Fields Still Work
+ * Verify the stable API surface fields still function.
+ */
+TEST(VgaHardware, DisplayConfigFieldsWork) {
+    DOSBoxContext ctx(ContextConfig::defaults());
+    ctx.initialize();
+
+    ctx.vga.width = 800;
+    ctx.vga.height = 600;
+    ctx.vga.bpp = 16;
+    ctx.vga.mode = VgaMode::LIN16;
+
+    EXPECT_EQ(ctx.vga.width, 800u);
+    EXPECT_EQ(ctx.vga.height, 600u);
+    EXPECT_EQ(ctx.vga.bpp, 16u);
+    EXPECT_EQ(ctx.vga.mode, VgaMode::LIN16);
+
+    ctx.shutdown();
+}
+
+/**
+ * TEST-HW-I01: VGA State Isolation With HW
+ * Verify full VGA hardware state is isolated per instance.
+ */
+TEST(VgaHardware, HwIsolationBetweenInstances) {
+    DOSBoxContext ctx1(ContextConfig::defaults());
+    DOSBoxContext ctx2(ContextConfig::defaults());
+    ctx1.initialize();
+    ctx2.initialize();
+
+#ifndef AIBOX_HEADLESS
+    // Both should have independent hw pointers
+    ASSERT_NE(ctx1.vga.hw, nullptr);
+    ASSERT_NE(ctx2.vga.hw, nullptr);
+    EXPECT_NE(ctx1.vga.hw, ctx2.vga.hw);
+#endif
+
+    // Config fields are independent
+    ctx1.vga.width = 1024;
+    ctx2.vga.width = 640;
+    EXPECT_EQ(ctx1.vga.width, 1024u);
+    EXPECT_EQ(ctx2.vga.width, 640u);
+
+    ctx1.shutdown();
+    ctx2.shutdown();
+}
+
+/**
+ * TEST-HW-I02: Hash Changes on VGA Config Modification
+ * Verify modifying VGA display config changes the state hash.
+ */
+TEST(VgaHardware, HashChangesOnConfigModification) {
+    DOSBoxContext ctx(ContextConfig::minimal());
+    ctx.initialize();
+
+    auto hash1 = get_state_hash(&ctx, HashMode::Fast);
+    ASSERT_TRUE(hash1.has_value());
+
+    ctx.vga.width = 1280;
+    ctx.vga.height = 1024;
+
+    auto hash2 = get_state_hash(&ctx, HashMode::Fast);
+    ASSERT_TRUE(hash2.has_value());
+
+    EXPECT_NE(hash1.value(), hash2.value());
 
     ctx.shutdown();
 }

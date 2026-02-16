@@ -57,3 +57,22 @@ vsync_state& vga_get_vsync() {
     }
     return fallback_vsync;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VGA Hardware State Compatibility Shim (Sprint 2 Completion)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Provides access to the full VGA_Type hardware state via current_context().
+// The `extern VGA_Type vga;` in vga.h is replaced by a macro calling this function.
+// New code should use DOSBoxContext.vga.hw-> directly when possible.
+
+static VGA_Type fallback_vga_hw = {};
+
+VGA_Type& vga_get_hw() {
+    if (has_current_context()) {
+        auto* hw = current_context().vga.hw;
+        if (hw) {
+            return *hw;
+        }
+    }
+    return fallback_vga_hw;
+}

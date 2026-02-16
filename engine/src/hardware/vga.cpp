@@ -206,7 +206,8 @@ uint32_t S3_LFB_BASE =              S3_LFB_BASE_DEFAULT;
 
 bool                                enable_pci_vga = true;
 
-VGA_Type vga;
+// VGA_Type vga; — removed, now per-instance via DOSBoxContext.vga.hw
+// Access via vga_get_hw() shim (vga_compat.cpp) or the #define vga macro in vga.h
 JEGA_DATA jega;
 SVGA_Driver svga;
 int enableCGASnow;

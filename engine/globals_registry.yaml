@@ -240,12 +240,12 @@ globals:
     file: src/hardware/pic.cpp
     line: 113
     subsystem: pic
-    target_context: DOSBoxContext.pic
-    migration_status: partial
+    target_context: DOSBoxContext.pic.controllers
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: critical
-    notes: "PR #14: Key fields migrated to PicState. Full register state pending."
+    notes: "Fully migrated to PicState.controllers[2] (PicController struct). Includes all 14 register fields per controller plus controller_index. Compat shims in pic_compat.cpp."
 
   - name: PIC_Ticks
     type: Bitu
@@ -345,12 +345,12 @@ globals:
     file: src/hardware/vga.cpp
     line: 205
     subsystem: vga
-    target_context: DOSBoxContext.vga
-    migration_status: partial
+    target_context: DOSBoxContext.vga.hw
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: critical
-    notes: "PR #13: Core display config migrated to VgaState. Full register state pending."
+    notes: "Fully migrated to VgaState.hw (opaque VGA_Type_t pointer). Per-instance allocation in allocate_hw()/free_hw(). Hash includes DAC, CRTC, Seq, Attr, Gfx, Config register subsets. Compat shim vga_get_hw() in vga_compat.cpp with #define vga macro in vga.h."
 
   - name: vga_render_on_demand
     type: bool
@@ -804,11 +804,11 @@ globals:
     line: 50
     subsystem: keyboard
     target_context: DOSBoxContext.keyboard
-    migration_status: partial
+    migration_status: migrated
     thread_safety: main_thread_only
     determinism_relevant: true
     priority: high
-    notes: "PR #14: Key fields migrated to KeyboardState. Full buffer state pending."
+    notes: "Fully migrated to KeyboardState including PS/2 mouse state, aux port flags, and buffer[96]."
 
   - name: on_capture_num_lock_was_on
     type: bool
@@ -910,9 +910,9 @@ globals:
 
 statistics:
   total_globals: 70
-  migrated: 58
+  migrated: 61
   pending: 0
   deferred: 9
-  partial: 3
+  partial: 0
   in_progress: 0
-  notes: "All 17 Sprint 2 pending globals resolved: 8 migrated to context (Memory, DMA, DOS, VGA, PIC ticker), 8 deferred (SDL/display/BIOS/logging - non-deterministic or unused in headless mode), 1 already partial (firstticker target struct partial)"
+  notes: "Sprint 2 Complete. All 3 partial globals (keyb, pics, vga) migrated to context. 61 migrated, 9 deferred (SDL/display/BIOS/logging - non-deterministic or unused in headless mode)."
