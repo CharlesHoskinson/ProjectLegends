@@ -372,6 +372,9 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_sprint2_migration.cpp
         # Sprint 2: Instance Migration TDD Tests
         tests/unit/test_instance_migration.cpp
+        # Audit Fix Tests
+        tests/unit/test_safe_arithmetic.cpp
+        tests/unit/test_text_input_utf8.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)

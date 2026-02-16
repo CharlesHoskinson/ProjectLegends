@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <legends/machine_context.h>
+#include <legends/exceptions.h>
 
 using namespace legends;
 
@@ -284,4 +285,10 @@ TEST_F(CompatShimTest, ContextGuardWithSameContext) {
 
     // Should restore to ctx (which was already set)
     EXPECT_EQ(compat::current_ptr(), &ctx);
+}
+
+// BUG-2 fix: current() must throw FatalException when no context is set
+TEST_F(CompatShimTest, CurrentThrowsWhenNoContext) {
+    compat::set_current_context(nullptr);
+    EXPECT_THROW((void)compat::current(), legends::FatalException);
 }

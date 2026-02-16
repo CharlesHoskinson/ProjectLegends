@@ -18,6 +18,7 @@
 #include "legends/legends_embed.h"
 #include "legends/machine_context.h"
 #include "legends/vision_framebuffer.h"
+#include "legends/safe_arithmetic.h"
 
 // Sprint 2: Per-instance state
 #include "internal/legends_instance.h"
@@ -1218,7 +1219,14 @@ legends_error_t legends_capture_rgb(
         height = inst->frame_state.gfx_height;
     }
 
-    size_t required_size = static_cast<size_t>(width) * height * 3;
+    constexpr uint16_t MAX_FRAME_DIMENSION = 2048;
+    if (width > MAX_FRAME_DIMENSION || height > MAX_FRAME_DIMENSION) {
+        LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE,
+            "Frame dimensions exceed maximum (2048x2048)");
+    }
+
+    size_t required_size = 0;
+    SAFE_MULTIPLY_OR_ERROR(static_cast<size_t>(width) * height, 3, required_size);
     *size_out = required_size;
 
     if (width_out != nullptr) { *width_out = width; }
@@ -1399,15 +1407,17 @@ legends_error_t legends_text_input(
             }
             ++p;
         } else {
-            if ((ch & 0xE0) == 0xC0) {
-                p += 2;
-            } else if ((ch & 0xF0) == 0xE0) {
-                p += 3;
-            } else if ((ch & 0xF8) == 0xF0) {
-                p += 4;
-            } else {
-                ++p;
+            int seq_len = 1;
+            if ((ch & 0xE0) == 0xC0) seq_len = 2;
+            else if ((ch & 0xF0) == 0xE0) seq_len = 3;
+            else if ((ch & 0xF8) == 0xF0) seq_len = 4;
+
+            // Validate continuation bytes exist before advancing
+            bool valid = true;
+            for (int i = 1; i < seq_len; ++i) {
+                if (p[i] == '\0') { valid = false; break; }
             }
+            p += valid ? seq_len : 1;
         }
     }
 
@@ -1840,15 +1850,20 @@ static legends_error_t load_state_v2_legacy(
     if (total_events > InputState::EFFECTIVE_CAPACITY) {
         LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "V2: Too many events for unified queue");
     }
-    size_t key_data_size = static_cast<size_t>(input_header_v2->key_queue_size) * sizeof(KeyEvent_V2);
-    size_t mouse_data_size = static_cast<size_t>(input_header_v2->mouse_queue_size) * sizeof(MouseEvent_V2);
+    size_t key_data_size = 0;
+    SAFE_MULTIPLY_OR_ERROR(input_header_v2->key_queue_size, sizeof(KeyEvent_V2), key_data_size);
+    size_t mouse_data_size = 0;
+    SAFE_MULTIPLY_OR_ERROR(input_header_v2->mouse_queue_size, sizeof(MouseEvent_V2), mouse_data_size);
     size_t input_data_offset = header->input_offset + sizeof(SaveStateInputHeader_V2);
     VALIDATE_DATA_BOUNDS(input_data_offset, key_data_size, verified_size);
     VALIDATE_DATA_BOUNDS(input_data_offset + key_data_size, mouse_data_size, verified_size);
 
-    // Validate frame dimensions (matching V3 sanity checks)
+    // Validate frame header fields (matching V3 sanity checks)
     const SaveStateFrameHeader* frame_header =
         reinterpret_cast<const SaveStateFrameHeader*>(ptr + header->frame_offset);
+    if (frame_header->is_text_mode > 1) {
+        LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "V2: invalid bool value for is_text_mode");
+    }
     constexpr uint8_t V2_MAX_COLUMNS = 80;
     constexpr uint8_t V2_MAX_ROWS = 50;
     if (frame_header->columns > V2_MAX_COLUMNS) {
@@ -1887,60 +1902,85 @@ static legends_error_t load_state_v2_legacy(
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // V2 Phase 3: Apply validated data to globals (cannot fail)
+    // V2 Phase 3: Stage validated data into locals (may allocate — can fail)
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Time state
-    inst->time_state.total_cycles = time_section->total_cycles;
-    inst->time_state.emu_time_us = time_section->emu_time_us;
-    inst->time_state.cycles_per_ms = time_section->cycles_per_ms;
+    // Stage time
+    TimeState staged_time{};
+    staged_time.total_cycles = time_section->total_cycles;
+    staged_time.emu_time_us = time_section->emu_time_us;
+    staged_time.cycles_per_ms = time_section->cycles_per_ms;
 
-    // CPU state
-    if (inst->machine) {
-        inst->machine->cpu.flags.interrupt = (cpu_section->interrupt_flag != 0);
-        inst->machine->cpu.halted = (cpu_section->halted != 0);
-    }
-
-    // PIC state
+    // Stage PIC
+    PICState staged_pics[2];
     for (int i = 0; i < 2; ++i) {
-        inst->pics[i].irr = pic_section->pics[i].irr;
-        inst->pics[i].imr = pic_section->pics[i].imr;
-        inst->pics[i].isr = pic_section->pics[i].isr;
-        inst->pics[i].vector_base = pic_section->pics[i].vector_base;
-        inst->pics[i].cascade_irq = pic_section->pics[i].cascade_irq;
+        staged_pics[i].irr = pic_section->pics[i].irr;
+        staged_pics[i].imr = pic_section->pics[i].imr;
+        staged_pics[i].isr = pic_section->pics[i].isr;
+        staged_pics[i].vector_base = pic_section->pics[i].vector_base;
+        staged_pics[i].cascade_irq = pic_section->pics[i].cascade_irq;
     }
 
-    // DMA state (V2 used memcpy)
+    // Stage DMA
+    DMAChannelState staged_dma[8];
     const uint8_t* dma_data = ptr + header->dma_offset;
     for (int i = 0; i < 8; ++i) {
-        std::memcpy(&inst->dma[i], dma_data + i * sizeof(DMAChannelState), sizeof(DMAChannelState));
+        std::memcpy(&staged_dma[i], dma_data + i * sizeof(DMAChannelState), sizeof(DMAChannelState));
     }
 
-    // Event queue
-    inst->event_queue.event_count = eq_header->event_count;
-    inst->event_queue.next_event_id = eq_header->next_event_id;
+    // Stage event queue
+    EventQueueState staged_eq{};
+    staged_eq.event_count = eq_header->event_count;
+    staged_eq.next_event_id = eq_header->next_event_id;
     for (size_t i = 0; i < eq_header->event_count; ++i) {
-        std::memcpy(&inst->event_queue.events[i], ptr + eq_data_offset + i * sizeof(ScheduledEvent),
+        std::memcpy(&staged_eq.events[i], ptr + eq_data_offset + i * sizeof(ScheduledEvent),
                     sizeof(ScheduledEvent));
     }
 
-    // V2 input: convert to unified queue
-    inst->input_state.clear();
+    // Stage V2 input: convert to unified queue
+    InputState staged_input{};
     size_t offset = input_data_offset;
     for (uint32_t i = 0; i < input_header_v2->key_queue_size; ++i) {
         KeyEvent_V2 ke_v2;
         std::memcpy(&ke_v2, ptr + offset, sizeof(KeyEvent_V2));
         offset += sizeof(KeyEvent_V2);
-        inst->input_state.enqueue_key(ke_v2.scancode, ke_v2.is_down, ke_v2.is_extended);
+        staged_input.enqueue_key(ke_v2.scancode, ke_v2.is_down, ke_v2.is_extended);
     }
     for (uint32_t i = 0; i < input_header_v2->mouse_queue_size; ++i) {
         MouseEvent_V2 me_v2;
         std::memcpy(&me_v2, ptr + offset, sizeof(MouseEvent_V2));
         offset += sizeof(MouseEvent_V2);
-        inst->input_state.enqueue_mouse(me_v2.delta_x, me_v2.delta_y, me_v2.buttons);
+        staged_input.enqueue_mouse(me_v2.delta_x, me_v2.delta_y, me_v2.buttons);
     }
 
-    // Frame state
+    // Stage frame (allocations happen here — before any inst-> mutation)
+    std::vector<uint8_t> staged_indexed_pixels;
+    if (pixel_buffer_size > 0) {
+        staged_indexed_pixels.resize(pixel_buffer_size);
+        std::memcpy(staged_indexed_pixels.data(), ptr + frame_data_offset + text_buffer_size, pixel_buffer_size);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // V2 Phase 4: Commit — all writes, no failure possible
+    // ─────────────────────────────────────────────────────────────────────────
+
+    inst->time_state = staged_time;
+
+    if (inst->machine) {
+        inst->machine->cpu.flags.interrupt = (cpu_section->interrupt_flag != 0);
+        inst->machine->cpu.halted = (cpu_section->halted != 0);
+    }
+
+    inst->pics[0] = staged_pics[0];
+    inst->pics[1] = staged_pics[1];
+
+    for (int i = 0; i < 8; ++i) {
+        inst->dma[i] = staged_dma[i];
+    }
+
+    inst->event_queue = staged_eq;
+    inst->input_state = std::move(staged_input);
+
     inst->frame_state.is_text_mode = frame_header->is_text_mode != 0;
     inst->frame_state.columns = frame_header->columns;
     inst->frame_state.rows = frame_header->rows;
@@ -1954,13 +1994,7 @@ static legends_error_t load_state_v2_legacy(
     if (text_buffer_size <= inst->frame_state.text_buffer.size() * sizeof(uint16_t)) {
         std::memcpy(inst->frame_state.text_buffer.data(), ptr + frame_data_offset, text_buffer_size);
     }
-
-    if (pixel_buffer_size > 0) {
-        inst->frame_state.indexed_pixels.resize(pixel_buffer_size);
-        std::memcpy(inst->frame_state.indexed_pixels.data(), ptr + frame_data_offset + text_buffer_size, pixel_buffer_size);
-    } else {
-        inst->frame_state.indexed_pixels.clear();
-    }
+    inst->frame_state.indexed_pixels = std::move(staged_indexed_pixels);
 
     inst->last_error.clear();
     return LEGENDS_OK;
@@ -2124,55 +2158,82 @@ legends_error_t legends_load_state(
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Phase 3: Apply validated data to globals (cannot fail)
-    // All data has been validated and engine has loaded successfully.
+    // Phase 3: Stage validated data into locals (may allocate — can fail)
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Time state
-    inst->time_state.total_cycles = time_section->total_cycles;
-    inst->time_state.emu_time_us = time_section->emu_time_us;
-    inst->time_state.cycles_per_ms = time_section->cycles_per_ms;
+    // Stage time
+    TimeState staged_time{};
+    staged_time.total_cycles = time_section->total_cycles;
+    staged_time.emu_time_us = time_section->emu_time_us;
+    staged_time.cycles_per_ms = time_section->cycles_per_ms;
 
-    // CPU state
+    // Stage PIC
+    PICState staged_pics[2];
+    staged_pics[0] = pic_section->pics[0];
+    staged_pics[1] = pic_section->pics[1];
+
+    // Stage DMA
+    DMAChannelState staged_dma[8];
+    size_t dma_offset = header->dma_offset;
+    for (int i = 0; i < 8; ++i) {
+        staged_dma[i] = deserialize_dma_channel(ptr + dma_offset);
+        dma_offset += WIRE_DMA_CHANNEL_SIZE;
+    }
+
+    // Stage event queue
+    EventQueueState staged_eq{};
+    staged_eq.event_count = eq_header->event_count;
+    staged_eq.next_event_id = eq_header->next_event_id;
+    size_t eq_offset = eq_data_offset;
+    for (size_t i = 0; i < staged_eq.event_count; ++i) {
+        std::memcpy(&staged_eq.events[i], ptr + eq_offset, sizeof(ScheduledEvent));
+        eq_offset += sizeof(ScheduledEvent);
+    }
+
+    // Stage input
+    InputState staged_input{};
+    staged_input.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
+                                 (static_cast<uint64_t>(input_header->next_sequence_hi) << 32);
+    size_t input_offset = input_data_offset;
+    for (uint32_t i = 0; i < input_header->event_count; ++i) {
+        InputEvent evt = deserialize_input_event(ptr + input_offset);
+        staged_input.enqueue_raw(evt);
+        input_offset += WIRE_INPUT_EVENT_SIZE;
+    }
+    staged_input.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
+                                 (static_cast<uint64_t>(input_header->next_sequence_hi) << 32);
+
+    // Stage frame (allocations happen here — before any inst-> mutation)
+    std::vector<uint8_t> staged_indexed_pixels;
+    size_t frame_offset = frame_data_offset;
+    if (frame_header->indexed_pixels_size > 0) {
+        staged_indexed_pixels.resize(frame_header->indexed_pixels_size);
+        std::memcpy(staged_indexed_pixels.data(),
+                    ptr + frame_offset + frame_header->text_buffer_size,
+                    frame_header->indexed_pixels_size);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Phase 4: Commit — all writes, no failure possible
+    // ─────────────────────────────────────────────────────────────────────────
+
+    inst->time_state = staged_time;
+
     if (inst->machine) {
         inst->machine->cpu.flags.interrupt = (cpu_section->interrupt_flag != 0);
         inst->machine->cpu.halted = (cpu_section->halted != 0);
     }
 
-    // PIC state (CRITICAL for TLA+ compliance)
-    inst->pics[0] = pic_section->pics[0];
-    inst->pics[1] = pic_section->pics[1];
+    inst->pics[0] = staged_pics[0];
+    inst->pics[1] = staged_pics[1];
 
-    // DMA state (portable deserialization)
-    size_t dma_offset = header->dma_offset;
     for (int i = 0; i < 8; ++i) {
-        inst->dma[i] = deserialize_dma_channel(ptr + dma_offset);
-        dma_offset += WIRE_DMA_CHANNEL_SIZE;
+        inst->dma[i] = staged_dma[i];
     }
 
-    // Event queue (CRITICAL for TLA+ compliance)
-    inst->event_queue.event_count = eq_header->event_count;
-    inst->event_queue.next_event_id = eq_header->next_event_id;
-    size_t eq_offset = eq_data_offset;
-    for (size_t i = 0; i < inst->event_queue.event_count; ++i) {
-        std::memcpy(&inst->event_queue.events[i], ptr + eq_offset, sizeof(ScheduledEvent));
-        eq_offset += sizeof(ScheduledEvent);
-    }
+    inst->event_queue = staged_eq;
+    inst->input_state = std::move(staged_input);
 
-    // Input state (unified queue with portable deserialization)
-    inst->input_state.clear();
-    inst->input_state.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
-                                  (static_cast<uint64_t>(input_header->next_sequence_hi) << 32);
-    size_t input_offset = input_data_offset;
-    for (uint32_t i = 0; i < input_header->event_count; ++i) {
-        InputEvent evt = deserialize_input_event(ptr + input_offset);
-        inst->input_state.enqueue_raw(evt);
-        input_offset += WIRE_INPUT_EVENT_SIZE;
-    }
-    inst->input_state.next_sequence = static_cast<uint64_t>(input_header->next_sequence_lo) |
-                                  (static_cast<uint64_t>(input_header->next_sequence_hi) << 32);
-
-    // Frame state
     inst->frame_state.is_text_mode = (frame_header->is_text_mode != 0);
     inst->frame_state.columns = frame_header->columns;
     inst->frame_state.rows = frame_header->rows;
@@ -2182,15 +2243,8 @@ legends_error_t legends_load_state(
     inst->frame_state.active_page = frame_header->active_page;
     inst->frame_state.gfx_width = frame_header->gfx_width;
     inst->frame_state.gfx_height = frame_header->gfx_height;
-    size_t frame_offset = frame_data_offset;
     std::memcpy(inst->frame_state.text_buffer.data(), ptr + frame_offset, frame_header->text_buffer_size);
-    frame_offset += frame_header->text_buffer_size;
-    if (frame_header->indexed_pixels_size > 0) {
-        inst->frame_state.indexed_pixels.resize(frame_header->indexed_pixels_size);
-        std::memcpy(inst->frame_state.indexed_pixels.data(), ptr + frame_offset, frame_header->indexed_pixels_size);
-    } else {
-        inst->frame_state.indexed_pixels.clear();
-    }
+    inst->frame_state.indexed_pixels = std::move(staged_indexed_pixels);
     inst->frame_state.dirty = true;
 
     return LEGENDS_OK;

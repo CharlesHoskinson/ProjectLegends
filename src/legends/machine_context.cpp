@@ -7,7 +7,6 @@
 
 #include <legends/machine_context.h>
 #include <legends/exceptions.h>
-#include <cassert>
 
 namespace legends {
 
@@ -27,8 +26,10 @@ void set_current_context(MachineContext* ctx) noexcept {
 }
 
 MachineContext& current() {
-    assert(g_current_context != nullptr &&
-           "No context set - call set_current_context first");
+    if (g_current_context == nullptr) {
+        throw legends::FatalException(
+            "No MachineContext set - call set_current_context first");
+    }
     return *g_current_context;
 }
 

@@ -151,6 +151,11 @@ TEST_F(StressTest, RapidKeyEvents) {
     // Step to process input
     legends_step_cycles(handle, 50000, nullptr);
 
+    // Verify engine actually executed
+    uint64_t cycles = 0;
+    EXPECT_EQ(legends_get_total_cycles(handle, &cycles), LEGENDS_OK);
+    EXPECT_GT(cycles, 0u);
+
     legends_destroy(handle);
 }
 
@@ -169,6 +174,11 @@ TEST_F(StressTest, RapidMouseEvents) {
     // Step to process input
     legends_step_cycles(handle, 50000, nullptr);
 
+    // Verify engine actually executed
+    uint64_t time_us = 0;
+    EXPECT_EQ(legends_get_emu_time(handle, &time_us), LEGENDS_OK);
+    EXPECT_GT(time_us, 0u);
+
     legends_destroy(handle);
 }
 
@@ -185,6 +195,11 @@ TEST_F(StressTest, MixedInputTypes) {
         legends_step_cycles(handle, 100, nullptr);
     }
 
+    // Verify engine actually executed
+    uint64_t cycles = 0;
+    EXPECT_EQ(legends_get_total_cycles(handle, &cycles), LEGENDS_OK);
+    EXPECT_GT(cycles, 0u);
+
     legends_destroy(handle);
 }
 
@@ -198,6 +213,11 @@ TEST_F(StressTest, TextInputLongStrings) {
         legends_text_input(handle, text.c_str());
         legends_step_cycles(handle, 1000, nullptr);
     }
+
+    // Verify engine actually executed
+    uint64_t cycles = 0;
+    EXPECT_EQ(legends_get_total_cycles(handle, &cycles), LEGENDS_OK);
+    EXPECT_GT(cycles, 0u);
 
     legends_destroy(handle);
 }

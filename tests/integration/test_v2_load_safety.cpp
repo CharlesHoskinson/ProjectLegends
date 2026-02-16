@@ -279,3 +279,58 @@ TEST_F(V2LoadSafetyTest, RejectsEventQueuePayloadOutsideDeclaredSize) {
     auto err = legends_load_state(h_, unsafe_state.data(), unsafe_state.size());
     EXPECT_NE(err, LEGENDS_OK);
 }
+
+// ---------------------------------------------------------------------------
+// BUG-5: V2 bool field validation — is_text_mode must be 0 or 1.
+// Builds a valid V2 state but sets is_text_mode = 5.
+// ---------------------------------------------------------------------------
+TEST_F(V2LoadSafetyTest, RejectsInvalidBoolField) {
+    constexpr uint32_t total_size = 192;
+    constexpr uint32_t header_size = 64;
+
+    std::vector<uint8_t> buf(256, 0);
+
+    // SaveStateHeader
+    write_u32_le(buf, 0, 0x53584244u);     // magic "DBXS"
+    write_u32_le(buf, 4, 2u);              // version V2
+    write_u32_le(buf, 8, total_size);      // declared verified size
+    write_u32_le(buf, 16, 64u);            // time_offset
+    write_u32_le(buf, 20, 88u);            // cpu_offset
+    write_u32_le(buf, 24, 104u);           // pic_offset
+    write_u32_le(buf, 28, 120u);           // dma_offset
+    write_u32_le(buf, 32, 184u);           // event_queue_offset
+    write_u32_le(buf, 36, 174u);           // input_offset
+    write_u32_le(buf, 40, 152u);           // frame_offset
+    write_u32_le(buf, 44, 0u);             // engine_offset
+    write_u32_le(buf, 48, 0u);             // engine_size
+
+    // SaveStateFrameHeader at offset 152 — set is_text_mode = 5 (invalid bool)
+    buf[152] = 5;                          // is_text_mode — INVALID
+    buf[153] = 1;                          // columns
+    buf[154] = 1;                          // rows
+    buf[155] = 0;                          // cursor_x
+    buf[156] = 0;                          // cursor_y
+    buf[157] = 1;                          // cursor_visible
+    buf[158] = 0;                          // active_page
+    buf[159] = 0;                          // _pad
+    write_u16_le(buf, 160, 0);             // gfx_width
+    write_u16_le(buf, 162, 0);             // gfx_height
+    write_u32_le(buf, 164, 2u);            // text_buffer_size
+    write_u32_le(buf, 168, 0u);            // indexed_pixels_size
+    write_u16_le(buf, 172, 0x0720u);       // one text cell
+
+    // SaveStateInputHeader_V2 at offset 174
+    write_u32_le(buf, 174, 0u);            // key_queue_size
+    write_u32_le(buf, 178, 0u);            // mouse_queue_size
+
+    // SaveStateEventQueueHeader at offset 184
+    write_u32_le(buf, 184, 0u);            // event_count
+    write_u32_le(buf, 188, 1u);            // next_event_id
+
+    // Checksum over [header_size, total_size)
+    const uint32_t checksum = crc32_ieee(buf.data() + header_size, total_size - header_size);
+    write_u32_le(buf, 12, checksum);
+
+    auto err = legends_load_state(h_, buf.data(), buf.size());
+    EXPECT_NE(err, LEGENDS_OK) << "Should reject is_text_mode=5 as invalid bool";
+}
