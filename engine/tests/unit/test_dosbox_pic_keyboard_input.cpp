@@ -40,12 +40,12 @@ TEST(PicStateTest, DefaultValues) {
     // IRQ timing
     EXPECT_EQ(pic.irq_delay_ns, 0u);
 
-    // Controller state
-    EXPECT_EQ(pic.master_imr, 0xFF);
-    EXPECT_EQ(pic.slave_imr, 0xFF);
-    EXPECT_EQ(pic.master_isr, 0);
-    EXPECT_EQ(pic.slave_isr, 0);
-    EXPECT_FALSE(pic.auto_eoi);
+    // Controller state (via accessors)
+    EXPECT_EQ(pic.master_imr(), 0xFF);
+    EXPECT_EQ(pic.slave_imr(), 0xFF);
+    EXPECT_EQ(pic.master_isr(), 0);
+    EXPECT_EQ(pic.slave_isr(), 0);
+    EXPECT_FALSE(pic.auto_eoi());
 }
 
 TEST(PicStateTest, Reset) {
@@ -59,11 +59,11 @@ TEST(PicStateTest, Reset) {
     pic.in_event_service = true;
     pic.srv_lag = 123.456;
     pic.irq_delay_ns = 1000;
-    pic.master_imr = 0x00;
-    pic.slave_imr = 0x00;
-    pic.master_isr = 0x80;
-    pic.slave_isr = 0x40;
-    pic.auto_eoi = true;
+    pic.controllers[0].imr = 0x00;
+    pic.controllers[1].imr = 0x00;
+    pic.controllers[0].isr = 0x80;
+    pic.controllers[1].isr = 0x40;
+    pic.controllers[0].auto_eoi = true;
 
     // Reset
     pic.reset();
@@ -76,11 +76,11 @@ TEST(PicStateTest, Reset) {
     EXPECT_FALSE(pic.in_event_service);
     EXPECT_DOUBLE_EQ(pic.srv_lag, 0.0);
     EXPECT_EQ(pic.irq_delay_ns, 0u);
-    EXPECT_EQ(pic.master_imr, 0xFF);
-    EXPECT_EQ(pic.slave_imr, 0xFF);
-    EXPECT_EQ(pic.master_isr, 0);
-    EXPECT_EQ(pic.slave_isr, 0);
-    EXPECT_FALSE(pic.auto_eoi);
+    EXPECT_EQ(pic.master_imr(), 0xFF);
+    EXPECT_EQ(pic.slave_imr(), 0xFF);
+    EXPECT_EQ(pic.master_isr(), 0);
+    EXPECT_EQ(pic.slave_isr(), 0);
+    EXPECT_FALSE(pic.auto_eoi());
 }
 
 TEST(PicStateTest, HashInto) {
@@ -89,11 +89,11 @@ TEST(PicStateTest, HashInto) {
 
     pic1.ticks = 1000;
     pic1.irq_check = 0x01;
-    pic1.master_imr = 0xFE;
+    pic1.controllers[0].imr = 0xFE;
 
     pic2.ticks = 1000;
     pic2.irq_check = 0x01;
-    pic2.master_imr = 0xFE;
+    pic2.controllers[0].imr = 0xFE;
 
     // Same state should produce same hash
     HashBuilder builder1;
@@ -142,11 +142,11 @@ TEST(PicStateTest, HashIncludesAllFields) {
     test_field_affects_hash([](PicState& p) { p.in_event_service = !p.in_event_service; });
     test_field_affects_hash([](PicState& p) { p.srv_lag += 1.0; });
     test_field_affects_hash([](PicState& p) { p.irq_delay_ns++; });
-    test_field_affects_hash([](PicState& p) { p.master_imr--; });
-    test_field_affects_hash([](PicState& p) { p.slave_imr--; });
-    test_field_affects_hash([](PicState& p) { p.master_isr++; });
-    test_field_affects_hash([](PicState& p) { p.slave_isr++; });
-    test_field_affects_hash([](PicState& p) { p.auto_eoi = !p.auto_eoi; });
+    test_field_affects_hash([](PicState& p) { p.controllers[0].imr--; });
+    test_field_affects_hash([](PicState& p) { p.controllers[1].imr--; });
+    test_field_affects_hash([](PicState& p) { p.controllers[0].isr++; });
+    test_field_affects_hash([](PicState& p) { p.controllers[1].isr++; });
+    test_field_affects_hash([](PicState& p) { p.controllers[0].auto_eoi = !p.controllers[0].auto_eoi; });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -162,7 +162,7 @@ TEST(KeyboardStateTest, DefaultValues) {
     EXPECT_TRUE(kb.active);
 
     // Buffer state
-    EXPECT_EQ(kb.buffer_size, 0);
+    EXPECT_EQ(kb.buffer_used, 0);
     EXPECT_EQ(kb.buffer_pos, 0);
 
     // Lock state
@@ -186,7 +186,7 @@ TEST(KeyboardStateTest, Reset) {
     kb.scanset = 1;
     kb.enabled = false;
     kb.active = false;
-    kb.buffer_size = 16;
+    kb.buffer_used = 16;
     kb.buffer_pos = 8;
     kb.num_lock = true;
     kb.caps_lock = true;
@@ -203,7 +203,7 @@ TEST(KeyboardStateTest, Reset) {
     EXPECT_EQ(kb.scanset, 2);
     EXPECT_TRUE(kb.enabled);
     EXPECT_TRUE(kb.active);
-    EXPECT_EQ(kb.buffer_size, 0);
+    EXPECT_EQ(kb.buffer_used, 0);
     EXPECT_EQ(kb.buffer_pos, 0);
     EXPECT_FALSE(kb.num_lock);
     EXPECT_FALSE(kb.caps_lock);
@@ -220,11 +220,11 @@ TEST(KeyboardStateTest, HashInto) {
 
     kb1.scanset = 1;
     kb1.num_lock = true;
-    kb1.buffer_size = 5;
+    kb1.buffer_used = 5;
 
     kb2.scanset = 1;
     kb2.num_lock = true;
-    kb2.buffer_size = 5;
+    kb2.buffer_used = 5;
 
     // Same state should produce same hash
     HashBuilder builder1;
@@ -269,7 +269,7 @@ TEST(KeyboardStateTest, HashIncludesAllFields) {
     test_field_affects_hash([](KeyboardState& k) { k.scanset = 1; });
     test_field_affects_hash([](KeyboardState& k) { k.enabled = !k.enabled; });
     test_field_affects_hash([](KeyboardState& k) { k.active = !k.active; });
-    test_field_affects_hash([](KeyboardState& k) { k.buffer_size++; });
+    test_field_affects_hash([](KeyboardState& k) { k.buffer_used++; });
     test_field_affects_hash([](KeyboardState& k) { k.buffer_pos++; });
     test_field_affects_hash([](KeyboardState& k) { k.num_lock = !k.num_lock; });
     test_field_affects_hash([](KeyboardState& k) { k.caps_lock = !k.caps_lock; });
@@ -382,7 +382,7 @@ TEST(PR14HashTest, PicStateAffectsHash) {
     // Modify PIC state
     ctx.pic.ticks = 10000;
     ctx.pic.irq_check = 0x01;
-    ctx.pic.master_imr = 0xFE;
+    ctx.pic.controllers[0].imr = 0xFE;
 
     // Get new hash
     auto result2 = get_state_hash(HashMode::Fast);
@@ -406,7 +406,7 @@ TEST(PR14HashTest, KeyboardStateAffectsHash) {
     // Modify keyboard state
     ctx.keyboard.scanset = 1;
     ctx.keyboard.num_lock = true;
-    ctx.keyboard.buffer_size = 10;
+    ctx.keyboard.buffer_used = 10;
 
     auto result2 = get_state_hash(HashMode::Fast);
     ASSERT_TRUE(result2.has_value());
@@ -484,12 +484,12 @@ TEST(ContextPR14Test, ResetClearsAllNewSubsystems) {
     // Modify all new subsystem states
     ctx.pic.ticks = 100000;
     ctx.pic.irq_check = 0xFF;
-    ctx.pic.master_imr = 0x00;
+    ctx.pic.controllers[0].imr = 0x00;
 
     ctx.keyboard.scanset = 1;
     ctx.keyboard.num_lock = true;
     ctx.keyboard.caps_lock = true;
-    ctx.keyboard.buffer_size = 16;
+    ctx.keyboard.buffer_used = 16;
 
     ctx.input.input_captured = true;
     ctx.input.captured_num_lock = true;
@@ -501,13 +501,13 @@ TEST(ContextPR14Test, ResetClearsAllNewSubsystems) {
     // PIC state should be reset
     EXPECT_EQ(ctx.pic.ticks, 0u);
     EXPECT_EQ(ctx.pic.irq_check, 0u);
-    EXPECT_EQ(ctx.pic.master_imr, 0xFF);
+    EXPECT_EQ(ctx.pic.master_imr(), 0xFF);
 
     // Keyboard state should be reset
     EXPECT_EQ(ctx.keyboard.scanset, 2);
     EXPECT_FALSE(ctx.keyboard.num_lock);
     EXPECT_FALSE(ctx.keyboard.caps_lock);
-    EXPECT_EQ(ctx.keyboard.buffer_size, 0);
+    EXPECT_EQ(ctx.keyboard.buffer_used, 0);
 
     // Input state should be reset
     EXPECT_FALSE(ctx.input.input_captured);

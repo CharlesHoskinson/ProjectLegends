@@ -152,7 +152,7 @@ endif()
 #
 
 # Configure engine options before adding subdirectory
-set(AIBOX_BUILD_TESTS OFF CACHE BOOL "Disable engine tests (use legends tests)" FORCE)
+set(AIBOX_BUILD_TESTS ON CACHE BOOL "Build engine tests alongside legends tests" FORCE)
 set(AIBOX_HEADLESS ON CACHE BOOL "Build engine in headless mode" FORCE)
 set(AIBOX_LIBRARY_MODE ON CACHE BOOL "Build engine as library" FORCE)
 
