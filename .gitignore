@@ -46,3 +46,4 @@ spec/tla/*.zip
 spec/tla/states/
 *_TTrace_*.tla
 build_test/
+.worktrees/
