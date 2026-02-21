@@ -439,14 +439,14 @@ TEST(ExceptionHierarchyTest, CanDistinguishByType) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LEGENDS_ABORT Macro Tests (Library Mode)
+// AIBOX_ABORT Macro Tests (Library Mode)
 // ─────────────────────────────────────────────────────────────────────────────
 
 #ifdef LEGENDS_LIBRARY_MODE
 
 TEST(AiboxAbortTest, ThrowsFatalException) {
     EXPECT_THROW(
-        LEGENDS_ABORT("test abort"),
+        AIBOX_ABORT("test abort"),
         FatalException
     );
 }
@@ -454,7 +454,7 @@ TEST(AiboxAbortTest, ThrowsFatalException) {
 TEST(AiboxAbortTest, MessageIncluded) {
     bool caught = false;
     try {
-        LEGENDS_ABORT("custom message");
+        AIBOX_ABORT("custom message");
     } catch (const FatalException& e) {
         EXPECT_NE(std::string(e.what()).find("custom message"), std::string::npos);
         caught = true;
@@ -465,7 +465,7 @@ TEST(AiboxAbortTest, MessageIncluded) {
 TEST(AiboxAbortTest, LocationIncluded) {
     bool caught = false;
     try {
-        LEGENDS_ABORT("test");
+        AIBOX_ABORT("test");
     } catch (const FatalException& e) {
         EXPECT_NE(e.file(), nullptr);
         EXPECT_GT(e.line(), 0);
@@ -477,26 +477,26 @@ TEST(AiboxAbortTest, LocationIncluded) {
 #endif // LEGENDS_LIBRARY_MODE
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LEGENDS_ASSERT Macro Tests (Library Mode)
+// AIBOX_ASSERT Macro Tests (Library Mode)
 // ─────────────────────────────────────────────────────────────────────────────
 
 #ifdef LEGENDS_LIBRARY_MODE
 
 TEST(AiboxAssertTest, PassesOnTrue) {
-    EXPECT_NO_THROW(LEGENDS_ASSERT(true, "should pass"));
-    EXPECT_NO_THROW(LEGENDS_ASSERT(1 == 1, "math works"));
+    EXPECT_NO_THROW(AIBOX_ASSERT(true, "should pass"));
+    EXPECT_NO_THROW(AIBOX_ASSERT(1 == 1, "math works"));
 }
 
 TEST(AiboxAssertTest, ThrowsOnFalse) {
     EXPECT_THROW(
-        LEGENDS_ASSERT(false, "should fail"),
+        AIBOX_ASSERT(false, "should fail"),
         FatalException
     );
 }
 
 TEST(AiboxAssertTest, MessageIncluded) {
     try {
-        LEGENDS_ASSERT(false, "custom assertion message");
+        AIBOX_ASSERT(false, "custom assertion message");
         FAIL() << "Should have thrown";
     } catch (const FatalException& e) {
         EXPECT_NE(std::string(e.what()).find("custom assertion message"), std::string::npos);

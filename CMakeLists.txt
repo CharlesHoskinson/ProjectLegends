@@ -164,20 +164,10 @@ add_subdirectory(engine)
 
 set(LEGENDS_SOURCES
     src/legends/legends_embed_api.cpp
-    src/legends/machine_context.cpp
-    src/legends/llm_frame.cpp
-    src/legends/llm_actions.cpp
-    src/legends/llm_diff.cpp
-    src/legends/llm_serializer.cpp
-    src/legends/vision_framebuffer.cpp
-    src/legends/vision_capture.cpp
-    src/legends/vision_overlay.cpp
-    src/legends/vision_annotations.cpp
 )
-
-if(LEGENDS_HEADLESS)
-    list(APPEND LEGENDS_SOURCES src/legends/headless_stub.cpp)
-endif()
+# All other sources (llm_*, vision_*, machine_context, headless_stub)
+# are compiled via aibox_core. The legends headers in include/legends/
+# are forwarding headers that alias aibox namespaces to legends.
 
 add_library(legends_core STATIC ${LEGENDS_SOURCES})
 
@@ -189,15 +179,22 @@ target_include_directories(legends_core
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/engine/include  # DOSBox-X headers
 )
+
+# Suppress C4201 (anonymous struct/union) from engine headers included
+# via forwarding headers. These are used for x86 register aliasing
+# (e.g., eax/ax/al unions) and are standard practice in DOSBox-X.
+if(MSVC)
+    target_compile_options(legends_core PUBLIC /wd4201)
+endif()
 
 # IMPORTANT: gsl-lite is PRIVATE - do NOT expose to consumers
 # Consumers include legends_embed.h (pure C ABI), not gsl-lite types
 target_link_libraries(legends_core
+    PUBLIC
+        aibox_core  # forwarding headers in include/legends/ reference aibox headers
     PRIVATE
         gsl::gsl-lite-v1
-        aibox_core  # DOSBox-X engine library
 )
 
 target_compile_definitions(legends_core

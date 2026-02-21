@@ -84,7 +84,7 @@ TEST(ErrorTest, MessageAccessorWorks) {
 
 TEST(ErrorTest, LocationCapturesFile) {
     // With explicit location, captures call site
-    Error err(ErrorCode::Unknown, "test", LEGENDS_CURRENT_LOCATION);
+    Error err(ErrorCode::Unknown, "test", AIBOX_CURRENT_LOCATION);
     std::string file = err.location().file_name();
     EXPECT_NE(file.find("test_error"), std::string::npos);
 }
@@ -92,7 +92,7 @@ TEST(ErrorTest, LocationCapturesFile) {
 TEST(ErrorTest, LocationCapturesLine) {
     // With explicit location, captures call site line
     int line_before = __LINE__;
-    Error err(ErrorCode::Unknown, "test", LEGENDS_CURRENT_LOCATION);
+    Error err(ErrorCode::Unknown, "test", AIBOX_CURRENT_LOCATION);
     int line_after = __LINE__;
 
     EXPECT_GE(err.location().line(), static_cast<uint32_t>(line_before));
@@ -113,7 +113,7 @@ TEST(ErrorTest, FormatIncludesMessage) {
 
 TEST(ErrorTest, FormatIncludesFile) {
     // With explicit location, format includes .cpp extension
-    Error err(ErrorCode::Unknown, "test", LEGENDS_CURRENT_LOCATION);
+    Error err(ErrorCode::Unknown, "test", AIBOX_CURRENT_LOCATION);
     std::string formatted = err.format();
     EXPECT_NE(formatted.find(".cpp"), std::string::npos);
 }
@@ -179,11 +179,11 @@ TEST(ErrorTest, MoveConstructorWorks) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LEGENDS_ERROR Macro Test
+// AIBOX_ERROR Macro Test
 // ─────────────────────────────────────────────────────────────────────────────
 
 TEST(ErrorMacroTest, AiboxErrorMacroWorks) {
-    auto err = LEGENDS_ERROR(ErrorCode::InvalidState, "test error");
+    auto err = AIBOX_ERROR(ErrorCode::InvalidState, "test error");
 
     EXPECT_EQ(err.code(), ErrorCode::InvalidState);
     EXPECT_EQ(err.message(), "test error");

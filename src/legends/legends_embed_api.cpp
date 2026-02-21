@@ -696,6 +696,10 @@ legends_error_t safe_call(legends_instance* inst, Func&& func) noexcept {
         return (err); \
     } while(0)
 
+// Aliases for aibox macro compatibility (SAFE_MULTIPLY_OR_ERROR uses these)
+#define DOSBOXX_ERROR LEGENDS_ERROR
+#define DOSBOXX_ERR_INVALID_STATE LEGENDS_ERR_INVALID_STATE
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Save State Bounds Validation Macros (P0 Security Fix)
 // ─────────────────────────────────────────────────────────────────────────────
