@@ -106,6 +106,18 @@ function(legends_set_legacy_cxx_standard target_name)
 endfunction()
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Security Hardening (H3)
+# ─────────────────────────────────────────────────────────────────────────────
+
+if(MSVC)
+    add_link_options(/GUARD:CF)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-fstack-protector-strong -D_FORTIFY_SOURCE=2)
+    add_compile_options(-fPIE)
+    add_link_options(-pie)
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -616,6 +628,7 @@ endif()
 include(GNUInstallDirs)
 
 install(TARGETS legends_core legends_pal
+    EXPORT LegendsTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
@@ -640,6 +653,11 @@ configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/LegendsConfig.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/LegendsConfig.cmake"
     @ONLY
+)
+
+install(EXPORT LegendsTargets
+    NAMESPACE Legends::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Legends
 )
 
 install(FILES

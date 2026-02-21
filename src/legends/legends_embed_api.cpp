@@ -831,8 +831,16 @@ legends_error_t legends_create(
             g_pre_creation_error = "API version mismatch";
             return LEGENDS_ERR_VERSION_MISMATCH;
         }
-        // Store config
+        // Store config (deep copy strings so caller can free originals)
         inst->config = *config;
+        if (config->config_path) {
+            inst->config_path_owned = config->config_path;
+            inst->config.config_path = inst->config_path_owned.c_str();
+        }
+        if (config->working_dir) {
+            inst->working_dir_owned = config->working_dir;
+            inst->config.working_dir = inst->working_dir_owned.c_str();
+        }
     } else {
         // Use defaults
         inst->config = legends_config_t{};
@@ -1033,6 +1041,16 @@ legends_error_t legends_step_cycles(
     LEGENDS_CHECK_THREAD();
     LEGENDS_REQUIRE(inst->machine != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
     LEGENDS_REQUIRE(inst->engine_handle != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
+
+    // Reentrancy guard (M1): reject if already inside a step call
+    // (e.g., called from a log callback)
+    if (inst->in_step) {
+        inst->last_error = "Reentrant call to step function";
+        return LEGENDS_ERR_INVALID_STATE;
+    }
+    inst->in_step = true;
+    // Scope guard: clear in_step on all exit paths
+    struct StepGuard { bool& flag; ~StepGuard() { flag = false; } } step_guard{inst->in_step};
 
     try {
         // Set context for compatibility shim (still needed for legacy code paths)

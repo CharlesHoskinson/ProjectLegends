@@ -46,6 +46,10 @@ dosbox_lib_config_t g_config;
 // Last error message
 std::string g_last_error;
 
+// Mouse button state (M5: moved from function-scope static to file-scope
+// so it can be reset on new instance creation)
+uint8_t g_mouse_last_buttons = 0;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Logging State
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -242,6 +246,9 @@ dosbox_lib_error_t dosbox_lib_create(
         g_time_state.reset();
         g_time_state.cycles_per_ms = g_config.cpu_cycles > 0 ? g_config.cpu_cycles : 3000;
 
+        // Reset mouse state (M5: prevent leaking between instances)
+        g_mouse_last_buttons = 0;
+
         // Return sentinel handle (actual pointer not exposed)
         *handle_out = reinterpret_cast<dosbox_lib_handle_t>(static_cast<uintptr_t>(1));
         g_last_error.clear();
@@ -289,10 +296,12 @@ dosbox_lib_error_t dosbox_lib_destroy(dosbox_lib_handle_t handle) {
         return DOSBOX_LIB_OK;
     }
 
+    // M6: Check thread affinity (same pattern as other thread-checked functions)
+    LIB_CHECK_THREAD();
+
     LIB_LOG_INFO("Destroying DOSBox-X library instance");
 
-    // Sprint 2 Phase 1: No thread-local context to clear
-    // Shutdown and destroy context directly
+    // Shutdown and destroy context
     if (g_context) {
         g_context->shutdown();
         g_context.reset();
@@ -942,15 +951,14 @@ dosbox_lib_error_t dosbox_lib_inject_mouse(
     }
 
     // Handle button state changes (provider notification only)
-    static uint8_t last_buttons = 0;
-    const bool buttons_changed = (buttons != last_buttons);
-    if ((buttons & 0x01) != (last_buttons & 0x01)) {
+    const bool buttons_changed = (buttons != g_mouse_last_buttons);
+    if ((buttons & 0x01) != (g_mouse_last_buttons & 0x01)) {
         static_cast<void>(aibox::headless::PushMouseButton(0, (buttons & 0x01) != 0));  // Left button
     }
-    if ((buttons & 0x02) != (last_buttons & 0x02)) {
+    if ((buttons & 0x02) != (g_mouse_last_buttons & 0x02)) {
         static_cast<void>(aibox::headless::PushMouseButton(1, (buttons & 0x02) != 0));  // Right button
     }
-    if ((buttons & 0x04) != (last_buttons & 0x04)) {
+    if ((buttons & 0x04) != (g_mouse_last_buttons & 0x04)) {
         static_cast<void>(aibox::headless::PushMouseButton(2, (buttons & 0x04) != 0));  // Middle button
     }
 
@@ -991,7 +999,7 @@ dosbox_lib_error_t dosbox_lib_inject_mouse(
         push_aux(static_cast<uint8_t>(y & 0xFF));
     }
 
-    last_buttons = buttons;
+    g_mouse_last_buttons = buttons;
 
     return DOSBOX_LIB_OK;
 }
