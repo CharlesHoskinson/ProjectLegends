@@ -106,6 +106,18 @@ function(legends_set_legacy_cxx_standard target_name)
 endfunction()
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Security Hardening (H3)
+# ─────────────────────────────────────────────────────────────────────────────
+
+if(MSVC)
+    add_link_options(/GUARD:CF)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-fstack-protector-strong -D_FORTIFY_SOURCE=2)
+    add_compile_options(-fPIE)
+    add_link_options(-pie)
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -152,7 +164,7 @@ endif()
 #
 
 # Configure engine options before adding subdirectory
-set(AIBOX_BUILD_TESTS OFF CACHE BOOL "Disable engine tests (use legends tests)" FORCE)
+set(AIBOX_BUILD_TESTS ON CACHE BOOL "Build engine tests alongside legends tests" FORCE)
 set(AIBOX_HEADLESS ON CACHE BOOL "Build engine in headless mode" FORCE)
 set(AIBOX_LIBRARY_MODE ON CACHE BOOL "Build engine as library" FORCE)
 
@@ -164,20 +176,10 @@ add_subdirectory(engine)
 
 set(LEGENDS_SOURCES
     src/legends/legends_embed_api.cpp
-    src/legends/machine_context.cpp
-    src/legends/llm_frame.cpp
-    src/legends/llm_actions.cpp
-    src/legends/llm_diff.cpp
-    src/legends/llm_serializer.cpp
-    src/legends/vision_framebuffer.cpp
-    src/legends/vision_capture.cpp
-    src/legends/vision_overlay.cpp
-    src/legends/vision_annotations.cpp
 )
-
-if(LEGENDS_HEADLESS)
-    list(APPEND LEGENDS_SOURCES src/legends/headless_stub.cpp)
-endif()
+# All other sources (llm_*, vision_*, machine_context, headless_stub)
+# are compiled via aibox_core. The legends headers in include/legends/
+# are forwarding headers that alias aibox namespaces to legends.
 
 add_library(legends_core STATIC ${LEGENDS_SOURCES})
 
@@ -186,18 +188,26 @@ legends_set_strict_cxx_standard(legends_core)
 
 target_include_directories(legends_core
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/engine/include  # DOSBox-X headers
 )
+
+# Suppress C4201 (anonymous struct/union) from engine headers included
+# via forwarding headers. These are used for x86 register aliasing
+# (e.g., eax/ax/al unions) and are standard practice in DOSBox-X.
+if(MSVC)
+    target_compile_options(legends_core PUBLIC /wd4201)
+endif()
 
 # IMPORTANT: gsl-lite is PRIVATE - do NOT expose to consumers
 # Consumers include legends_embed.h (pure C ABI), not gsl-lite types
 target_link_libraries(legends_core
+    PUBLIC
+        aibox_core  # forwarding headers in include/legends/ reference aibox headers
     PRIVATE
         gsl::gsl-lite-v1
-        aibox_core  # DOSBox-X engine library
 )
 
 target_compile_definitions(legends_core
@@ -276,7 +286,8 @@ legends_set_strict_cxx_standard(legends_pal)
 
 target_include_directories(legends_pal
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 target_compile_definitions(legends_pal
@@ -618,7 +629,8 @@ endif()
 
 include(GNUInstallDirs)
 
-install(TARGETS legends_core legends_pal
+install(TARGETS legends_core legends_pal aibox_core
+    EXPORT LegendsTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
@@ -643,6 +655,11 @@ configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/LegendsConfig.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/LegendsConfig.cmake"
     @ONLY
+)
+
+install(EXPORT LegendsTargets
+    NAMESPACE Legends::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Legends
 )
 
 install(FILES

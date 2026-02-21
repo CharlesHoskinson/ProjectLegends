@@ -1017,7 +1017,7 @@ TEST_F(DOSBoxLibraryEngineStateTest, LoadRejectsTotalSizeLargerThanBuffer) {
     header->total_size = dosbox::ENGINE_STATE_SIZE * 10;  // Way larger than buffer
 
     auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
-    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_STATE)
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_BUFFER_TOO_SMALL)
         << "Should reject total_size > buffer_size";
 }
 

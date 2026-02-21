@@ -203,7 +203,8 @@ else()
 endif()
 
 target_include_directories(aibox_core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 # Compile definitions for aibox_core
@@ -222,24 +223,17 @@ endif()
 # ─────────────────────────────────────────────────────────────────────────────
 # gsl-lite (Contracts and Safety)
 # ─────────────────────────────────────────────────────────────────────────────
-
-include(FetchContent)
-
-FetchContent_Declare(
-    gsl-lite
-    GIT_REPOSITORY https://github.com/gsl-lite/gsl-lite.git
-    GIT_TAG v0.41.0
-)
+#
+# gsl-lite is provided by the root CMakeLists.txt (v1.0.0).
+# Do NOT declare a separate FetchContent here — it would conflict.
 
 # Configure contract violations to terminate (fail-fast for debugging)
 set(GSL_LITE_OPT_CONTRACT_VIOLATION_TERMINATES ON CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(gsl-lite)
-
-# Link gsl-lite to aibox_core
+# Link gsl-lite to aibox_core (target provided by root build)
 target_link_libraries(aibox_core PUBLIC gsl::gsl-lite-v1)
 
-message(STATUS "gsl-lite: Contract checking enabled")
+message(STATUS "gsl-lite: Contract checking enabled (provided by root build)")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # C++23 Feature Validation

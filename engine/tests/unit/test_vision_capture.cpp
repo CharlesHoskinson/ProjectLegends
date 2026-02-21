@@ -22,7 +22,7 @@ TEST(PixelFormatTest, ToString) {
     EXPECT_STREQ(to_string(PixelFormat::Grayscale8), "Grayscale8");
 }
 
-TEST(PixelFormatTest, BytesPerPixel) {
+TEST(VisionPixelFormatTest, BytesPerPixel) {
     EXPECT_EQ(bytes_per_pixel(PixelFormat::Indexed8), 1);
     EXPECT_EQ(bytes_per_pixel(PixelFormat::RGB24), 3);
     EXPECT_EQ(bytes_per_pixel(PixelFormat::RGBA32), 4);

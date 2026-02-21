@@ -117,7 +117,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        sanitizer: [address, undefined]
+        sanitizer: [address, undefined, thread]
         include:
           - sanitizer: address
             flags: "-fsanitize=address -fno-omit-frame-pointer"
@@ -125,6 +125,9 @@ jobs:
           - sanitizer: undefined
             flags: "-fsanitize=undefined -fno-omit-frame-pointer"
             env: "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"
+          - sanitizer: thread
+            flags: "-fsanitize=thread -fno-omit-frame-pointer"
+            env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1"
 
     steps:
       - uses: actions/checkout@v4
@@ -208,11 +211,10 @@ jobs:
             -DLEGENDS_BUILD_TESTS=ON \
             -DLEGENDS_HEADLESS=ON
 
-      - name: Run clang-tidy on new/modified engine code
+      - name: Run clang-tidy on engine and legends source
         run: |
-          echo "Running clang-tidy on engine source files..."
-          # Run on core engine files (exclude legacy DOSBox-X code for now)
-          find engine/src/misc -name '*.cpp' -print0 | \
+          echo "Running clang-tidy on engine and legends source files..."
+          find engine/src src/legends -name '*.cpp' -print0 | \
             xargs -0 -r clang-tidy-16 -p build \
               --checks='modernize-*,bugprone-*,performance-*,-modernize-use-trailing-return-type' \
               2>&1 | tee clang-tidy-output.txt
@@ -223,3 +225,147 @@ jobs:
             exit 1
           fi
           echo "Static analysis passed (warnings only)."
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Fuzz Testing (libFuzzer)
+  # ─────────────────────────────────────────────────────────────────────────────
+  fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [linux]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build clang-16
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_C_COMPILER=clang-16 \
+            -DCMAKE_CXX_COMPILER=clang++-16 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_FUZZING=ON \
+            -DENABLE_ASAN=ON \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build fuzz targets
+        run: cmake --build build --target fuzz-all generate_fuzz_corpus
+
+      - name: Generate seed corpus
+        run: ./build/tests/fuzz/generate_fuzz_corpus build/tests/fuzz/corpus
+
+      - name: Run engine load state fuzzer (60s)
+        run: |
+          ./build/tests/fuzz/fuzz_engine_load_state \
+            build/tests/fuzz/corpus \
+            -max_len=8192 \
+            -max_total_time=60
+
+      - name: Run legends load state fuzzer (60s)
+        run: |
+          ./build/tests/fuzz/fuzz_legends_load_state \
+            build/tests/fuzz/corpus \
+            -max_len=8192 \
+            -max_total_time=60
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # TLA+ Model Checking
+  # ─────────────────────────────────────────────────────────────────────────────
+  tlaplus:
+    name: TLA+ Model Checking
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install TLA+ tools
+        run: |
+          wget -q https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar \
+            -O /tmp/tla2tools.jar
+
+      - name: Run LifecycleMinimal
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config LifecycleMinimal.cfg LifecycleMinimal.tla -workers auto
+
+      - name: Run PALMinimal
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config PALMinimal.cfg PALMinimal.tla -workers auto
+
+      - name: Run ThreadingMinimal
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config ThreadingMinimal.cfg ThreadingMinimal.tla -workers auto
+
+      - name: Run SaveStateTest
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config SaveStateTest.cfg SaveStateTest.tla -workers auto
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Code Coverage
+  # ─────────────────────────────────────────────────────────────────────────────
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [linux]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build gcc-13 g++-13 lcov
+
+      - name: Configure with coverage
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+            -DCMAKE_C_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Generate coverage report
+        run: |
+          lcov --capture --directory build --output-file coverage.info \
+            --gcov-tool gcov-13 --ignore-errors mismatch
+          lcov --remove coverage.info \
+            '/usr/*' '*/build/_deps/*' '*/tests/*' \
+            --output-file coverage.filtered.info \
+            --ignore-errors unused
+          lcov --list coverage.filtered.info
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.filtered.info

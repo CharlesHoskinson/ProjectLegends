@@ -269,7 +269,7 @@ TEST_F(CallbackRegistryTest, GetEntryReturnsEntry) {
     ASSERT_NE(entry, nullptr);
     EXPECT_EQ(entry->handler, simple_callback);
     EXPECT_EQ(entry->userdata, &value);
-    EXPECT_STREQ(entry->description, "Entry");
+    EXPECT_EQ(entry->description, "Entry");
     EXPECT_TRUE(entry->active);
 }
 

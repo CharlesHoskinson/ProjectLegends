@@ -36,8 +36,16 @@ struct legends_instance {
     // ── Owner thread (for thread-affinity checks) ──────────────────────────
     std::thread::id owner_thread_id{};
 
+    // ── Reentrancy guard (M1) ────────────────────────────────────────────
+    bool in_step{false};
+
     // ── Configuration ──────────────────────────────────────────────────────
     legends_config_t config{};
+
+    // Deep copies of config strings (M4) — config.config_path and
+    // config.working_dir point into these owned buffers.
+    std::string config_path_owned;
+    std::string working_dir_owned;
 
     // ── Error state ────────────────────────────────────────────────────────
     std::string last_error;

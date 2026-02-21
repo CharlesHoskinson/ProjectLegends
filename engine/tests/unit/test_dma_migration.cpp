@@ -158,19 +158,19 @@ TEST(DmaMigration, CleanupOnDestroy) {
  * Verify DMA channel 1 works for Sound Blaster.
  */
 TEST(DmaIntegration, SoundBlasterDMA) {
+#ifdef AIBOX_HEADLESS
+    GTEST_SKIP() << "DMA controllers not initialized in headless mode";
+#else
     DOSBoxContext ctx(ContextConfig::defaults());
     auto result = ctx.initialize();
     ASSERT_TRUE(result.has_value()) << "Context initialization failed";
 
-    // DMA channel 1 is typically used by Sound Blaster
     auto* sb_chan = ctx.dma.get_channel(1);
     ASSERT_NE(sb_chan, nullptr) << "Sound Blaster DMA channel 1 should exist";
-
-    // Verify channel is functional (basic state check)
-    // The channel should be masked by default
     EXPECT_TRUE(sb_chan->masked) << "DMA channel should be masked by default";
 
     ctx.shutdown();
+#endif
 }
 
 /**
@@ -252,12 +252,13 @@ TEST(DmaDeterminism, StateInHash) {
         auto init_result = ctx.initialize();
         ASSERT_TRUE(init_result.has_value()) << "Context initialization failed";
 
-        // Modify DMA channel state
+#ifndef AIBOX_HEADLESS
+        // Modify DMA channel state (requires full DmaChannel type)
         auto* chan = ctx.dma.get_channel(0);
         if (chan) {
-            // Modify a DMA channel property
             chan->currcnt = 0x1234;
         }
+#endif
 
         auto hash_result = get_state_hash(&ctx, HashMode::Fast);
         ASSERT_TRUE(hash_result.has_value()) << "Hash computation failed";

@@ -13,7 +13,7 @@ using namespace legends;
 // Mock I/O Port Registration System
 // ─────────────────────────────────────────────────────────────────────────────
 
-namespace legends::internal {
+namespace aibox::internal {
 
 // Mock port registry for testing
 static std::map<uint16_t, std::pair<IoReadHandler, IoWriteHandler>> g_registered_ports;
@@ -58,7 +58,7 @@ void invoke_write(uint16_t port, uint32_t value, size_t width) {
     }
 }
 
-} // namespace legends::internal
+} // namespace aibox::internal
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test Fixture

@@ -5,11 +5,11 @@
  * Defines the binary format used by dosbox_lib_save_state() and
  * dosbox_lib_load_state() to serialize the DOSBoxContext state.
  *
- * Format version 2 includes:
+ * Format version 3 includes:
  * - Header with magic, version, checksums
  * - Timing state
  * - PIC state (interrupt controller)
- * - Keyboard state (essential fields only)
+ * - Keyboard state (full 96-entry buffer) [V3]
  * - CPU state (cycle counters, NMI, halt) [V2]
  * - Memory state (page config, A20 gate, LFB) [V2]
  *
@@ -32,7 +32,8 @@ namespace dosbox {
 constexpr uint32_t ENGINE_STATE_MAGIC = 0x45584244;
 
 /// Current engine state format version
-constexpr uint32_t ENGINE_STATE_VERSION = 2;
+/// V3: keyboard buffer expanded from 16 to 96 entries (H1)
+constexpr uint32_t ENGINE_STATE_VERSION = 3;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Engine State Header
@@ -116,8 +117,9 @@ static_assert(sizeof(EngineStatePic) == 24, "EngineStatePic must be 24 bytes");
  * V2: Expanded to include buffer contents, 8042, repeat, and all flags.
  */
 struct EngineStateKeyboard {
-    // Main keyboard buffer contents (16 entries x 2 bytes = 32 bytes)
-    uint16_t buffer[16];
+    // Main keyboard buffer contents (96 entries x 2 bytes = 192 bytes)
+    // V3: expanded from 16 to match KeyboardState::BUFFER_SIZE (H1 fix)
+    uint16_t buffer[96];
 
     // 32-bit fields
     uint32_t buffer_used;        ///< Entries used in buffer
@@ -165,7 +167,7 @@ struct EngineStateKeyboard {
     uint8_t rightshift_pressed;  ///< Right Shift pressed
     uint8_t _pad[2];             ///< Pad to 4-byte boundary
 };
-static_assert(sizeof(EngineStateKeyboard) == 104, "EngineStateKeyboard must be 104 bytes");
+static_assert(sizeof(EngineStateKeyboard) == 264, "EngineStateKeyboard must be 264 bytes");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CPU State Section [V2]
@@ -247,7 +249,7 @@ constexpr size_t ENGINE_STATE_SIZE =
     sizeof(EngineStateCpu) +
     sizeof(EngineStateMemory);
 
-static_assert(ENGINE_STATE_SIZE == 384, "ENGINE_STATE_SIZE should be 384 bytes");
+static_assert(ENGINE_STATE_SIZE == 544, "ENGINE_STATE_SIZE should be 544 bytes");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CRC32 Helper
