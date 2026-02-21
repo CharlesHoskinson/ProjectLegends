@@ -14,6 +14,17 @@
 
 #pragma once
 
+// Anonymous structs model x86 register overlays (al/ah/ax/eax aliasing).
+// This is a well-defined compiler extension on GCC, Clang, and MSVC.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4201)
+#endif
+
 #include <cstdint>
 #include <array>
 
@@ -528,3 +539,10 @@ public:
 };
 
 } // namespace aibox
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
