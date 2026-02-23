@@ -393,6 +393,8 @@ if(LEGENDS_BUILD_TESTS)
         # Phase C: Context Unification
         tests/unit/test_timing_single_source.cpp
         tests/unit/test_context_guard_unified.cpp
+        # Phase E: Determinism at Scale
+        tests/unit/test_determinism_at_scale.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
