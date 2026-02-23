@@ -152,11 +152,37 @@ target_compile_definitions(fuzz_engine_load_state PRIVATE
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Fuzz target: input injection (legends API level)
+# ─────────────────────────────────────────────────────────────────────────────
+
+add_executable(fuzz_input_injection
+    fuzz_input_injection.cpp
+)
+
+target_link_libraries(fuzz_input_injection PRIVATE
+    legends_core
+    aibox_core
+)
+
+target_compile_options(fuzz_input_injection PRIVATE
+    ${FUZZ_COMPILE_OPTIONS}
+)
+
+target_link_options(fuzz_input_injection PRIVATE
+    ${FUZZ_LINK_OPTIONS}
+)
+
+target_compile_definitions(fuzz_input_injection PRIVATE
+    AIBOX_LIBRARY_MODE=1
+    AIBOX_HEADLESS=1
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Convenience targets
 # ─────────────────────────────────────────────────────────────────────────────
 
 add_custom_target(fuzz-all
-    DEPENDS fuzz_legends_load_state fuzz_engine_load_state
+    DEPENDS fuzz_legends_load_state fuzz_engine_load_state fuzz_input_injection
     COMMENT "Building all fuzz targets"
 )
 

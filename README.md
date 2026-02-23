@@ -6,6 +6,7 @@
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue)]()
 [![C++ Standard](https://img.shields.io/badge/C%2B%2B-23-blue)]()
 [![Tests](https://img.shields.io/badge/tests-1500%2B%20passing-brightgreen)]()
+[![codecov](https://codecov.io/gh/CharlesHoskinson/projectLegends/graph/badge.svg)](https://codecov.io/gh/CharlesHoskinson/projectLegends)
 
 ---
 

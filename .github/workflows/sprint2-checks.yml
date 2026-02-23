@@ -40,6 +40,9 @@ jobs:
       - name: Check globals registry (with baseline enforcement)
         run: python scripts/check_globals.py --path .
 
+      - name: Check gsl-lite usage
+        run: python scripts/check_gsl_lite_usage.py --path .
+
   multi-instance-tests:
     name: Multi-Instance Smoke Tests
     runs-on: ubuntu-latest
