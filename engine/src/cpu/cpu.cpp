@@ -22,12 +22,23 @@
 #include <stddef.h>
 
 #include "cpu.h"
+#if C_DEBUG
 #include "debug.h"
+#endif
+#ifndef DOSBOX_LIBRARY_MODE
 #include "mapper.h"
+#include "control.h"
+#endif
 #include "paging.h"
 #include "callback.h"
 #include "lazyflags.h"
-#include "control.h"
+#ifdef DOSBOX_LIBRARY_MODE
+/* Minimal forward declarations for library mode (no config system). */
+class Section;
+class Section_prop;
+#else
+/* control.h already included above in non-library mode. */
+#endif
 #include "logging.h"
 #include "pic.h"
 
@@ -257,6 +268,9 @@ int CPU_IsDynamicCore(void) {
     return 0;
 }
 
+#ifdef DOSBOX_LIBRARY_MODE
+void menu_update_cputype(void) { }
+#else
 void menu_update_cputype(void) {
     bool allow_prefetch = false;
     bool allow_pre386 = false;
@@ -345,7 +359,12 @@ void menu_update_cputype(void) {
         check(CPU_ArchitectureType == CPU_ARCHTYPE_EXPERIMENTAL).
         refresh_item(mainMenu);
 }
+#endif /* !DOSBOX_LIBRARY_MODE */
 
+#ifdef DOSBOX_LIBRARY_MODE
+const char *GetCPUType() { return "386"; }
+int GetDynamicType() { return 0; }
+#else
 const char *GetCPUType() {
     if (CPU_ArchitectureType == CPU_ARCHTYPE_8086 && (cpudecoder != &CPU_Core8086_Prefetch_Run))
         return "8086";
@@ -410,6 +429,7 @@ int GetDynamicType() {
     return 0;
 #endif
 }
+#endif /* !DOSBOX_LIBRARY_MODE (GetCPUType / GetDynamicType) */
 
 #if (C_DYNAMIC_X86) && (C_DYNREC)
 #define BOTH_DYNAMIC 1
@@ -417,6 +437,11 @@ int GetDynamicType() {
 #define BOTH_DYNAMIC 0
 #endif
 
+#ifdef DOSBOX_LIBRARY_MODE
+void menu_update_dynamic() { }
+void menu_update_core(void) { }
+void menu_update_autocycle(void) { }
+#else
 void menu_update_dynamic() {
 #if (C_DYNAMIC_X86) || (C_DYNREC)
 	const Section_prop * cpu_section = static_cast<Section_prop *>(control->GetSection("cpu"));
@@ -515,6 +540,7 @@ void menu_update_autocycle(void) {
     item.check(CPU_CycleAutoAdjust || (CPU_AutoDetermineMode&CPU_AUTODETERMINE_CYCLES));
     item.refresh_item(mainMenu);
 }
+#endif /* !DOSBOX_LIBRARY_MODE */
 
 /* called to signal an NMI. */
 
@@ -3300,6 +3326,79 @@ void CPU_ENTER(bool use32,Bitu bytes,Bitu level) {
 	reg_esp=(reg_esp&cpu.stack.notmask)|(sp_index&cpu.stack.mask);
 }
 
+#ifdef DOSBOX_LIBRARY_MODE
+/* Library mode: no config system, no UI, no mapper.
+ * Provide minimal stubs for functions referenced externally. */
+void CPU_SyncCycleMaxToProp(void) { }
+void CPU_CycleIncrease(bool) { }
+void CPU_CycleDecrease(bool) { }
+void CPU_Enable_SkipAutoAdjust(void) { CPU_SkipCycleAutoAdjust = true; }
+void CPU_Disable_SkipAutoAdjust(void) { CPU_SkipCycleAutoAdjust = false; }
+void CPU_Reset_AutoAdjust(void) { CPU_IODelayRemoved = 0; }
+
+Bitu vm86_fake_io_seg = 0xF000;
+Bitu vm86_fake_io_off = 0x0700;
+Bitu vm86_fake_io_offs[3*2] = {0};
+void init_vm86_fake_io() { }
+
+void CPU_Core_Normal_Init(void);
+void CPU_Core_Simple_Init(void);
+
+void CPU_LibraryInit(void) {
+    /* Minimal CPU state initialization for library mode. */
+    reg_eax = reg_ebx = reg_ecx = reg_edx = 0;
+    reg_edi = reg_esi = reg_ebp = reg_esp = 0;
+
+    SegSet16(cs, 0); Segs.limit[cs] = ((PhysPt)(~0UL)); Segs.expanddown[cs] = false;
+    SegSet16(ds, 0); Segs.limit[ds] = ((PhysPt)(~0UL)); Segs.expanddown[ds] = false;
+    SegSet16(es, 0); Segs.limit[es] = ((PhysPt)(~0UL)); Segs.expanddown[es] = false;
+    SegSet16(fs, 0); Segs.limit[fs] = ((PhysPt)(~0UL)); Segs.expanddown[fs] = false;
+    SegSet16(gs, 0); Segs.limit[gs] = ((PhysPt)(~0UL)); Segs.expanddown[gs] = false;
+    SegSet16(ss, 0); Segs.limit[ss] = ((PhysPt)(~0UL)); Segs.expanddown[ss] = false;
+
+    CPU_SetFlags(FLAG_IF, FMASK_ALL);
+    cpu.cr0 = 0;
+    cpu.cr4 = 0xffffffff;
+    CPU_SET_CRX(0, 0);
+    CPU_SET_CRX(4, 0);
+    cpu.code.big = false;
+    cpu.stack.mask = 0xffff;
+    cpu.stack.notmask = 0xffff0000;
+    cpu.stack.big = false;
+    cpu.trap_skip = false;
+    cpu.idt.SetBase(0);
+    cpu.idt.SetLimit(1023);
+
+    for (Bitu i = 0; i < 7; i++) { cpu.drx[i] = 0; cpu.trx[i] = 0; }
+    cpu.drx[6] = 0xffff0ff0;
+    cpu.drx[7] = 0x00000400;
+
+    CPU_Core_Normal_Init();
+    CPU_Core_Simple_Init();
+
+    cpudecoder = &CPU_Core_Normal_Run;
+    CPU_ArchitectureType = CPU_ARCHTYPE_386;
+    CPU_CycleMax = 3000;
+    CPU_CyclesSet = 3000;
+    CPU_OldCycleMax = 3000;
+}
+
+void CPU_Init() { CPU_LibraryInit(); }
+void CPU_ShutDown(Section*) { }
+
+/* Save/Load state stubs for library mode */
+void DescriptorTable::SaveState(std::ostream&) { }
+void DescriptorTable::LoadState(std::istream&) { }
+void GDTDescriptorTable::SaveState(std::ostream&) { }
+void GDTDescriptorTable::LoadState(std::istream&) { }
+void TaskStateSegment::SaveState(std::ostream&) { }
+void TaskStateSegment::LoadState(std::istream&) { }
+
+uint16_t CPU_FindDecoderType(CPU_Decoder*) { return 0; }
+CPU_Decoder* CPU_IndexDecoderType(uint16_t) { return &CPU_Core_Normal_Run; }
+
+#else /* !DOSBOX_LIBRARY_MODE */
+
 void CPU_SyncCycleMaxToProp(void) {
     char tmp[64];
 
@@ -5060,3 +5159,4 @@ void setBytes(std::istream& stream) override
 }
 } dummy;
 }
+#endif /* !DOSBOX_LIBRARY_MODE */
