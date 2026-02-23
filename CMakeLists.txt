@@ -388,6 +388,7 @@ if(LEGENDS_BUILD_TESTS)
         # Phase B: Serialization
         tests/unit/test_wire_format.cpp
         tests/unit/test_pic_serialization.cpp
+        tests/unit/test_v4_serialization.cpp
         # Phase D: PIC Hardware Tests
         tests/unit/test_pic_hardware.cpp
         # Phase C: Context Unification

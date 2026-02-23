@@ -78,3 +78,34 @@ TEST_F(CpuBridgeTest, CallbackIdIsNegativeOneByDefault) {
     auto result = execute_cycles(&ctx, 100);
     EXPECT_EQ(result.callback_id, -1);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contract / postcondition tests (Phase C.3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST_F(CpuBridgeTest, PostconditionCompletedMeansAllCyclesConsumed) {
+    ctx.timing.total_cycles = 0;
+    auto result = execute_cycles(&ctx, 7777);
+
+    // gsl_Ensures in execute_cycles guarantees this on Completed
+    ASSERT_EQ(result.stop_reason, CpuStopReason::Completed);
+    EXPECT_EQ(result.cycles_executed, 7777u);
+}
+
+TEST_F(CpuBridgeTest, PostconditionStopRequestConsumesFewer) {
+    ctx.timing.total_cycles = 0;
+    ctx.request_stop();
+    auto result = execute_cycles(&ctx, 10000);
+
+    ASSERT_EQ(result.stop_reason, CpuStopReason::UserRequest);
+    EXPECT_LT(result.cycles_executed, 10000u);
+}
+
+TEST_F(CpuBridgeTest, ExecuteMsRequiresPositiveCyclesPerMs) {
+    // cycles_per_ms > 0 is a gsl_Expects precondition.
+    // Valid calls must provide a positive rate.
+    ctx.timing.total_cycles = 0;
+    auto result = execute_ms(&ctx, 5, 3000);
+    EXPECT_EQ(result.stop_reason, CpuStopReason::Completed);
+    EXPECT_EQ(result.cycles_executed, 15000u);
+}

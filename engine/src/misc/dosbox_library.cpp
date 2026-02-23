@@ -515,6 +515,15 @@ dosbox_lib_error_t dosbox_lib_save_state(
     offset += sizeof(dosbox::EngineStateCpu);
 
     header.memory_offset = static_cast<uint32_t>(offset);
+    offset += sizeof(dosbox::EngineStateMemory);
+
+    header.mixer_offset = static_cast<uint32_t>(offset);
+    offset += sizeof(dosbox::EngineStateMixer);
+
+    header.vga_offset = static_cast<uint32_t>(offset);
+    offset += sizeof(dosbox::EngineStateVga);
+
+    header.dos_offset = static_cast<uint32_t>(offset);
 
     // Serialize timing state (H2: local struct + memcpy)
     dosbox::EngineStateTiming timing{};
@@ -528,18 +537,36 @@ dosbox_lib_error_t dosbox_lib_save_state(
     timing.locked = ctx->timing.locked ? 1 : 0;
     std::memcpy(ptr + header.timing_offset, &timing, sizeof(timing));
 
-    // Serialize PIC state (H2: local struct + memcpy)
+    // Serialize PIC state (V4: full controller registers)
     dosbox::EngineStatePic pic{};
     pic.ticks = ctx->pic.ticks;
     pic.irq_check = ctx->pic.irq_check;
     pic.irq_check_pending = ctx->pic.irq_check_pending;
     pic.master_cascade_irq = ctx->pic.master_cascade_irq;
-    pic.master_imr = ctx->pic.master_imr();
-    pic.slave_imr = ctx->pic.slave_imr();
-    pic.master_isr = ctx->pic.master_isr();
-    pic.slave_isr = ctx->pic.slave_isr();
-    pic.auto_eoi = ctx->pic.auto_eoi() ? 1 : 0;
     pic.in_event_service = ctx->pic.in_event_service ? 1 : 0;
+    pic.enable_slave_pic = ctx->pic.enable_slave_pic ? 1 : 0;
+    for (int c = 0; c < 2; ++c) {
+        auto& src = ctx->pic.controllers[c];
+        auto& dst = pic.controllers[c];
+        dst.icw_words = src.icw_words;
+        dst.icw_index = src.icw_index;
+        dst.special = src.special ? 1 : 0;
+        dst.auto_eoi = src.auto_eoi ? 1 : 0;
+        dst.rotate_on_auto_eoi = src.rotate_on_auto_eoi ? 1 : 0;
+        dst.single = src.single ? 1 : 0;
+        dst.request_issr = src.request_issr ? 1 : 0;
+        dst.vector_base = src.vector_base;
+        dst.input = src.input;
+        dst.edge = src.edge;
+        dst.irr = src.irr;
+        dst.imr = src.imr;
+        dst.imrr = src.imrr;
+        dst.isr = src.isr;
+        dst.isrr = src.isrr;
+        dst.isr_ignore = src.isr_ignore;
+        dst.active_irq = src.active_irq;
+        dst.controller_index = src.controller_index;
+    }
     std::memcpy(ptr + header.pic_offset, &pic, sizeof(pic));
 
     // Serialize keyboard state (H2: local struct + memcpy; V3: 96 entries)
@@ -630,6 +657,64 @@ dosbox_lib_error_t dosbox_lib_save_state(
     mem.a20_controlport = ctx->memory.a20.controlport;
     std::memcpy(ptr + header.memory_offset, &mem, sizeof(mem));
 
+    // Serialize Mixer state [V4]
+    dosbox::EngineStateMixer mixer{};
+    mixer.freq = ctx->mixer.freq;
+    mixer.blocksize = ctx->mixer.blocksize;
+    mixer.master_vol[0] = ctx->mixer.mastervol[0];
+    mixer.master_vol[1] = ctx->mixer.mastervol[1];
+    mixer.record_vol[0] = ctx->mixer.recordvol[0];
+    mixer.record_vol[1] = ctx->mixer.recordvol[1];
+    mixer.samples = ctx->mixer.prebuffer_samples;
+    mixer.enabled = ctx->mixer.enabled ? 1 : 0;
+    mixer.nosound = ctx->mixer.nosound ? 1 : 0;
+    mixer.swapstereo = ctx->mixer.swapstereo ? 1 : 0;
+    mixer.mute = ctx->mixer.mute ? 1 : 0;
+    mixer.sampleaccurate = ctx->mixer.sampleaccurate ? 1 : 0;
+    std::memcpy(ptr + header.mixer_offset, &mixer, sizeof(mixer));
+
+    // Serialize VGA state [V4]
+    dosbox::EngineStateVga vga{};
+    vga.width = ctx->vga.width;
+    vga.height = ctx->vga.height;
+    vga.bpp = ctx->vga.bpp;
+    vga.mode = static_cast<uint8_t>(ctx->vga.mode);
+    vga.svga_chip = static_cast<uint8_t>(ctx->vga.svga_chip);
+    vga.render_on_demand = ctx->vga.render_on_demand ? 1 : 0;
+    vga.refresh_rate = ctx->vga.refresh_rate;
+    vga.frame_counter = ctx->vga.frame_counter;
+    vga.dac_8bit = ctx->vga.dac_8bit ? 1 : 0;
+    vga.vbe_enabled = ctx->vga.vbe_enabled ? 1 : 0;
+    vga.text_mode = ctx->vga.text_mode ? 1 : 0;
+    vga.cga_snow = ctx->vga.cga_snow ? 1 : 0;
+    vga.vesa_flags = static_cast<uint8_t>(
+        (ctx->vga.vesa_32bpp ? 0x01 : 0) |
+        (ctx->vga.vesa_24bpp ? 0x02 : 0) |
+        (ctx->vga.vesa_16bpp ? 0x04 : 0) |
+        (ctx->vga.vesa_15bpp ? 0x08 : 0) |
+        (ctx->vga.vesa_8bpp  ? 0x10 : 0) |
+        (ctx->vga.vesa_4bpp  ? 0x20 : 0) |
+        (ctx->vga.vesa_lowres ? 0x40 : 0) |
+        (ctx->vga.vesa_hd    ? 0x80 : 0));
+    std::memcpy(ptr + header.vga_offset, &vga, sizeof(vga));
+
+    // Serialize DOS state [V4]
+    dosbox::EngineStateDos dos{};
+    dos.psp_segment = ctx->dos.psp_segment;
+    dos.dta_segment = ctx->dos.dta_segment;
+    dos.dta_offset = ctx->dos.dta_offset;
+    dos.version_major = ctx->dos.version.major;
+    dos.version_minor = ctx->dos.version.minor;
+    dos.current_drive = ctx->dos.current_drive;
+    dos.verify = ctx->dos.verify;
+    dos.return_code = ctx->dos.return_code;
+    dos.return_mode = ctx->dos.return_mode ? 1 : 0;
+    dos.country = ctx->dos.country;
+    dos.codepage = ctx->dos.codepage;
+    dos.kernel_disabled = ctx->dos.kernel_disabled ? 1 : 0;
+    dos.kernel_running = ctx->dos.kernel_running ? 1 : 0;
+    std::memcpy(ptr + header.dos_offset, &dos, sizeof(dos));
+
     // Compute checksum over data after header
     const uint8_t* data_start = ptr + sizeof(dosbox::EngineStateHeader);
     size_t data_size = *size_out - sizeof(dosbox::EngineStateHeader);
@@ -703,13 +788,29 @@ dosbox_lib_error_t dosbox_lib_load_state(
                off + section_size <= header.total_size;
     };
 
+    // V3: PIC section was 24 bytes; V4: expanded to 68 bytes
+    size_t pic_section_size = (header.version <= 3)
+        ? sizeof(dosbox::EngineStatePicV3)
+        : sizeof(dosbox::EngineStatePic);
+
     if (!validate_offset(header.timing_offset, sizeof(dosbox::EngineStateTiming)) ||
-        !validate_offset(header.pic_offset, sizeof(dosbox::EngineStatePic)) ||
+        !validate_offset(header.pic_offset, pic_section_size) ||
         !validate_offset(header.keyboard_offset, sizeof(dosbox::EngineStateKeyboard)) ||
         !validate_offset(header.cpu_offset, sizeof(dosbox::EngineStateCpu)) ||
         !validate_offset(header.memory_offset, sizeof(dosbox::EngineStateMemory))) {
         g_last_error = "Invalid section offset";
         return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+
+    // V4 sections are optional for V3 loading
+    bool has_v4_sections = header.version >= 4;
+    if (has_v4_sections) {
+        if (!validate_offset(header.mixer_offset, sizeof(dosbox::EngineStateMixer)) ||
+            !validate_offset(header.vga_offset, sizeof(dosbox::EngineStateVga)) ||
+            !validate_offset(header.dos_offset, sizeof(dosbox::EngineStateDos))) {
+            g_last_error = "Invalid V4 section offset";
+            return DOSBOX_LIB_ERR_INVALID_STATE;
+        }
     }
 
     auto* ctx = g_context.get();
@@ -726,19 +827,54 @@ dosbox_lib_error_t dosbox_lib_load_state(
     ctx->timing.frame_ticks = timing.frame_ticks;
     ctx->timing.locked = timing.locked != 0;
 
-    // Deserialize PIC state (H2: memcpy into local struct)
-    dosbox::EngineStatePic pic{};
-    std::memcpy(&pic, ptr + header.pic_offset, sizeof(pic));
-    ctx->pic.ticks = pic.ticks;
-    ctx->pic.irq_check = pic.irq_check;
-    ctx->pic.irq_check_pending = pic.irq_check_pending;
-    ctx->pic.master_cascade_irq = pic.master_cascade_irq;
-    ctx->pic.controllers[0].imr = pic.master_imr;
-    ctx->pic.controllers[1].imr = pic.slave_imr;
-    ctx->pic.controllers[0].isr = pic.master_isr;
-    ctx->pic.controllers[1].isr = pic.slave_isr;
-    ctx->pic.controllers[0].auto_eoi = pic.auto_eoi != 0;
-    ctx->pic.in_event_service = pic.in_event_service != 0;
+    // Deserialize PIC state
+    if (header.version <= 3) {
+        // V3 backward compat: load abbreviated format
+        dosbox::EngineStatePicV3 pic_v3{};
+        std::memcpy(&pic_v3, ptr + header.pic_offset, sizeof(pic_v3));
+        ctx->pic.ticks = pic_v3.ticks;
+        ctx->pic.irq_check = pic_v3.irq_check;
+        ctx->pic.irq_check_pending = pic_v3.irq_check_pending;
+        ctx->pic.master_cascade_irq = pic_v3.master_cascade_irq;
+        ctx->pic.controllers[0].imr = pic_v3.master_imr;
+        ctx->pic.controllers[1].imr = pic_v3.slave_imr;
+        ctx->pic.controllers[0].isr = pic_v3.master_isr;
+        ctx->pic.controllers[1].isr = pic_v3.slave_isr;
+        ctx->pic.controllers[0].auto_eoi = pic_v3.auto_eoi != 0;
+        ctx->pic.in_event_service = pic_v3.in_event_service != 0;
+    } else {
+        // V4: full controller state
+        dosbox::EngineStatePic pic{};
+        std::memcpy(&pic, ptr + header.pic_offset, sizeof(pic));
+        ctx->pic.ticks = pic.ticks;
+        ctx->pic.irq_check = pic.irq_check;
+        ctx->pic.irq_check_pending = pic.irq_check_pending;
+        ctx->pic.master_cascade_irq = pic.master_cascade_irq;
+        ctx->pic.in_event_service = pic.in_event_service != 0;
+        ctx->pic.enable_slave_pic = pic.enable_slave_pic != 0;
+        for (int c = 0; c < 2; ++c) {
+            auto& src = pic.controllers[c];
+            auto& dst = ctx->pic.controllers[c];
+            dst.icw_words = src.icw_words;
+            dst.icw_index = src.icw_index;
+            dst.special = src.special != 0;
+            dst.auto_eoi = src.auto_eoi != 0;
+            dst.rotate_on_auto_eoi = src.rotate_on_auto_eoi != 0;
+            dst.single = src.single != 0;
+            dst.request_issr = src.request_issr != 0;
+            dst.vector_base = src.vector_base;
+            dst.input = src.input;
+            dst.edge = src.edge;
+            dst.irr = src.irr;
+            dst.imr = src.imr;
+            dst.imrr = src.imrr;
+            dst.isr = src.isr;
+            dst.isrr = src.isrr;
+            dst.isr_ignore = src.isr_ignore;
+            dst.active_irq = src.active_irq;
+            dst.controller_index = src.controller_index;
+        }
+    }
 
     // Deserialize keyboard state (H2: memcpy; V3: 96 entries)
     dosbox::EngineStateKeyboard kbd{};
@@ -827,6 +963,71 @@ dosbox_lib_error_t dosbox_lib_load_state(
     ctx->memory.hw_next_assign = mem.hw_next_assign;
     ctx->memory.a20.enabled = mem.a20_enabled != 0;
     ctx->memory.a20.controlport = mem.a20_controlport;
+
+    // Deserialize V4 sections (mixer, VGA, DOS)
+    if (has_v4_sections) {
+        // Mixer state
+        dosbox::EngineStateMixer mixer{};
+        std::memcpy(&mixer, ptr + header.mixer_offset, sizeof(mixer));
+        ctx->mixer.freq = mixer.freq;
+        ctx->mixer.blocksize = mixer.blocksize;
+        ctx->mixer.mastervol[0] = mixer.master_vol[0];
+        ctx->mixer.mastervol[1] = mixer.master_vol[1];
+        ctx->mixer.recordvol[0] = mixer.record_vol[0];
+        ctx->mixer.recordvol[1] = mixer.record_vol[1];
+        ctx->mixer.prebuffer_samples = mixer.samples;
+        ctx->mixer.enabled = mixer.enabled != 0;
+        ctx->mixer.nosound = mixer.nosound != 0;
+        ctx->mixer.swapstereo = mixer.swapstereo != 0;
+        ctx->mixer.mute = mixer.mute != 0;
+        ctx->mixer.sampleaccurate = mixer.sampleaccurate != 0;
+
+        // VGA state
+        dosbox::EngineStateVga vga{};
+        std::memcpy(&vga, ptr + header.vga_offset, sizeof(vga));
+        ctx->vga.width = vga.width;
+        ctx->vga.height = vga.height;
+        ctx->vga.bpp = vga.bpp;
+        ctx->vga.mode = static_cast<dosbox::VgaMode>(vga.mode);
+        ctx->vga.svga_chip = static_cast<dosbox::SvgaChip>(vga.svga_chip);
+        ctx->vga.render_on_demand = vga.render_on_demand != 0;
+        ctx->vga.refresh_rate = vga.refresh_rate;
+        ctx->vga.frame_counter = vga.frame_counter;
+        ctx->vga.dac_8bit = vga.dac_8bit != 0;
+        ctx->vga.vbe_enabled = vga.vbe_enabled != 0;
+        ctx->vga.text_mode = vga.text_mode != 0;
+        ctx->vga.cga_snow = vga.cga_snow != 0;
+        ctx->vga.vesa_32bpp = (vga.vesa_flags & 0x01) != 0;
+        ctx->vga.vesa_24bpp = (vga.vesa_flags & 0x02) != 0;
+        ctx->vga.vesa_16bpp = (vga.vesa_flags & 0x04) != 0;
+        ctx->vga.vesa_15bpp = (vga.vesa_flags & 0x08) != 0;
+        ctx->vga.vesa_8bpp  = (vga.vesa_flags & 0x10) != 0;
+        ctx->vga.vesa_4bpp  = (vga.vesa_flags & 0x20) != 0;
+        ctx->vga.vesa_lowres = (vga.vesa_flags & 0x40) != 0;
+        ctx->vga.vesa_hd    = (vga.vesa_flags & 0x80) != 0;
+
+        // DOS state
+        dosbox::EngineStateDos dos{};
+        std::memcpy(&dos, ptr + header.dos_offset, sizeof(dos));
+        ctx->dos.psp_segment = dos.psp_segment;
+        ctx->dos.dta_segment = dos.dta_segment;
+        ctx->dos.dta_offset = dos.dta_offset;
+        ctx->dos.version.major = dos.version_major;
+        ctx->dos.version.minor = dos.version_minor;
+        ctx->dos.current_drive = dos.current_drive;
+        ctx->dos.verify = dos.verify;
+        ctx->dos.return_code = dos.return_code;
+        ctx->dos.return_mode = dos.return_mode != 0;
+        ctx->dos.country = dos.country;
+        ctx->dos.codepage = dos.codepage;
+        ctx->dos.kernel_disabled = dos.kernel_disabled != 0;
+        ctx->dos.kernel_running = dos.kernel_running != 0;
+    } else {
+        // V3 backward compat: initialize new sections to defaults
+        ctx->mixer.reset();
+        ctx->vga.reset();
+        ctx->dos.reset();
+    }
 
     g_last_error.clear();
     return DOSBOX_LIB_OK;

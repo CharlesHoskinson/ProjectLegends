@@ -15,6 +15,7 @@
 #include "dosbox/cpu_bridge.h"
 #include "dosbox/dosbox_context.h"
 
+#include <gsl/gsl-lite.hpp>
 #include <algorithm>
 
 namespace dosbox {
@@ -87,16 +88,21 @@ CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
     // Update context timing state
     ctx->timing.total_cycles += result.cycles_executed;
 
+    // Postcondition: on normal completion, all requested cycles were consumed
+    gsl_Ensures(result.stop_reason != CpuStopReason::Completed ||
+                result.cycles_executed == cycles);
+
     return result;
 }
 
 CpuExecuteResult execute_ms(DOSBoxContext* ctx, uint32_t ms, uint32_t cycles_per_ms) {
+    gsl_Expects(cycles_per_ms > 0);
+
     uint64_t total_cycles = static_cast<uint64_t>(ms) * cycles_per_ms;
     auto result = execute_cycles(ctx, total_cycles);
 
     // Update virtual ticks if context provided
     if (ctx) {
-        // Calculate actual ms executed based on cycles
         uint32_t ms_executed = static_cast<uint32_t>(result.cycles_executed / cycles_per_ms);
         ctx->timing.virtual_ticks_ms += ms_executed;
     }

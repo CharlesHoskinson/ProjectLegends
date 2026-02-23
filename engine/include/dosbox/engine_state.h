@@ -5,13 +5,16 @@
  * Defines the binary format used by dosbox_lib_save_state() and
  * dosbox_lib_load_state() to serialize the DOSBoxContext state.
  *
- * Format version 3 includes:
+ * Format version 4 includes:
  * - Header with magic, version, checksums
  * - Timing state
- * - PIC state (interrupt controller)
+ * - PIC state with full controller registers [V4]
  * - Keyboard state (full 96-entry buffer) [V3]
  * - CPU state (cycle counters, NMI, halt) [V2]
  * - Memory state (page config, A20 gate, LFB) [V2]
+ * - Mixer state (audio config) [V4]
+ * - VGA state (display config) [V4]
+ * - DOS state (kernel config) [V4]
  *
  * @copyright GPL-2.0-or-later
  */
@@ -32,8 +35,8 @@ namespace dosbox {
 constexpr uint32_t ENGINE_STATE_MAGIC = 0x45584244;
 
 /// Current engine state format version
-/// V3: keyboard buffer expanded from 16 to 96 entries (H1)
-constexpr uint32_t ENGINE_STATE_VERSION = 3;
+/// V4: full PIC controllers, mixer, VGA, DOS serialization
+constexpr uint32_t ENGINE_STATE_VERSION = 4;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Engine State Header
@@ -55,7 +58,9 @@ struct EngineStateHeader {
     uint32_t keyboard_offset;    ///< Offset to EngineStateKeyboard
     uint32_t cpu_offset;         ///< Offset to EngineStateCpu [V2]
     uint32_t memory_offset;      ///< Offset to EngineStateMemory [V2]
-    uint32_t _reserved[3];       ///< Reserved for future sections
+    uint32_t mixer_offset;       ///< Offset to EngineStateMixer [V4]
+    uint32_t vga_offset;         ///< Offset to EngineStateVga [V4]
+    uint32_t dos_offset;         ///< Offset to EngineStateDos [V4]
 };
 static_assert(sizeof(EngineStateHeader) == 48, "EngineStateHeader must be 48 bytes");
 
@@ -86,24 +91,68 @@ static_assert(sizeof(EngineStateTiming) == 40, "EngineStateTiming must be 40 byt
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
+ * @brief Serialized PIC controller state (one per 8259A chip).
+ *
+ * All 18 fields from PicController, packed for wire format.
+ * V4: replaces the abbreviated V3 PIC format.
+ */
+struct EngineStatePicController {
+    uint32_t icw_words;          ///< ICW words expected
+    uint32_t icw_index;          ///< Current ICW index
+    uint8_t  special;            ///< Special mask mode
+    uint8_t  auto_eoi;           ///< Automatic EOI
+    uint8_t  rotate_on_auto_eoi; ///< Rotate on auto EOI
+    uint8_t  single;             ///< Single PIC mode
+    uint8_t  request_issr;       ///< Reading ISR vs IRR
+    uint8_t  vector_base;        ///< Base interrupt vector
+    uint8_t  input;              ///< Input signal state
+    uint8_t  edge;               ///< Edge trigger mask
+    uint8_t  irr;                ///< Interrupt Request Register
+    uint8_t  imr;                ///< Interrupt Mask Register
+    uint8_t  imrr;               ///< IMR reversed
+    uint8_t  isr;                ///< In-Service Register
+    uint8_t  isrr;               ///< ISR reversed
+    uint8_t  isr_ignore;         ///< ISR ignore mask
+    uint8_t  active_irq;         ///< Active IRQ (8 = none)
+    uint8_t  controller_index;   ///< 0 = master, 1 = slave
+};
+static_assert(sizeof(EngineStatePicController) == 24, "EngineStatePicController must be 24 bytes");
+
+/**
  * @brief Serialized PIC (interrupt controller) state.
  *
- * Corresponds to DOSBoxContext::pic (PicState).
+ * V4: includes full controller state for both master and slave.
+ * V3 backward compat: old 24-byte format loaded via EngineStatePicV3.
  */
 struct EngineStatePic {
     uint64_t ticks;              ///< PIC tick counter
     uint32_t irq_check;          ///< Pending IRQ bitmap
     uint32_t irq_check_pending;  ///< Deferred IRQ check
-    int8_t master_cascade_irq;   ///< Cascade IRQ line (usually 2)
-    uint8_t master_imr;          ///< Master PIC interrupt mask
-    uint8_t slave_imr;           ///< Slave PIC interrupt mask
-    uint8_t master_isr;          ///< Master PIC in-service register
-    uint8_t slave_isr;           ///< Slave PIC in-service register
-    uint8_t auto_eoi;            ///< Auto end-of-interrupt mode
-    uint8_t in_event_service;    ///< Currently servicing event
-    uint8_t _pad;
+    int8_t   master_cascade_irq; ///< Cascade IRQ line (usually 2)
+    uint8_t  in_event_service;   ///< Currently servicing event
+    uint8_t  enable_slave_pic;   ///< Slave PIC enabled
+    uint8_t  _pad[5];           ///< Align controllers to 8-byte boundary
+    EngineStatePicController controllers[2]; ///< Full controller state [V4]
 };
-static_assert(sizeof(EngineStatePic) == 24, "EngineStatePic must be 24 bytes");
+static_assert(sizeof(EngineStatePic) == 72, "EngineStatePic must be 72 bytes");
+
+/**
+ * @brief V3 PIC format for backward compatibility loading.
+ */
+struct EngineStatePicV3 {
+    uint64_t ticks;
+    uint32_t irq_check;
+    uint32_t irq_check_pending;
+    int8_t   master_cascade_irq;
+    uint8_t  master_imr;
+    uint8_t  slave_imr;
+    uint8_t  master_isr;
+    uint8_t  slave_isr;
+    uint8_t  auto_eoi;
+    uint8_t  in_event_service;
+    uint8_t  _pad;
+};
+static_assert(sizeof(EngineStatePicV3) == 24, "EngineStatePicV3 must be 24 bytes");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Keyboard State Section
@@ -235,11 +284,103 @@ struct EngineStateMemory {
 static_assert(sizeof(EngineStateMemory) == 72, "EngineStateMemory must be 72 bytes");
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Total Size Calculation
+// Mixer State Section [V4]
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * @brief Total size needed for engine state.
+ * @brief Serialized mixer/audio state.
+ *
+ * Corresponds to DOSBoxContext::mixer (MixerState).
+ * Captures determinism-relevant audio configuration.
+ */
+struct EngineStateMixer {
+    uint32_t freq;               ///< Sample rate in Hz
+    uint32_t blocksize;          ///< SDL audio block size
+    float    master_vol[2];      ///< Master volume L/R
+    float    record_vol[2];      ///< Recording volume L/R
+    uint32_t samples;            ///< Prebuffer samples
+    uint8_t  enabled;            ///< Mixer enabled
+    uint8_t  nosound;            ///< No sound mode
+    uint8_t  swapstereo;         ///< Swap L/R
+    uint8_t  mute;               ///< Muted
+    uint8_t  sampleaccurate;     ///< Sample-accurate mixing
+    uint8_t  _pad[3];
+};
+static_assert(sizeof(EngineStateMixer) == 36, "EngineStateMixer must be 36 bytes");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VGA State Section [V4]
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * @brief Serialized VGA display configuration state.
+ *
+ * Corresponds to DOSBoxContext::vga (VgaState).
+ * Captures display mode and determinism-relevant config flags.
+ * Excludes the ~20KB VGA_Type hardware state.
+ */
+struct EngineStateVga {
+    uint16_t width;              ///< Display width
+    uint16_t height;             ///< Display height
+    uint8_t  bpp;                ///< Bits per pixel
+    uint8_t  mode;               ///< VgaMode enum
+    uint8_t  svga_chip;          ///< SvgaChip enum
+    uint8_t  render_on_demand;   ///< On-demand rendering
+    double   refresh_rate;       ///< Refresh rate Hz
+    uint32_t frame_counter;      ///< Total frames rendered
+    uint8_t  dac_8bit;           ///< 8-bit DAC
+    uint8_t  vbe_enabled;        ///< VESA extensions
+    uint8_t  text_mode;          ///< In text mode
+    uint8_t  cga_snow;           ///< CGA snow effect
+    uint8_t  vesa_flags;         ///< Packed: 32/24/16/15/8/4bpp + lowres + hd
+    uint8_t  _pad[7];           ///< Align to 8-byte boundary (for double)
+};
+static_assert(sizeof(EngineStateVga) == 32, "EngineStateVga must be 32 bytes");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOS State Section [V4]
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * @brief Serialized DOS kernel state.
+ *
+ * Corresponds to DOSBoxContext::dos (DosState).
+ */
+struct EngineStateDos {
+    uint16_t psp_segment;        ///< Current PSP segment
+    uint16_t dta_segment;        ///< DTA segment
+    uint16_t dta_offset;         ///< DTA offset
+    uint8_t  version_major;      ///< DOS version major
+    uint8_t  version_minor;      ///< DOS version minor
+    uint8_t  current_drive;      ///< Active drive (0=A)
+    uint8_t  verify;             ///< Verify flag
+    uint8_t  return_code;        ///< ERRORLEVEL
+    uint8_t  return_mode;        ///< Return mode
+    uint16_t country;            ///< Country code
+    uint16_t codepage;           ///< Code page
+    uint8_t  kernel_disabled;    ///< Kernel disabled
+    uint8_t  kernel_running;     ///< Kernel running
+    uint8_t  _pad[2];
+};
+static_assert(sizeof(EngineStateDos) == 20, "EngineStateDos must be 20 bytes");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Total Size Calculation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// V3 size for backward compat (5 sections, old 24-byte PIC)
+constexpr size_t ENGINE_STATE_SIZE_V3 =
+    sizeof(EngineStateHeader) +
+    sizeof(EngineStateTiming) +
+    sizeof(EngineStatePicV3) +
+    sizeof(EngineStateKeyboard) +
+    sizeof(EngineStateCpu) +
+    sizeof(EngineStateMemory);
+
+static_assert(ENGINE_STATE_SIZE_V3 == 544, "V3 size must be 544 bytes");
+
+/**
+ * @brief Total size needed for V4 engine state.
  */
 constexpr size_t ENGINE_STATE_SIZE =
     sizeof(EngineStateHeader) +
@@ -247,9 +388,12 @@ constexpr size_t ENGINE_STATE_SIZE =
     sizeof(EngineStatePic) +
     sizeof(EngineStateKeyboard) +
     sizeof(EngineStateCpu) +
-    sizeof(EngineStateMemory);
+    sizeof(EngineStateMemory) +
+    sizeof(EngineStateMixer) +
+    sizeof(EngineStateVga) +
+    sizeof(EngineStateDos);
 
-static_assert(ENGINE_STATE_SIZE == 544, "ENGINE_STATE_SIZE should be 544 bytes");
+static_assert(ENGINE_STATE_SIZE == 680, "ENGINE_STATE_SIZE should be 680 bytes");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CRC32 Helper
