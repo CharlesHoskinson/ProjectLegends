@@ -111,7 +111,6 @@ elseif(MSVC)
     add_compile_options(
         /W4
         /wd4100  # unreferenced formal parameter
-        /wd4244  # conversion warnings
     )
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif()

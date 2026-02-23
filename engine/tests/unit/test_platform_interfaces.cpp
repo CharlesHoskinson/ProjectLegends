@@ -475,7 +475,7 @@ TEST(HostTimingTest, CounterToTime) {
     uint64_t us = timing.counter_to_us(delta);
     // Should be approximately 1 second (1,000,000 us)
     // Allow some tolerance due to precision
-    EXPECT_NEAR(us, 1000000u, 1000u);  // Within 1ms
+    EXPECT_NEAR(static_cast<double>(us), 1000000.0, 1000.0);  // Within 1ms
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
