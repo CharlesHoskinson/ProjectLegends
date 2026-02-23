@@ -1046,7 +1046,7 @@ legends_error_t legends_step_cycles(
     // (e.g., called from a log callback)
     if (inst->in_step) {
         inst->last_error = "Reentrant call to step function";
-        return LEGENDS_ERR_INVALID_STATE;
+        return LEGENDS_ERR_REENTRANT_CALL;
     }
     inst->in_step = true;
     // Scope guard: clear in_step on all exit paths

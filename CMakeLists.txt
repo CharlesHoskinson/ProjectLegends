@@ -379,6 +379,8 @@ if(LEGENDS_BUILD_TESTS)
         # Audit Fix Tests
         tests/unit/test_safe_arithmetic.cpp
         tests/unit/test_text_input_utf8.cpp
+        # Phase 0: Runtime Safety
+        tests/unit/test_reentrancy_guard.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
