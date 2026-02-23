@@ -130,11 +130,11 @@ TEST_F(CpuBridgeWithContextTest, ExecuteLargeCycleCount) {
 }
 
 TEST_F(CpuBridgeWithContextTest, ExecuteWithNullContext) {
-    // Should handle null context gracefully
+    // Null context is a runtime error (not a contract violation)
     auto result = execute_cycles(nullptr, 1000);
 
-    // Should complete (null context just means no stop_requested check)
-    EXPECT_EQ(result.stop_reason, CpuStopReason::Completed);
+    EXPECT_EQ(result.stop_reason, CpuStopReason::Error);
+    EXPECT_EQ(result.cycles_executed, 0u);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -283,12 +283,11 @@ TEST_F(CpuBridgeWithContextTest, ExecuteOneCycle) {
     EXPECT_EQ(result.stop_reason, CpuStopReason::Completed);
 }
 
-TEST_F(CpuBridgeWithContextTest, ExecuteMsWithZeroCyclesPerMs) {
-    // Edge case: zero cycles per ms should handle gracefully
-    auto result = execute_ms(context_.get(), 10, 0);
+TEST_F(CpuBridgeWithContextTest, ExecuteMsWithMinimalCyclesPerMs) {
+    // cycles_per_ms must be > 0 (gsl_Expects contract). Test with minimal value.
+    auto result = execute_ms(context_.get(), 10, 1);
 
-    // Should complete with zero cycles executed
-    EXPECT_EQ(result.cycles_executed, 0u);
+    EXPECT_EQ(result.cycles_executed, 10u);
     EXPECT_EQ(result.stop_reason, CpuStopReason::Completed);
 }
 
