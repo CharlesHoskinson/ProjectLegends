@@ -73,29 +73,18 @@ struct LogState {
 LogState g_log_state;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Time State (canonical for determinism)
+// Timing Config (cycles_per_ms set at create, timing state lives in g_context)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-struct TimeState {
-    uint64_t total_cycles = 0;
-    uint64_t emu_time_us = 0;
-    uint32_t cycles_per_ms = 3000;
+uint32_t g_cycles_per_ms = 3000;
 
-    void reset() {
-        total_cycles = 0;
-        emu_time_us = 0;
-    }
+inline uint64_t cycles_to_us(uint64_t cycles) {
+    return (cycles * 1000) / g_cycles_per_ms;
+}
 
-    uint64_t cycles_to_us(uint64_t cycles) const {
-        return (cycles * 1000) / cycles_per_ms;
-    }
-
-    uint64_t ms_to_cycles(uint32_t ms) const {
-        return static_cast<uint64_t>(ms) * cycles_per_ms;
-    }
-};
-
-TimeState g_time_state;
+inline uint64_t ms_to_cycles(uint32_t ms) {
+    return static_cast<uint64_t>(ms) * g_cycles_per_ms;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Validation Helpers
@@ -242,9 +231,8 @@ dosbox_lib_error_t dosbox_lib_create(
         }();
         g_context = std::make_unique<dosbox::DOSBoxContext>(ctx_config);
 
-        // Initialize time state
-        g_time_state.reset();
-        g_time_state.cycles_per_ms = g_config.cpu_cycles > 0 ? g_config.cpu_cycles : 3000;
+        // Initialize timing config
+        g_cycles_per_ms = g_config.cpu_cycles > 0 ? g_config.cpu_cycles : 3000;
 
         // Reset mouse state (M5: prevent leaking between instances)
         g_mouse_last_buttons = 0;
@@ -309,7 +297,7 @@ dosbox_lib_error_t dosbox_lib_destroy(dosbox_lib_handle_t handle) {
 
     // Reset state
     aibox::headless::ResetState();
-    g_time_state.reset();
+    g_cycles_per_ms = 3000;
     g_instance_exists = false;
     g_owner_thread_id = std::thread::id{};
     g_last_error.clear();
@@ -330,7 +318,6 @@ dosbox_lib_error_t dosbox_lib_reset(dosbox_lib_handle_t handle) {
             g_last_error = reset_result.error().message();
             return DOSBOX_LIB_ERR_INTERNAL;
         }
-        g_time_state.reset();
         g_last_error.clear();
         return DOSBOX_LIB_OK;
 
@@ -384,16 +371,14 @@ dosbox_lib_error_t dosbox_lib_step_cycles(
                 break;
         }
 
-        // Update canonical time state (bridge already updated context timing)
-        g_time_state.total_cycles += bridge_result.cycles_executed;
+        // Context timing already updated by bridge (total_cycles incremented)
         // Compute emu_time from total_cycles to avoid accumulating rounding errors
-        // This ensures determinism: 10000 cycles in one call = 5000+5000 in two calls
-        g_time_state.emu_time_us = g_time_state.cycles_to_us(g_time_state.total_cycles);
+        uint64_t emu_us = cycles_to_us(g_context->timing.total_cycles);
 
         // Fill result
         if (result_out) {
             result_out->cycles_executed = bridge_result.cycles_executed;
-            result_out->emu_time_us = g_time_state.emu_time_us;
+            result_out->emu_time_us = emu_us;
             result_out->stop_reason = stop_reason;
             result_out->events_processed = bridge_result.events_processed;
         }
@@ -420,7 +405,7 @@ dosbox_lib_error_t dosbox_lib_step_ms(
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
     // Convert milliseconds to cycles
-    uint64_t target_cycles = g_time_state.ms_to_cycles(ms);
+    uint64_t target_cycles = ms_to_cycles(ms);
 
     // Delegate to cycle-based stepping
     return dosbox_lib_step_cycles(handle, target_cycles, result_out);
@@ -435,7 +420,7 @@ dosbox_lib_error_t dosbox_lib_get_emu_time(
     LIB_REQUIRE(time_us_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
-    *time_us_out = g_time_state.emu_time_us;
+    *time_us_out = cycles_to_us(g_context->timing.total_cycles);
     return DOSBOX_LIB_OK;
 }
 
@@ -448,7 +433,7 @@ dosbox_lib_error_t dosbox_lib_get_total_cycles(
     LIB_REQUIRE(cycles_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
-    *cycles_out = g_time_state.total_cycles;
+    *cycles_out = g_context->timing.total_cycles;
     return DOSBOX_LIB_OK;
 }
 
@@ -842,10 +827,6 @@ dosbox_lib_error_t dosbox_lib_load_state(
     ctx->memory.hw_next_assign = mem.hw_next_assign;
     ctx->memory.a20.enabled = mem.a20_enabled != 0;
     ctx->memory.a20.controlport = mem.a20_controlport;
-
-    // Update g_time_state for consistency with library API
-    g_time_state.total_cycles = timing.total_cycles;
-    g_time_state.emu_time_us = g_time_state.cycles_to_us(timing.total_cycles);
 
     g_last_error.clear();
     return DOSBOX_LIB_OK;
