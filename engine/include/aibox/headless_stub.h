@@ -286,6 +286,14 @@ size_t GetQueuedAudioSamples() noexcept;
 void ClearAudioBuffer() noexcept;
 
 /**
+ * @brief Reset all headless state to initial values.
+ *
+ * Clears ticks, video mode, palette, and all provider pointers.
+ * Called during instance destruction to prevent stale state.
+ */
+void ResetState() noexcept;
+
+/**
  * @brief Pause or resume audio playback.
  *
  * @param paused true to pause, false to resume

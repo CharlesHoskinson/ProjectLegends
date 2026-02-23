@@ -308,6 +308,7 @@ dosbox_lib_error_t dosbox_lib_destroy(dosbox_lib_handle_t handle) {
     }
 
     // Reset state
+    aibox::headless::ResetState();
     g_time_state.reset();
     g_instance_exists = false;
     g_owner_thread_id = std::thread::id{};

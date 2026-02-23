@@ -47,63 +47,59 @@ namespace headless {
 // ============================================================================
 
 namespace {
-    // Virtual tick counter for deterministic timing (fallback)
-    // Uses relaxed ordering since exact timing is not critical
-    std::atomic<uint64_t> g_virtual_ticks{0};
+struct HeadlessState {
+    std::atomic<uint64_t> virtual_ticks{0};
+    VideoMode video_mode{320, 200, 8, true};
+    std::atomic<dosbox::platform::ITiming*> timing_provider{nullptr};
+    std::atomic<dosbox::platform::IDisplay*> display_provider{nullptr};
+    std::vector<uint8_t> palette{std::vector<uint8_t>(1024, 0)};
+    std::atomic<dosbox::platform::IInput*> input_provider{nullptr};
+    std::atomic<dosbox::platform::IAudio*> audio_provider{nullptr};
 
-    // Current video mode
-    VideoMode g_video_mode{320, 200, 8, true};
+    void reset() {
+        virtual_ticks.store(0, std::memory_order_relaxed);
+        video_mode = {320, 200, 8, true};
+        timing_provider.store(nullptr, std::memory_order_release);
+        display_provider.store(nullptr, std::memory_order_release);
+        palette.assign(1024, 0);
+        input_provider.store(nullptr, std::memory_order_release);
+        audio_provider.store(nullptr, std::memory_order_release);
+    }
+};
 
-    // Platform timing provider (PR #17)
-    // When set, SDL_GetTicks/SDL_Delay use this instead of virtual ticks
-    std::atomic<dosbox::platform::ITiming*> g_timing_provider{nullptr};
-
-    // Platform display provider (PR #18)
-    // When set, GFX_* calls use this instead of default VideoMode
-    std::atomic<dosbox::platform::IDisplay*> g_display_provider{nullptr};
-
-    // Palette storage for indexed modes (256 * 4 = 1024 bytes RGBA)
-    std::vector<uint8_t> g_palette(1024, 0);
-
-    // Platform input provider (PR #19)
-    // When set, input events are pushed/polled through this provider
-    std::atomic<dosbox::platform::IInput*> g_input_provider{nullptr};
-
-    // Platform audio provider (PR #20)
-    // When set, audio samples are pushed through this provider
-    std::atomic<dosbox::platform::IAudio*> g_audio_provider{nullptr};
-}
+HeadlessState g_state;
+} // anon namespace
 
 uint64_t GetTicks() noexcept {
     // Use platform timing provider if available
-    auto* provider = g_timing_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.timing_provider.load(std::memory_order_acquire);
     if (provider) {
         return provider->get_ticks();
     }
-    return g_virtual_ticks.load(std::memory_order_relaxed);
+    return g_state.virtual_ticks.load(std::memory_order_relaxed);
 }
 
 void AdvanceTicks(uint32_t delta_ms) noexcept {
     // If using platform timing provider, advance through it
-    auto* provider = g_timing_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.timing_provider.load(std::memory_order_acquire);
     if (provider) {
         provider->advance_time(delta_ms);
         return;
     }
-    g_virtual_ticks.fetch_add(delta_ms, std::memory_order_relaxed);
+    g_state.virtual_ticks.fetch_add(delta_ms, std::memory_order_relaxed);
 }
 
 void ResetTicks() noexcept {
-    g_virtual_ticks.store(0, std::memory_order_relaxed);
+    g_state.virtual_ticks.store(0, std::memory_order_relaxed);
     // Note: Platform timing provider reset is handled by the provider owner
 }
 
 VideoMode GetVideoMode() noexcept {
-    return g_video_mode;
+    return g_state.video_mode;
 }
 
 void SetVideoMode(const VideoMode& mode) noexcept {
-    g_video_mode = mode;
+    g_state.video_mode = mode;
 }
 
 // ============================================================================
@@ -111,15 +107,15 @@ void SetVideoMode(const VideoMode& mode) noexcept {
 // ============================================================================
 
 void SetTimingProvider(dosbox::platform::ITiming* timing) noexcept {
-    g_timing_provider.store(timing, std::memory_order_release);
+    g_state.timing_provider.store(timing, std::memory_order_release);
 }
 
 dosbox::platform::ITiming* GetTimingProvider() noexcept {
-    return g_timing_provider.load(std::memory_order_acquire);
+    return g_state.timing_provider.load(std::memory_order_acquire);
 }
 
 bool HasTimingProvider() noexcept {
-    return g_timing_provider.load(std::memory_order_acquire) != nullptr;
+    return g_state.timing_provider.load(std::memory_order_acquire) != nullptr;
 }
 
 // ============================================================================
@@ -127,20 +123,20 @@ bool HasTimingProvider() noexcept {
 // ============================================================================
 
 void SetDisplayProvider(dosbox::platform::IDisplay* display) noexcept {
-    g_display_provider.store(display, std::memory_order_release);
+    g_state.display_provider.store(display, std::memory_order_release);
 }
 
 dosbox::platform::IDisplay* GetDisplayProvider() noexcept {
-    return g_display_provider.load(std::memory_order_acquire);
+    return g_state.display_provider.load(std::memory_order_acquire);
 }
 
 bool HasDisplayProvider() noexcept {
-    return g_display_provider.load(std::memory_order_acquire) != nullptr;
+    return g_state.display_provider.load(std::memory_order_acquire) != nullptr;
 }
 
 void UploadFrame(const uint8_t* pixels, size_t size,
                  int width, int height, int bpp) noexcept {
-    auto* provider = g_display_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.display_provider.load(std::memory_order_acquire);
     if (provider && pixels && size > 0) {
         dosbox::platform::FrameInfo info;
         info.width = static_cast<uint16_t>(width);
@@ -174,19 +170,19 @@ void UploadFrame(const uint8_t* pixels, size_t size,
 }
 
 void SetPalette(const uint8_t* palette, size_t size) noexcept {
-    auto* provider = g_display_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.display_provider.load(std::memory_order_acquire);
 
     if (provider && palette && size > 0) {
         // Convert RGB palette to RGBA (provider expects RGBA format)
         if (size == 768) {  // 256 * 3 RGB entries
-            g_palette.resize(1024);  // 256 * 4 RGBA entries
+            g_state.palette.resize(1024);  // 256 * 4 RGBA entries
             for (size_t i = 0; i < 256; ++i) {
-                g_palette[i * 4 + 0] = palette[i * 3 + 0];  // R
-                g_palette[i * 4 + 1] = palette[i * 3 + 1];  // G
-                g_palette[i * 4 + 2] = palette[i * 3 + 2];  // B
-                g_palette[i * 4 + 3] = 255;                  // A
+                g_state.palette[i * 4 + 0] = palette[i * 3 + 0];  // R
+                g_state.palette[i * 4 + 1] = palette[i * 3 + 1];  // G
+                g_state.palette[i * 4 + 2] = palette[i * 3 + 2];  // B
+                g_state.palette[i * 4 + 3] = 255;                  // A
             }
-            provider->set_palette(std::span<const uint8_t>(g_palette.data(), g_palette.size()));
+            provider->set_palette(std::span<const uint8_t>(g_state.palette.data(), g_state.palette.size()));
         } else if (size == 1024) {  // Already RGBA
             provider->set_palette(std::span<const uint8_t>(palette, size));
         }
@@ -198,19 +194,19 @@ void SetPalette(const uint8_t* palette, size_t size) noexcept {
 // ============================================================================
 
 void SetInputProvider(dosbox::platform::IInput* input) noexcept {
-    g_input_provider.store(input, std::memory_order_release);
+    g_state.input_provider.store(input, std::memory_order_release);
 }
 
 dosbox::platform::IInput* GetInputProvider() noexcept {
-    return g_input_provider.load(std::memory_order_acquire);
+    return g_state.input_provider.load(std::memory_order_acquire);
 }
 
 bool HasInputProvider() noexcept {
-    return g_input_provider.load(std::memory_order_acquire) != nullptr;
+    return g_state.input_provider.load(std::memory_order_acquire) != nullptr;
 }
 
 bool PushInputEvent(const dosbox::platform::InputEvent& event) noexcept {
-    auto* provider = g_input_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.input_provider.load(std::memory_order_acquire);
     if (provider) {
         provider->push_event(event);
         return true;
@@ -219,7 +215,7 @@ bool PushInputEvent(const dosbox::platform::InputEvent& event) noexcept {
 }
 
 bool PushKeyEvent(uint16_t keycode, bool pressed) noexcept {
-    auto* provider = g_input_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.input_provider.load(std::memory_order_acquire);
     if (provider) {
         auto code = static_cast<dosbox::platform::KeyCode>(keycode);
         if (pressed) {
@@ -233,7 +229,7 @@ bool PushKeyEvent(uint16_t keycode, bool pressed) noexcept {
 }
 
 bool PushMouseMotion(int16_t dx, int16_t dy) noexcept {
-    auto* provider = g_input_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.input_provider.load(std::memory_order_acquire);
     if (provider) {
         provider->push_event(dosbox::platform::InputEvent::motion(dx, dy));
         return true;
@@ -242,7 +238,7 @@ bool PushMouseMotion(int16_t dx, int16_t dy) noexcept {
 }
 
 bool PushMouseButton(uint8_t button, bool pressed) noexcept {
-    auto* provider = g_input_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.input_provider.load(std::memory_order_acquire);
     if (provider) {
         auto btn = static_cast<dosbox::platform::MouseButton>(button);
         if (pressed) {
@@ -260,19 +256,19 @@ bool PushMouseButton(uint8_t button, bool pressed) noexcept {
 // ============================================================================
 
 void SetAudioProvider(dosbox::platform::IAudio* audio) noexcept {
-    g_audio_provider.store(audio, std::memory_order_release);
+    g_state.audio_provider.store(audio, std::memory_order_release);
 }
 
 dosbox::platform::IAudio* GetAudioProvider() noexcept {
-    return g_audio_provider.load(std::memory_order_acquire);
+    return g_state.audio_provider.load(std::memory_order_acquire);
 }
 
 bool HasAudioProvider() noexcept {
-    return g_audio_provider.load(std::memory_order_acquire) != nullptr;
+    return g_state.audio_provider.load(std::memory_order_acquire) != nullptr;
 }
 
 size_t PushAudioSamples(const int16_t* samples, size_t count) noexcept {
-    auto* provider = g_audio_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.audio_provider.load(std::memory_order_acquire);
     if (provider && samples && count > 0) {
         return provider->push_samples(std::span<const int16_t>(samples, count));
     }
@@ -280,7 +276,7 @@ size_t PushAudioSamples(const int16_t* samples, size_t count) noexcept {
 }
 
 size_t GetQueuedAudioSamples() noexcept {
-    auto* provider = g_audio_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.audio_provider.load(std::memory_order_acquire);
     if (provider) {
         return provider->get_queued_samples();
     }
@@ -288,17 +284,21 @@ size_t GetQueuedAudioSamples() noexcept {
 }
 
 void ClearAudioBuffer() noexcept {
-    auto* provider = g_audio_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.audio_provider.load(std::memory_order_acquire);
     if (provider) {
         provider->clear();
     }
 }
 
 void PauseAudio(bool paused) noexcept {
-    auto* provider = g_audio_provider.load(std::memory_order_acquire);
+    auto* provider = g_state.audio_provider.load(std::memory_order_acquire);
     if (provider) {
         provider->pause(paused);
     }
+}
+
+void ResetState() noexcept {
+    g_state.reset();
 }
 
 } // namespace headless

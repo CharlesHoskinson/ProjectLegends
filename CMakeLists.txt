@@ -382,6 +382,7 @@ if(LEGENDS_BUILD_TESTS)
         # Phase 0: Runtime Safety
         tests/unit/test_reentrancy_guard.cpp
         tests/unit/test_config_deep_copy.cpp
+        tests/unit/test_headless_reset.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
