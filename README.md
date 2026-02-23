@@ -78,7 +78,7 @@ Save and load operations preserve the complete emulator state for deterministic 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ SaveStateHeader (96 bytes)                                  │
+│ SaveStateHeader (64 bytes)                                  │
 │   magic, version, total_size, checksum                      │
 │   section offsets: time, cpu, pic, dma, events, input, frame│
 │   engine_offset, engine_size                                │
@@ -165,6 +165,8 @@ int main() {
 | `legends_create(config, handle_out)` | Create emulator instance |
 | `legends_destroy(handle)` | Release instance and resources |
 | `legends_reset(handle)` | Reset to initial state |
+| `legends_get_api_version(major, minor, patch)` | Query library version |
+| `legends_get_config(handle, config_out)` | Read active config |
 
 ### Stepping
 
@@ -189,6 +191,7 @@ int main() {
 | Function | Description |
 |----------|-------------|
 | `legends_key_event(handle, scancode, pressed)` | Inject key event |
+| `legends_key_event_ext(handle, scancode, pressed, flags)` | Inject key event with modifier flags |
 | `legends_text_input(handle, text)` | Type string |
 | `legends_mouse_event(handle, dx, dy, buttons)` | Inject mouse event |
 
@@ -198,6 +201,15 @@ int main() {
 |----------|-------------|
 | `legends_capture_text(handle, cells, cols, rows)` | Read text mode screen |
 | `legends_capture_rgb(handle, buf, stride, w, h)` | Read graphics as RGB24 |
+| `legends_is_frame_dirty(handle, dirty_out)` | Check if display changed since last capture |
+| `legends_get_cursor(handle, cursor_out)` | Get text cursor position and shape |
+
+### Diagnostics
+
+| Function | Description |
+|----------|-------------|
+| `legends_get_last_error(handle, buf, size)` | Get last error message string |
+| `legends_set_log_callback(handle, callback, userdata)` | Register log message callback |
 
 ---
 
@@ -209,6 +221,7 @@ int main() {
 | `LEGENDS_ERR_NULL_HANDLE` | -1 | Null handle passed |
 | `LEGENDS_ERR_NULL_POINTER` | -2 | Null pointer argument |
 | `LEGENDS_ERR_NOT_INITIALIZED` | -4 | Instance not initialized |
+| `LEGENDS_ERR_REENTRANT_CALL` | -5 | Step called from within callback |
 | `LEGENDS_ERR_BUFFER_TOO_SMALL` | -6 | Buffer too small |
 | `LEGENDS_ERR_INVALID_STATE` | -8 | Invalid state data |
 | `LEGENDS_ERR_VERSION_MISMATCH` | -9 | Save state version mismatch |
