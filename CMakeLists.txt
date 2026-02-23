@@ -392,6 +392,7 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_pic_hardware.cpp
         # Phase C: Context Unification
         tests/unit/test_timing_single_source.cpp
+        tests/unit/test_context_guard_unified.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
