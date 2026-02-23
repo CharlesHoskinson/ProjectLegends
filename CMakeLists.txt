@@ -383,6 +383,8 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_reentrancy_guard.cpp
         tests/unit/test_config_deep_copy.cpp
         tests/unit/test_headless_reset.cpp
+        # Phase B: Serialization
+        tests/unit/test_wire_format.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
