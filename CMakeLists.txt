@@ -426,6 +426,10 @@ if(LEGENDS_BUILD_TESTS)
 
     target_compile_definitions(legends_unit_tests PRIVATE
         LEGENDS_LIBRARY_MODE=1
+        # gsl-lite contract config (must match legends_core)
+        gsl_CONFIG_DEFAULTS_VERSION=1
+        gsl_CONFIG_CONTRACT_CHECKING_ON
+        gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
     )
 
     gtest_discover_tests(legends_unit_tests

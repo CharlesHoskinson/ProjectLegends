@@ -978,7 +978,7 @@ legends_error_t legends_destroy(legends_handle handle) {
 
     // Null out the global and delete via unique_ptr (RAII cleanup)
     g_active_instance.store(nullptr, std::memory_order_release);
-    std::unique_ptr<legends_instance>(inst);
+    delete inst;
 
     return LEGENDS_OK;
 }

@@ -603,7 +603,7 @@ TEST(LlmSerializerContractTest, Cp437ToUtf8AllowsNullWithZeroLength) {
 }
 
 TEST(LlmSerializerContractTest, EncodeUtf8RejectsNullOutput) {
-    EXPECT_THROW(encode_utf8(U'A', nullptr), legends::gsl::fail_fast);
+    EXPECT_THROW((void)encode_utf8(U'A', nullptr), legends::gsl::fail_fast);
 }
 
 TEST(LlmSerializerContractTest, SerializeRejectsNullData) {
