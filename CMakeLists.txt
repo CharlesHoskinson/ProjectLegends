@@ -511,6 +511,7 @@ if(LEGENDS_BUILD_TESTS)
         tests/integration/test_workflow_saveload.cpp
         tests/integration/test_workflow_input.cpp
         tests/integration/test_workflow_llm.cpp
+        tests/integration/test_agent_smoke.cpp
         # Input/SaveState Tests (Issues 1, 3, 4, 5)
         tests/integration/test_input_injection.cpp
         tests/integration/test_save_state_safety.cpp
