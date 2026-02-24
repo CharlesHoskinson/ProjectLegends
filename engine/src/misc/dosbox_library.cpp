@@ -462,6 +462,22 @@ dosbox_lib_error_t dosbox_lib_get_total_cycles(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Context Access API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_get_context_ptr(
+    dosbox_lib_handle_t handle,
+    void** ctx_out
+) {
+    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_REQUIRE(ctx_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    *ctx_out = static_cast<void*>(g_context.get());
+    return DOSBOX_LIB_OK;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // State API
 // ═══════════════════════════════════════════════════════════════════════════════
 

@@ -249,6 +249,25 @@ dosbox_lib_error_t dosbox_lib_get_total_cycles(
 );
 
 /* =========================================================================
+ * CONTEXT ACCESS API
+ * ========================================================================= */
+
+/**
+ * @brief Get raw pointer to the internal DOSBoxContext.
+ *
+ * Used by the legends layer to set dosbox::ContextGuard before stepping.
+ * The returned pointer is valid for the lifetime of the handle.
+ *
+ * @param handle Valid handle
+ * @param ctx_out Receives opaque context pointer
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_get_context_ptr(
+    dosbox_lib_handle_t handle,
+    void** ctx_out
+);
+
+/* =========================================================================
  * STATE API
  * ========================================================================= */
 

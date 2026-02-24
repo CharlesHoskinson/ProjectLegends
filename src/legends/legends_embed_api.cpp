@@ -25,6 +25,14 @@
 
 // DOSBox-X Engine Bridge (PR #22)
 #include "dosbox/dosbox_library.h"
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4244) // C4244 from STL templates in dosbox_context.h inlines
+#endif
+#include "dosbox/dosbox_context.h"
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 #include "dosbox/error_mapping.h"
 
 #include <atomic>
@@ -1053,8 +1061,15 @@ legends_error_t legends_step_cycles(
     struct StepGuard { bool& flag; ~StepGuard() { flag = false; } } step_guard{inst->in_step};
 
     try {
-        // Set context for compatibility shim (still needed for legacy code paths)
-        legends::compat::ContextGuard guard(*inst->machine);
+        // Set dosbox context TLS pointer so compat shims resolve during
+        // the entire step scope (including input draining).
+        void* raw_ctx = nullptr;
+        dosbox_lib_get_context_ptr(inst->engine_handle, &raw_ctx);
+        auto* dctx = static_cast<dosbox::DOSBoxContext*>(raw_ctx);
+        dosbox::ContextGuard dosbox_guard(*dctx);
+
+        // Set aibox context for compatibility shim (still needed for legacy code paths)
+        legends::compat::ContextGuard legend_guard(*inst->machine);
 
         // Drain input queue before stepping to preserve device interleaving order
         legends_error_t drain_err = drain_input_to_engine(inst, nullptr);
