@@ -7,7 +7,7 @@
 
 #include <aibox/machine_context.h>
 #include <aibox/exceptions.h>
-#include <cassert>
+#include <gsl-lite/gsl-lite.hpp>
 
 namespace aibox {
 
@@ -27,8 +27,7 @@ void set_current_context(MachineContext* ctx) noexcept {
 }
 
 MachineContext& current() {
-    assert(g_current_context != nullptr &&
-           "No context set - call set_current_context first");
+    gsl_Assert(g_current_context != nullptr);
     return *g_current_context;
 }
 

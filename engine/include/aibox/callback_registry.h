@@ -260,8 +260,8 @@ private:
 // Inline implementation of CallbackToken::release
 inline void CallbackToken::release() {
     if (registry_) {
-        // M22: Assert registry is still alive in debug builds
-        assert(registry_->alive_ && "CallbackToken::release() called after registry destroyed");
+        // M22: Assert registry is still alive
+        gsl_Assert(registry_->alive_);
         registry_->unregister(id_);
         registry_ = nullptr;
     }

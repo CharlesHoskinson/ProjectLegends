@@ -12,8 +12,8 @@
 #include "events.h"
 #include "function_ref.h"
 
+#include <gsl-lite/gsl-lite.hpp>
 #include <algorithm>
-#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -295,8 +295,8 @@ private:
 // Inline implementation of EventSubscriptionToken::release
 inline void EventSubscriptionToken::release() {
     if (bus_) {
-        // M22: Assert bus is still alive in debug builds
-        assert(bus_->alive_ && "EventSubscriptionToken::release() called after bus destroyed");
+        // M22: Assert bus is still alive
+        gsl_Assert(bus_->alive_);
         bus_->unsubscribe(id_);
         bus_ = nullptr;
     }

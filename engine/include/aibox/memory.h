@@ -27,7 +27,6 @@
 #include "exceptions.h"
 
 #include <gsl-lite/gsl-lite.hpp>
-#include <cassert>
 #include <memory>
 #include <cstdint>
 #include <cstddef>
@@ -532,7 +531,7 @@ public:
      */
     [[nodiscard]] uint8_t* data() noexcept {
         // M19: Prevent mutable access to const views
-        assert(!const_ && "mutable data() called on const MemoryView");
+        gsl_Assert(!const_);
         if (const_) return nullptr;
         return ptr_;
     }
