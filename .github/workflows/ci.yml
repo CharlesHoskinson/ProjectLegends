@@ -330,6 +330,48 @@ jobs:
           java -cp /tmp/tla2tools.jar tlc2.TLC \
             -config SaveStateTest.cfg SaveStateTest.tla -workers auto
 
+      - name: Run DeterminismMinimal
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config DeterminismMinimal.cfg DeterminismMinimal.tla -workers auto
+
+      - name: Run CaptureMinimal
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config CaptureMinimal.cfg CaptureMinimal.tla -workers auto
+
+      - name: Run InputMinimal
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config InputMinimal.cfg InputMinimal.tla -workers auto
+
+      - name: Run ReentrancyMinimal
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config ReentrancyMinimal.cfg ReentrancyMinimal.tla -workers auto
+
+      - name: Run ErrorModel
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config ErrorModel.cfg ErrorModel.tla -workers auto
+
+      - name: Run ConfigValidation
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config ConfigValidation.cfg ConfigValidation.tla -workers auto
+
+      - name: Run APIContract
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config APIContract.cfg APIContract.tla -workers auto
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Code Coverage
   # ─────────────────────────────────────────────────────────────────────────────
