@@ -211,6 +211,7 @@ public:
      * @return RAII token that unsubscribes when destroyed
      */
     [[nodiscard]] EventSubscriptionToken subscribe(InternalEventHandler handler) {
+        gsl_Expects(handler);
         std::lock_guard lock(mutex_);
 
         uint32_t id = next_id_++;
@@ -397,7 +398,7 @@ public:
     void subscribe(events::EventType type,
                    ExternalEventCallback callback,
                    void* user_data) {
-        if (!callback) return;  // F7: reject null callbacks
+        gsl_Expects(callback != nullptr);
         std::lock_guard lock(mutex_);
         subscriptions_.push_back(ExternalSubscription{
             type, callback, user_data, true

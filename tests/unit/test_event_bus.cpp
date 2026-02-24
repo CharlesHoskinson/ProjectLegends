@@ -4,6 +4,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <legends/gsl.hpp>
 #include <legends/event_bus.h>
 #include <atomic>
 #include <thread>
@@ -452,11 +453,19 @@ TEST_F(ExternalEventBridgeTest, MultipleEvents) {
 TEST_F(ExternalEventBridgeTest, RejectsNullCallback) {
     ExternalEventBridge bridge(internal_bus);
 
-    // Subscribing with nullptr callback should be silently rejected
-    bridge.subscribe(EventType::Keyboard, nullptr, nullptr);
+    // Subscribing with nullptr callback violates gsl_Expects precondition
+    EXPECT_THROW(
+        bridge.subscribe(EventType::Keyboard, nullptr, nullptr),
+        legends::gsl::fail_fast
+    );
+}
 
-    // No subscription should have been stored
-    EXPECT_EQ(bridge.subscription_count(), 0u);
+TEST_F(InternalEventBusTest, RejectsNullHandler) {
+    // Subscribing with empty handler violates gsl_Expects precondition
+    EXPECT_THROW(
+        bus.subscribe(InternalEventHandler{}),
+        legends::gsl::fail_fast
+    );
 }
 
 TEST_F(ExternalEventBridgeTest, ValidCallbackStillWorks) {
