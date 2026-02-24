@@ -242,7 +242,7 @@ endif()
 # Do NOT declare a separate FetchContent here — it would conflict.
 
 # Link gsl-lite to aibox_core (target provided by root build)
-target_link_libraries(aibox_core PUBLIC gsl::gsl-lite-v1)
+target_link_libraries(aibox_core PRIVATE gsl::gsl-lite-v1)
 
 # gsl-lite v1 strict C++23 configuration for engine
 target_compile_definitions(aibox_core PRIVATE

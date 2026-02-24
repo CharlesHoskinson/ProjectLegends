@@ -47,7 +47,7 @@ safe_multiply_3(std::size_t a, std::size_t b, std::size_t c) noexcept {
  *        on overflow via the file-local DOSBOXX_ERROR macro.
  *
  * Requires DOSBOXX_ERROR(code, msg) to be in scope
- * (as in dosboxx_embed_api.cpp FFI functions).
+ * (as in legends_embed_api.cpp FFI functions).
  */
 #define SAFE_MULTIPLY_OR_ERROR(a, b, result_var) \
     do { \

@@ -2272,7 +2272,7 @@ TEST_F(SecurityHardeningTest, LoadRejectsInvalidFrameGeometry) {
 // Test: Fuzz with randomized offsets
 TEST_F(SecurityHardeningTest, FuzzRandomizedOffsets) {
     auto buffer = createValidSaveState();
-    const size_t header_size = 96;  // SaveStateHeader size
+    const size_t header_size = 64;  // SaveStateHeader size
 
     // Test various corrupted offset patterns
     for (int seed = 0; seed < 50; ++seed) {
