@@ -4,6 +4,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <legends/gsl.hpp>
 #include <legends/handle_registry.h>
 #include <thread>
 #include <vector>
@@ -117,17 +118,19 @@ TEST_F(HandleRegistryTest, AllocateAndValidate) {
     EXPECT_EQ(registry.validate(handle, HandleType::Emulator), HandleStatus::Valid);
 }
 
-TEST_F(HandleRegistryTest, AllocateNullObject) {
+TEST_F(HandleRegistryTest, AllocateNullObjectThrows) {
     int* null_ptr = nullptr;
-    auto handle = registry.allocate(null_ptr, HandleType::Emulator);
-
-    EXPECT_TRUE(handle.is_null());
+    EXPECT_THROW(
+        registry.allocate(null_ptr, HandleType::Emulator),
+        legends::gsl::fail_fast
+    );
 }
 
-TEST_F(HandleRegistryTest, AllocateInvalidType) {
-    auto handle = registry.allocate(&test_object, HandleType::Invalid);
-
-    EXPECT_TRUE(handle.is_null());
+TEST_F(HandleRegistryTest, AllocateInvalidTypeThrows) {
+    EXPECT_THROW(
+        registry.allocate(&test_object, HandleType::Invalid),
+        legends::gsl::fail_fast
+    );
 }
 
 TEST_F(HandleRegistryTest, GetObject) {

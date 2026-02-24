@@ -249,9 +249,8 @@ public:
      */
     template<typename T>
     [[nodiscard]] PackedHandle allocate(T* object, HandleType type) {
-        if (!object || type == HandleType::Invalid) {
-            return PackedHandle{0};
-        }
+        gsl_Expects(object != nullptr);
+        gsl_Expects(type != HandleType::Invalid);
 
         std::lock_guard lock(mutex_);
 
