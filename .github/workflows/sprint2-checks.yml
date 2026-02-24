@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'engine/**'
+      - 'src/**'
+      - 'include/**'
       - 'scripts/**'
       - 'tests/**'
       - '.github/workflows/sprint2-checks.yml'
@@ -11,6 +13,8 @@ on:
   pull_request:
     paths:
       - 'engine/**'
+      - 'src/**'
+      - 'include/**'
       - 'scripts/**'
       - 'tests/**'
       - '.github/workflows/sprint2-checks.yml'
@@ -60,8 +64,8 @@ jobs:
       - name: Build unit tests
         run: cmake --build build --target legends_unit_tests
 
-      - name: Run multi-instance tests
-        run: ./build/legends_unit_tests --gtest_filter="MultiInstance*:Sprint2*"
+      - name: Run multi-instance and contract tests
+        run: ./build/legends_unit_tests --gtest_filter="MultiInstance*:Sprint2*:GslContract*:ContractGates*"
 
       - name: Run full test suite
         run: ./build/legends_unit_tests --gtest_filter="-CompatShimTest.CurrentThrowsWhenNoContext"
