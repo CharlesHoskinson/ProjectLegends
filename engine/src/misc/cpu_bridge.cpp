@@ -14,7 +14,7 @@
 #include "cpu.h"
 #include "callback.h"
 
-#include <gsl/gsl-lite.hpp>
+#include <gsl-lite/gsl-lite.hpp>
 #include <algorithm>
 #include <cassert>
 #include <limits>

@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <gsl/gsl-lite.hpp>
+#include <gsl-lite/gsl-lite.hpp>
 #include <algorithm>
 #include <array>
 #include <cstdint>
