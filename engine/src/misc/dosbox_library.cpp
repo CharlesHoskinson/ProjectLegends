@@ -1216,4 +1216,57 @@ dosbox_lib_error_t dosbox_lib_get_pic_state(
     return DOSBOX_LIB_OK;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Memory Access API (Phase A)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_read_memory(
+    dosbox_lib_handle_t handle,
+    uint32_t address,
+    void* buffer,
+    size_t size
+) {
+    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(buffer != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    // Bounds check against context memory
+    if (g_context->memory.base == nullptr || size == 0) {
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+    if (static_cast<uint64_t>(address) + size > g_context->memory.size) {
+        g_last_error = "Memory read out of bounds";
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+
+    std::memcpy(buffer, g_context->memory.base + address, size);
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_write_memory(
+    dosbox_lib_handle_t handle,
+    const void* buffer,
+    uint32_t address,
+    size_t size
+) {
+    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(buffer != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    if (g_context->memory.base == nullptr || size == 0) {
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+    if (static_cast<uint64_t>(address) + size > g_context->memory.size) {
+        g_last_error = "Memory write out of bounds";
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+
+    std::memcpy(g_context->memory.base + address, buffer, size);
+    return DOSBOX_LIB_OK;
+}
+
 } // extern "C"

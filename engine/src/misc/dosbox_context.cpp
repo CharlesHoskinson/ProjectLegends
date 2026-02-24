@@ -24,13 +24,20 @@
 #include "vga.h"  // For VGA_Type_t in allocate_hw/free_hw
 #else
 // Stub memory functions for headless mode
-// In headless mode, memory is not actually allocated - we're just testing the API
+// Allocate flat RAM so memory read/write APIs and CPU core work
 namespace {
-inline bool MEM_AllocateForContext(dosbox::DOSBoxContext* /*ctx*/, size_t /*kb*/) {
-    return true; // Always succeed in headless mode
+inline bool MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t kb) {
+    size_t bytes = kb * 1024;
+    ctx->memory.base = new (std::nothrow) uint8_t[bytes]();
+    if (!ctx->memory.base) return false;
+    ctx->memory.size = bytes;
+    ctx->memory.pages = static_cast<uint32_t>(bytes / 4096);
+    return true;
 }
-inline void MEM_FreeForContext(dosbox::DOSBoxContext* /*ctx*/) {
-    // Nothing to free in headless mode
+inline void MEM_FreeForContext(dosbox::DOSBoxContext* ctx) {
+    delete[] ctx->memory.base;
+    ctx->memory.base = nullptr;
+    ctx->memory.size = 0;
 }
 }
 #endif

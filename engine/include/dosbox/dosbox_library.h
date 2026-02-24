@@ -382,6 +382,42 @@ dosbox_lib_error_t dosbox_lib_inject_mouse(
 );
 
 /* =========================================================================
+ * MEMORY ACCESS API
+ * ========================================================================= */
+
+/**
+ * @brief Read from guest physical memory.
+ *
+ * @param handle Valid handle
+ * @param address Guest physical address
+ * @param buffer Output buffer
+ * @param size Bytes to read
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_read_memory(
+    dosbox_lib_handle_t handle,
+    uint32_t address,
+    void* buffer,
+    size_t size
+);
+
+/**
+ * @brief Write to guest physical memory.
+ *
+ * @param handle Valid handle
+ * @param address Guest physical address
+ * @param buffer Data to write
+ * @param size Bytes to write
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_write_memory(
+    dosbox_lib_handle_t handle,
+    const void* buffer,
+    uint32_t address,
+    size_t size
+);
+
+/* =========================================================================
  * PIC STATE API
  * ========================================================================= */
 
