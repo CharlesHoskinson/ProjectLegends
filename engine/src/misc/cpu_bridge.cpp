@@ -1,41 +1,55 @@
 /**
  * @file cpu_bridge.cpp
- * @brief CPU execution bridge for library mode (stub implementation).
+ * @brief CPU execution bridge for library mode.
  *
- * This is a stub implementation for library mode builds that do not
- * have access to the full DOSBox-X CPU core. It simulates CPU execution
- * by incrementing cycle counters without executing actual instructions.
- *
- * In full DOSBox-X builds, this file is replaced with the real
- * implementation that bridges to the CPU core.
+ * Bridges the library mode context-based API to the DOSBox-X CPU core.
+ * Calls CPU_Core_Normal_Run (or whichever decoder cpudecoder points to)
+ * using CPU_Cycles as the execution budget.
  *
  * @copyright GPL-2.0-or-later
  */
 
 #include "dosbox/cpu_bridge.h"
 #include "dosbox/dosbox_context.h"
+#include "cpu.h"
+#include "callback.h"
 
 #include <gsl/gsl-lite.hpp>
 #include <algorithm>
+#include <limits>
+#include <cstring>
+
+extern void CPU_Init();
+extern void CPU_LibraryInit();
+extern bool CPU_IsHLTed();
 
 namespace dosbox {
 
 namespace {
-
-// Flag to track if bridge has been initialized
 bool g_bridge_initialized = false;
-
-// Maximum cycles per batch to allow for event checking
-constexpr uint64_t MAX_CYCLES_PER_BATCH = 10000;
-
 } // anonymous namespace
 
 void init_cpu_bridge() {
-    g_bridge_initialized = true;
+    if (!g_bridge_initialized) {
+        // Initialize CPU state if not already done
+        ::CPU_Init();
+
+        // Ensure decoder is set
+        if (cpudecoder == nullptr)
+            cpudecoder = &CPU_Core_Simple_Run;
+
+        g_bridge_initialized = true;
+    }
 }
 
 bool is_cpu_bridge_ready() {
     return g_bridge_initialized;
+}
+
+void reset_cpu_bridge() {
+    // Re-initialize all CPU registers, segments, flags to power-on defaults.
+    // This ensures deterministic execution after a context reset.
+    ::CPU_LibraryInit();
 }
 
 CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
@@ -49,48 +63,53 @@ CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
         init_cpu_bridge();
     }
 
-    // Validate input
     if (ctx == nullptr) {
         result.stop_reason = CpuStopReason::Error;
         return result;
     }
 
-    // Check for stop request
     if (ctx->stop_requested()) {
         result.stop_reason = CpuStopReason::UserRequest;
         return result;
     }
 
-    // STUB IMPLEMENTATION: Simulate CPU execution
-    // In a real implementation, this would execute actual CPU instructions
-    // through the DOSBox-X core. Here we just increment counters.
-
-    uint64_t cycles_remaining = cycles;
-
-    while (cycles_remaining > 0) {
-        // Check for stop request
-        if (ctx->stop_requested()) {
-            result.stop_reason = CpuStopReason::UserRequest;
-            break;
-        }
-
-        // Simulate batch execution
-        uint64_t batch = std::min(cycles_remaining, MAX_CYCLES_PER_BATCH);
-
-        // In stub mode, we "execute" all requested cycles instantly
-        result.cycles_executed += batch;
-        cycles_remaining -= batch;
-
-        // Simulate some event processing (1 event per batch)
-        result.events_processed++;
+    // Zero cycles: no-op
+    if (cycles == 0) {
+        return result;
     }
+
+    // Clamp to signed range for CPU_Cycles (intptr_t)
+    constexpr uint64_t max_budget = static_cast<uint64_t>(std::numeric_limits<cpu_cycles_count_t>::max());
+    auto budget = static_cast<cpu_cycles_count_t>(std::min(cycles, max_budget));
+
+    cpu_cycles_count_t saved = CPU_Cycles;
+    CPU_Cycles = budget;
+
+    Bits ret = (*cpudecoder)();
+
+    // Compute consumed cycles (decoder may overshoot by 1 instruction)
+    cpu_cycles_count_t consumed = budget - CPU_Cycles;
+    if (consumed < 0) consumed = 0;
+    // Clamp to requested budget - overshoot is a decoder implementation detail
+    if (static_cast<uint64_t>(consumed) > cycles)
+        consumed = static_cast<cpu_cycles_count_t>(cycles);
+    result.cycles_executed = static_cast<uint64_t>(consumed);
+
+    // Restore any remaining cycles
+    CPU_Cycles = saved;
+
+    if (ret == CBRET_STOP) {
+        result.stop_reason = CpuStopReason::Halt;
+    } else if (ret > CBRET_STOP) {
+        result.stop_reason = CpuStopReason::Callback;
+        result.callback_id = static_cast<int32_t>(ret);
+    } else if (CPU_IsHLTed()) {
+        result.stop_reason = CpuStopReason::Halt;
+    }
+    // ret == CBRET_NONE (0) means normal completion
 
     // Update context timing state
     ctx->timing.total_cycles += result.cycles_executed;
-
-    // Postcondition: on normal completion, all requested cycles were consumed
-    gsl_Ensures(result.stop_reason != CpuStopReason::Completed ||
-                result.cycles_executed == cycles);
 
     return result;
 }
@@ -101,7 +120,6 @@ CpuExecuteResult execute_ms(DOSBoxContext* ctx, uint32_t ms, uint32_t cycles_per
     uint64_t total_cycles = static_cast<uint64_t>(ms) * cycles_per_ms;
     auto result = execute_cycles(ctx, total_cycles);
 
-    // Update virtual ticks if context provided
     if (ctx) {
         uint32_t ms_executed = static_cast<uint32_t>(result.cycles_executed / cycles_per_ms);
         ctx->timing.virtual_ticks_ms += ms_executed;

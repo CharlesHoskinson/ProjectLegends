@@ -259,15 +259,23 @@ dosbox_lib_error_t dosbox_lib_init(dosbox_lib_handle_t handle) {
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
     try {
-        // Initialize the context
+        // Set thread-local context so memory access (MemBase) works during init
+        dosbox::ContextGuard ctx_guard(*g_context);
+
+        // Initialize the context (allocates memory, etc.)
         auto init_result = g_context->initialize();
         if (!init_result.has_value()) {
             g_last_error = init_result.error().message();
             return DOSBOX_LIB_ERR_INTERNAL;
         }
 
-        // Sprint 2 Phase 1: No longer set thread-local context
-        // Platform providers are wired directly through the context
+        // Initialize CPU bridge (decoder, registers).
+        // Must happen after memory is allocated so MemBase is valid.
+        // init_cpu_bridge() is idempotent for decoder setup but we also
+        // need CPU_LibraryInit() to reset registers for each new instance
+        // (EIP etc. persist as globals across instance create/destroy).
+        dosbox::init_cpu_bridge();
+        dosbox::reset_cpu_bridge();
 
         LIB_LOG_INFO("DOSBox-X library instance initialized");
         return DOSBOX_LIB_OK;
@@ -318,6 +326,20 @@ dosbox_lib_error_t dosbox_lib_reset(dosbox_lib_handle_t handle) {
             g_last_error = reset_result.error().message();
             return DOSBOX_LIB_ERR_INTERNAL;
         }
+
+        // Reset real CPU registers to power-on defaults for determinism
+        dosbox::reset_cpu_bridge();
+
+        // Zero guest memory so execution starts from a clean state,
+        // then refill guard region with HLT (0xF4) so CPU halts on overrun
+        if (g_context->memory.base && g_context->memory.size > 0) {
+            std::memset(g_context->memory.base, 0, g_context->memory.size);
+            // Guard region sits immediately after the main memory allocation
+            constexpr size_t GUARD_REGION_SIZE = 65536;
+            std::memset(g_context->memory.base + g_context->memory.size,
+                        0xF4, GUARD_REGION_SIZE);
+        }
+
         g_last_error.clear();
         return DOSBOX_LIB_OK;
 
@@ -342,8 +364,10 @@ dosbox_lib_error_t dosbox_lib_step_cycles(
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
     try {
-        // Sprint 2 Phase 1: Operate directly on context without thread-local state
         auto* ctx = g_context.get();
+
+        // Set thread-local context so CPU core memory access (MemBase) works
+        dosbox::ContextGuard ctx_guard(*ctx);
 
         // Use the CPU bridge to execute actual CPU instructions
         auto bridge_result = dosbox::execute_cycles(ctx, cycles);
@@ -1213,6 +1237,59 @@ dosbox_lib_error_t dosbox_lib_get_pic_state(
     state_out->slave_imr = g_context->pic.slave_imr();
     state_out->slave_isr = g_context->pic.slave_isr();
 
+    return DOSBOX_LIB_OK;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Memory Access API (Phase A)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_read_memory(
+    dosbox_lib_handle_t handle,
+    uint32_t address,
+    void* buffer,
+    size_t size
+) {
+    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(buffer != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    // Bounds check against context memory
+    if (g_context->memory.base == nullptr || size == 0) {
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+    if (static_cast<uint64_t>(address) + size > g_context->memory.size) {
+        g_last_error = "Memory read out of bounds";
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+
+    std::memcpy(buffer, g_context->memory.base + address, size);
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_write_memory(
+    dosbox_lib_handle_t handle,
+    const void* buffer,
+    uint32_t address,
+    size_t size
+) {
+    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(buffer != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    if (g_context->memory.base == nullptr || size == 0) {
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+    if (static_cast<uint64_t>(address) + size > g_context->memory.size) {
+        g_last_error = "Memory write out of bounds";
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+
+    std::memcpy(g_context->memory.base + address, buffer, size);
     return DOSBOX_LIB_OK;
 }
 

@@ -11,10 +11,23 @@ using namespace dosbox;
 
 class CpuBridgeTest : public ::testing::Test {
 protected:
-    DOSBoxContext ctx{};
+    ContextConfig config_ = ContextConfig::minimal();
+    std::unique_ptr<DOSBoxContext> ctx_;
 
     void SetUp() override {
         init_cpu_bridge();
+        ctx_ = std::make_unique<DOSBoxContext>(config_);
+        auto result = ctx_->initialize();
+        ASSERT_TRUE(result.has_value()) << "Context init failed";
+        set_current_context(ctx_.get());
+    }
+
+    void TearDown() override {
+        set_current_context(nullptr);
+        if (ctx_) {
+            ctx_->shutdown();
+            ctx_.reset();
+        }
     }
 };
 
@@ -23,20 +36,20 @@ TEST_F(CpuBridgeTest, IsReadyAfterInit) {
 }
 
 TEST_F(CpuBridgeTest, ExecuteCyclesUpdatesContext) {
-    ctx.timing.total_cycles = 0;
-    auto result = execute_cycles(&ctx, 3000);
+    ctx_->timing.total_cycles = 0;
+    auto result = execute_cycles(ctx_.get(), 3000);
 
     EXPECT_EQ(result.stop_reason, CpuStopReason::Completed);
     EXPECT_EQ(result.cycles_executed, 3000u);
-    EXPECT_EQ(ctx.timing.total_cycles, 3000u);
+    EXPECT_EQ(ctx_->timing.total_cycles, 3000u);
 }
 
 TEST_F(CpuBridgeTest, ExecuteCyclesAccumulates) {
-    ctx.timing.total_cycles = 0;
-    execute_cycles(&ctx, 1000);
-    execute_cycles(&ctx, 2000);
+    ctx_->timing.total_cycles = 0;
+    execute_cycles(ctx_.get(), 1000);
+    execute_cycles(ctx_.get(), 2000);
 
-    EXPECT_EQ(ctx.timing.total_cycles, 3000u);
+    EXPECT_EQ(ctx_->timing.total_cycles, 3000u);
 }
 
 TEST_F(CpuBridgeTest, NullContextReturnsError) {
@@ -46,36 +59,36 @@ TEST_F(CpuBridgeTest, NullContextReturnsError) {
 }
 
 TEST_F(CpuBridgeTest, StopRequestedHaltsExecution) {
-    ctx.request_stop();
-    auto result = execute_cycles(&ctx, 100000);
+    ctx_->request_stop();
+    auto result = execute_cycles(ctx_.get(), 100000);
 
     EXPECT_EQ(result.stop_reason, CpuStopReason::UserRequest);
     EXPECT_EQ(result.cycles_executed, 0u);
 }
 
 TEST_F(CpuBridgeTest, ExecuteMsConvertsToycles) {
-    ctx.timing.total_cycles = 0;
-    auto result = execute_ms(&ctx, 10, 3000); // 10ms * 3000 = 30000 cycles
+    ctx_->timing.total_cycles = 0;
+    auto result = execute_ms(ctx_.get(), 10, 3000); // 10ms * 3000 = 30000 cycles
 
     EXPECT_EQ(result.cycles_executed, 30000u);
-    EXPECT_EQ(ctx.timing.total_cycles, 30000u);
+    EXPECT_EQ(ctx_->timing.total_cycles, 30000u);
 }
 
 TEST_F(CpuBridgeTest, ExecuteMsUpdatesVirtualTicks) {
-    ctx.timing.virtual_ticks_ms = 0;
-    execute_ms(&ctx, 10, 3000);
+    ctx_->timing.virtual_ticks_ms = 0;
+    execute_ms(ctx_.get(), 10, 3000);
 
-    EXPECT_EQ(ctx.timing.virtual_ticks_ms, 10u);
+    EXPECT_EQ(ctx_->timing.virtual_ticks_ms, 10u);
 }
 
 TEST_F(CpuBridgeTest, ZeroCyclesCompletesImmediately) {
-    auto result = execute_cycles(&ctx, 0);
+    auto result = execute_cycles(ctx_.get(), 0);
     EXPECT_EQ(result.stop_reason, CpuStopReason::Completed);
     EXPECT_EQ(result.cycles_executed, 0u);
 }
 
 TEST_F(CpuBridgeTest, CallbackIdIsNegativeOneByDefault) {
-    auto result = execute_cycles(&ctx, 100);
+    auto result = execute_cycles(ctx_.get(), 100);
     EXPECT_EQ(result.callback_id, -1);
 }
 
@@ -84,18 +97,18 @@ TEST_F(CpuBridgeTest, CallbackIdIsNegativeOneByDefault) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(CpuBridgeTest, PostconditionCompletedMeansAllCyclesConsumed) {
-    ctx.timing.total_cycles = 0;
-    auto result = execute_cycles(&ctx, 7777);
+    ctx_->timing.total_cycles = 0;
+    auto result = execute_cycles(ctx_.get(), 7777);
 
-    // gsl_Ensures in execute_cycles guarantees this on Completed
+    // Completed means all requested cycles were consumed (clamped to budget)
     ASSERT_EQ(result.stop_reason, CpuStopReason::Completed);
     EXPECT_EQ(result.cycles_executed, 7777u);
 }
 
 TEST_F(CpuBridgeTest, PostconditionStopRequestConsumesFewer) {
-    ctx.timing.total_cycles = 0;
-    ctx.request_stop();
-    auto result = execute_cycles(&ctx, 10000);
+    ctx_->timing.total_cycles = 0;
+    ctx_->request_stop();
+    auto result = execute_cycles(ctx_.get(), 10000);
 
     ASSERT_EQ(result.stop_reason, CpuStopReason::UserRequest);
     EXPECT_LT(result.cycles_executed, 10000u);
@@ -104,8 +117,8 @@ TEST_F(CpuBridgeTest, PostconditionStopRequestConsumesFewer) {
 TEST_F(CpuBridgeTest, ExecuteMsRequiresPositiveCyclesPerMs) {
     // cycles_per_ms > 0 is a gsl_Expects precondition.
     // Valid calls must provide a positive rate.
-    ctx.timing.total_cycles = 0;
-    auto result = execute_ms(&ctx, 5, 3000);
+    ctx_->timing.total_cycles = 0;
+    auto result = execute_ms(ctx_.get(), 5, 3000);
     EXPECT_EQ(result.stop_reason, CpuStopReason::Completed);
     EXPECT_EQ(result.cycles_executed, 15000u);
 }

@@ -85,6 +85,9 @@ add_executable(aibox_unit_tests
     unit/test_dos_filesystem_migration.cpp
     # CPU Bridge
     unit/test_cpu_bridge.cpp
+    # Phase A: Memory API + CPU Proof of Life
+    unit/test_memory_api.cpp
+    unit/test_cpu_proof_of_life.cpp
 )
 
 target_link_libraries(aibox_unit_tests PRIVATE

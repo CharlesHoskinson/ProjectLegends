@@ -179,6 +179,16 @@ set(AIBOX_CORE_SOURCES
     src/hardware/dma_compat.cpp
     # Sprint 2 PR #9: Memory accessor compat shim (MEM_GetBaseRef/MEM_GetSizeRef)
     src/hardware/memory_compat.cpp
+    # Phase A: CPU interpretive cores (real x86 execution)
+    src/cpu/core_normal.cpp
+    src/cpu/core_simple.cpp
+    src/cpu/flags.cpp
+    src/cpu/paging.cpp
+    src/cpu/callback.cpp
+    src/cpu/cpu.cpp
+    src/cpu/mmx.cpp
+    src/cpu/modrm.cpp
+    src/cpu/cpu_library_stubs.cpp
 )
 
 # Add headless stub when building without SDL
@@ -204,6 +214,11 @@ endif()
 target_include_directories(aibox_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+# CPU-internal headers (instructions.h, modrm.h, lazyflags.h, core_normal/*.h)
+target_include_directories(aibox_core PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/cpu
 )
 
 # Compile definitions for aibox_core
