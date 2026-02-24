@@ -16,8 +16,11 @@
 
 #include <gsl/gsl-lite.hpp>
 #include <algorithm>
+#include <limits>
+#include <cstring>
 
 extern void CPU_Init();
+extern void CPU_LibraryInit();
 extern bool CPU_IsHLTed();
 
 namespace dosbox {
@@ -43,6 +46,12 @@ bool is_cpu_bridge_ready() {
     return g_bridge_initialized;
 }
 
+void reset_cpu_bridge() {
+    // Re-initialize all CPU registers, segments, flags to power-on defaults.
+    // This ensures deterministic execution after a context reset.
+    ::CPU_LibraryInit();
+}
+
 CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
     CpuExecuteResult result{};
     result.cycles_executed = 0;
@@ -64,20 +73,26 @@ CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
         return result;
     }
 
-    // Clamp to avoid overflow: CPU_Cycles is intptr_t (signed)
-    auto budget = static_cast<cpu_cycles_count_t>(
-        std::min(cycles, static_cast<uint64_t>(CPU_CycleMax > 0 ? CPU_CycleMax * 10 : 100000)));
-    if (static_cast<uint64_t>(budget) < cycles)
-        budget = static_cast<cpu_cycles_count_t>(cycles);
+    // Zero cycles: no-op
+    if (cycles == 0) {
+        return result;
+    }
+
+    // Clamp to signed range for CPU_Cycles (intptr_t)
+    constexpr uint64_t max_budget = static_cast<uint64_t>(std::numeric_limits<cpu_cycles_count_t>::max());
+    auto budget = static_cast<cpu_cycles_count_t>(std::min(cycles, max_budget));
 
     cpu_cycles_count_t saved = CPU_Cycles;
     CPU_Cycles = budget;
 
     Bits ret = (*cpudecoder)();
 
-    // Compute consumed cycles
+    // Compute consumed cycles (decoder may overshoot by 1 instruction)
     cpu_cycles_count_t consumed = budget - CPU_Cycles;
     if (consumed < 0) consumed = 0;
+    // Clamp to requested budget - overshoot is a decoder implementation detail
+    if (static_cast<uint64_t>(consumed) > cycles)
+        consumed = static_cast<cpu_cycles_count_t>(cycles);
     result.cycles_executed = static_cast<uint64_t>(consumed);
 
     // Restore any remaining cycles

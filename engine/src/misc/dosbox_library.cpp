@@ -262,12 +262,20 @@ dosbox_lib_error_t dosbox_lib_init(dosbox_lib_handle_t handle) {
         // Set thread-local context so memory access (MemBase) works during init
         dosbox::ContextGuard ctx_guard(*g_context);
 
-        // Initialize the context
+        // Initialize the context (allocates memory, etc.)
         auto init_result = g_context->initialize();
         if (!init_result.has_value()) {
             g_last_error = init_result.error().message();
             return DOSBOX_LIB_ERR_INTERNAL;
         }
+
+        // Initialize CPU bridge (decoder, registers).
+        // Must happen after memory is allocated so MemBase is valid.
+        // init_cpu_bridge() is idempotent for decoder setup but we also
+        // need CPU_LibraryInit() to reset registers for each new instance
+        // (EIP etc. persist as globals across instance create/destroy).
+        dosbox::init_cpu_bridge();
+        dosbox::reset_cpu_bridge();
 
         LIB_LOG_INFO("DOSBox-X library instance initialized");
         return DOSBOX_LIB_OK;
@@ -318,6 +326,20 @@ dosbox_lib_error_t dosbox_lib_reset(dosbox_lib_handle_t handle) {
             g_last_error = reset_result.error().message();
             return DOSBOX_LIB_ERR_INTERNAL;
         }
+
+        // Reset real CPU registers to power-on defaults for determinism
+        dosbox::reset_cpu_bridge();
+
+        // Zero guest memory so execution starts from a clean state,
+        // then refill guard region with HLT (0xF4) so CPU halts on overrun
+        if (g_context->memory.base && g_context->memory.size > 0) {
+            std::memset(g_context->memory.base, 0, g_context->memory.size);
+            // Guard region sits immediately after the main memory allocation
+            constexpr size_t GUARD_REGION_SIZE = 65536;
+            std::memset(g_context->memory.base + g_context->memory.size,
+                        0xF4, GUARD_REGION_SIZE);
+        }
+
         g_last_error.clear();
         return DOSBOX_LIB_OK;
 

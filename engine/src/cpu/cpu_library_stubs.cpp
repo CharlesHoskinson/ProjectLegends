@@ -109,7 +109,7 @@ static size_t get_mem_size() {
 uint8_t mem_readb(PhysPt addr) {
     uint8_t* base = get_mem_base();
     if (base && addr < get_mem_size()) return base[addr];
-    return 0xFF;
+    return 0xF4; // HLT - safely halt CPU on out-of-bounds read
 }
 
 uint16_t mem_readw(PhysPt addr) {
@@ -119,7 +119,7 @@ uint16_t mem_readw(PhysPt addr) {
         memcpy(&val, base + addr, 2);
         return val;
     }
-    return 0xFFFF;
+    return 0xF4F4; // HLT HLT
 }
 
 uint32_t mem_readd(PhysPt addr) {
@@ -129,7 +129,7 @@ uint32_t mem_readd(PhysPt addr) {
         memcpy(&val, base + addr, 4);
         return val;
     }
-    return 0xFFFFFFFF;
+    return 0xF4F4F4F4; // HLT HLT HLT HLT
 }
 
 void mem_writeb(PhysPt addr, uint8_t val) {
@@ -155,7 +155,14 @@ void mem_unalignedwrited(PhysPt addr, uint32_t val) { mem_writed(addr, val); }
 /* ── Paging stubs ─────────────────────────────────────────────────── */
 
 Bitu MEM_TotalPages() {
-    return get_mem_size() / MEM_PAGESIZE;
+    // Include the 64KB guard region (filled with HLT) in the page count.
+    // core_simple.cpp uses MEM_TotalPages() to compute a safety limit
+    // (total_pages * 4096 - 16384); if the limit falls within main memory,
+    // it falls through to CPU_Core_Normal_Run which uses TLB (uninitialized
+    // in library mode) and crashes. Including the guard ensures the CPU
+    // hits HLT bytes well before the safety limit.
+    constexpr size_t GUARD_REGION_SIZE = 65536;
+    return (get_mem_size() + GUARD_REGION_SIZE) / MEM_PAGESIZE;
 }
 
 /* Stub page handler for flat memory model */

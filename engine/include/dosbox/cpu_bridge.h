@@ -83,6 +83,15 @@ void init_cpu_bridge();
  */
 bool is_cpu_bridge_ready();
 
+/**
+ * @brief Reset CPU state to initial values.
+ *
+ * Re-initializes all x86 registers, segment descriptors, and flags
+ * to their power-on defaults. Call this during instance reset to ensure
+ * deterministic execution from a known state.
+ */
+void reset_cpu_bridge();
+
 } // namespace dosbox
 
 #endif // DOSBOX_CPU_BRIDGE_H

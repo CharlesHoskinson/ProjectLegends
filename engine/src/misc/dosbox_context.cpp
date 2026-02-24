@@ -10,6 +10,8 @@
 #include "dosbox/state_hash.h"
 #include "aibox/headless_stub.h"
 
+#include <cstring>
+
 // VideoModeBlock for cur_mode hashing (non-headless only)
 #ifndef AIBOX_HEADLESS
 #include "../ints/int10.h"
@@ -26,12 +28,20 @@
 // Stub memory functions for headless mode
 // Allocate flat RAM so memory read/write APIs and CPU core work
 namespace {
+// Guard region size: extra bytes after main RAM filled with HLT (0xF4).
+// Prevents crashes when the CPU's instruction pointer (core.cseip, a host
+// pointer) advances past allocated memory during execution of zero-filled code.
+constexpr size_t GUARD_REGION_SIZE = 65536; // 64KB guard
+
 inline bool MEM_AllocateForContext(dosbox::DOSBoxContext* ctx, size_t kb) {
     size_t bytes = kb * 1024;
-    ctx->memory.base = new (std::nothrow) uint8_t[bytes]();
+    // Allocate main memory + guard region
+    ctx->memory.base = new (std::nothrow) uint8_t[bytes + GUARD_REGION_SIZE]();
     if (!ctx->memory.base) return false;
     ctx->memory.size = bytes;
     ctx->memory.pages = static_cast<uint32_t>(bytes / 4096);
+    // Fill guard region with HLT (0xF4) so CPU halts instead of crashing
+    std::memset(ctx->memory.base + bytes, 0xF4, GUARD_REGION_SIZE);
     return true;
 }
 inline void MEM_FreeForContext(dosbox::DOSBoxContext* ctx) {
