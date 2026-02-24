@@ -18,6 +18,7 @@
 #include <algorithm>
 
 extern void CPU_Init();
+extern bool CPU_IsHLTed();
 
 namespace dosbox {
 
@@ -32,7 +33,7 @@ void init_cpu_bridge() {
 
         // Ensure decoder is set
         if (cpudecoder == nullptr)
-            cpudecoder = &CPU_Core_Normal_Run;
+            cpudecoder = &CPU_Core_Simple_Run;
 
         g_bridge_initialized = true;
     }
@@ -87,6 +88,8 @@ CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
     } else if (ret > CBRET_STOP) {
         result.stop_reason = CpuStopReason::Callback;
         result.callback_id = static_cast<int32_t>(ret);
+    } else if (CPU_IsHLTed()) {
+        result.stop_reason = CpuStopReason::Halt;
     }
     // ret == CBRET_NONE (0) means normal completion
 

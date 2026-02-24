@@ -259,15 +259,15 @@ dosbox_lib_error_t dosbox_lib_init(dosbox_lib_handle_t handle) {
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
     try {
+        // Set thread-local context so memory access (MemBase) works during init
+        dosbox::ContextGuard ctx_guard(*g_context);
+
         // Initialize the context
         auto init_result = g_context->initialize();
         if (!init_result.has_value()) {
             g_last_error = init_result.error().message();
             return DOSBOX_LIB_ERR_INTERNAL;
         }
-
-        // Sprint 2 Phase 1: No longer set thread-local context
-        // Platform providers are wired directly through the context
 
         LIB_LOG_INFO("DOSBox-X library instance initialized");
         return DOSBOX_LIB_OK;
@@ -342,8 +342,10 @@ dosbox_lib_error_t dosbox_lib_step_cycles(
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
     try {
-        // Sprint 2 Phase 1: Operate directly on context without thread-local state
         auto* ctx = g_context.get();
+
+        // Set thread-local context so CPU core memory access (MemBase) works
+        dosbox::ContextGuard ctx_guard(*ctx);
 
         // Use the CPU bridge to execute actual CPU instructions
         auto bridge_result = dosbox::execute_cycles(ctx, cycles);

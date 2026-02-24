@@ -3348,6 +3348,7 @@ void CPU_LibraryInit(void) {
     /* Minimal CPU state initialization for library mode. */
     reg_eax = reg_ebx = reg_ecx = reg_edx = 0;
     reg_edi = reg_esi = reg_ebp = reg_esp = 0;
+    reg_eip = 0;
 
     SegSet16(cs, 0); Segs.limit[cs] = ((PhysPt)(~0UL)); Segs.expanddown[cs] = false;
     SegSet16(ds, 0); Segs.limit[ds] = ((PhysPt)(~0UL)); Segs.expanddown[ds] = false;
@@ -3376,7 +3377,7 @@ void CPU_LibraryInit(void) {
     CPU_Core_Normal_Init();
     CPU_Core_Simple_Init();
 
-    cpudecoder = &CPU_Core_Normal_Run;
+    cpudecoder = &CPU_Core_Simple_Run;
     CPU_ArchitectureType = CPU_ARCHTYPE_386;
     CPU_CycleMax = 3000;
     CPU_CyclesSet = 3000;
