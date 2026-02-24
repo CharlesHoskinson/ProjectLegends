@@ -793,10 +793,10 @@ legends_error_t legends_create(
     // Initialize output to null
     *handle_out = nullptr;
 
-    // Allocate new instance
-    legends_instance* new_inst = nullptr;
+    // Allocate new instance (make_unique provides exception-safe allocation)
+    std::unique_ptr<legends_instance> owned_inst;
     try {
-        new_inst = new legends_instance;
+        owned_inst = std::make_unique<legends_instance>();
     } catch (const std::bad_alloc&) {
         g_pre_creation_error = "Out of memory allocating instance";
         return LEGENDS_ERR_OUT_OF_MEMORY;
@@ -804,11 +804,9 @@ legends_error_t legends_create(
 
     // Single instance enforcement using atomic compare-exchange
     legends_instance* expected = nullptr;
-    if (!g_active_instance.compare_exchange_strong(expected, new_inst,
+    if (!g_active_instance.compare_exchange_strong(expected, owned_inst.get(),
             std::memory_order_acq_rel, std::memory_order_acquire)) {
-        delete new_inst;
-        // Log through existing instance's callback if available
-        // (expected now holds the active instance pointer after CAS failure)
+        // owned_inst destructor handles cleanup automatically
         if (expected && expected->log_state.callback) {
             expected->log_state.callback(
                 0,  // LOG_LEVEL_ERROR
@@ -819,8 +817,8 @@ legends_error_t legends_create(
         return LEGENDS_ERR_ALREADY_CREATED;
     }
 
-    // From here, inst points to the active instance
-    inst = new_inst;
+    // CAS succeeded — release ownership to the atomic, inst is now the raw pointer
+    inst = owned_inst.release();
 
     // Store owner thread ID for thread affinity checking
     inst->owner_thread_id = std::this_thread::get_id();
@@ -978,9 +976,9 @@ legends_error_t legends_destroy(legends_handle handle) {
     // Clean up all per-instance state
     inst->destroy_cleanup();
 
-    // Null out the global and delete
+    // Null out the global and delete via unique_ptr (RAII cleanup)
     g_active_instance.store(nullptr, std::memory_order_release);
-    delete inst;
+    std::unique_ptr<legends_instance>(inst);
 
     return LEGENDS_OK;
 }
