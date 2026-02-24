@@ -188,6 +188,7 @@ set(AIBOX_CORE_SOURCES
     src/cpu/cpu.cpp
     src/cpu/mmx.cpp
     src/cpu/modrm.cpp
+    src/cpu/cpu_library_stubs.cpp
 )
 
 # Add headless stub when building without SDL
