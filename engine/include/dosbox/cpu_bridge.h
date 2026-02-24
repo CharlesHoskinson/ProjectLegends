@@ -40,6 +40,17 @@ struct CpuExecuteResult {
     int32_t callback_id;        ///< If Callback, which one (-1 if none)
 };
 
+/*
+ * CPU Globals Sync Convention
+ * ---------------------------
+ * ENTRY: save CPU_Cycles, set CPU_Cycles = budget
+ * EXIT:  consumed = budget - CPU_Cycles
+ *        restore CPU_Cycles to saved value
+ *        ctx->timing.total_cycles += consumed
+ *
+ * Registers remain in CPU globals between calls (single-instance).
+ */
+
 /**
  * @brief Execute CPU cycles in library mode.
  *

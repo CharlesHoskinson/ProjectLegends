@@ -16,6 +16,7 @@
 
 #include <gsl/gsl-lite.hpp>
 #include <algorithm>
+#include <cassert>
 #include <limits>
 #include <cstring>
 
@@ -97,6 +98,9 @@ CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
 
     // Restore any remaining cycles
     CPU_Cycles = saved;
+#ifndef NDEBUG
+    assert(CPU_Cycles == saved && "CPU_Cycles not restored after bridge call");
+#endif
 
     if (ret == CBRET_STOP) {
         result.stop_reason = CpuStopReason::Halt;
