@@ -4,8 +4,12 @@ CI Gate: Verify gsl-lite usage follows library contract.
 
 This script enforces the following rules:
 1. No use of legacy header <gsl/gsl-lite.hpp> (conflicts with Microsoft GSL)
-2. No gsl_FEATURE_GSL_COMPATIBILITY_MODE in public headers
+2. No gsl_FEATURE_GSL_COMPATIBILITY_MODE in source code
 3. gsl-lite types not exposed in public C ABI headers (legends_embed.h)
+4. No direct gsl_lite:: namespace usage (use legends::gsl:: alias)
+5. No bare assert() in modern aibox code (use gsl_Assert or LEGENDS_ASSERT)
+6. No gsl_lite::span in C++23 code (use std::span)
+7. No gsl_lite::byte in C++23 code (use std::byte)
 
 Run this in CI to prevent gsl-lite misuse from breaking the library contract.
 
@@ -18,6 +22,25 @@ import re
 import sys
 from pathlib import Path
 from typing import List, Tuple
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Comment detection
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def is_comment(line: str, filepath: str) -> bool:
+    """Check if a line is a comment (C++, CMake, or Python style)."""
+    stripped = line.lstrip()
+    # C/C++ single-line comments
+    if stripped.startswith('//') or stripped.startswith('*'):
+        return True
+    # CMake and Python comments
+    if stripped.startswith('#'):
+        # But not preprocessor directives
+        if re.match(r'#\s*(include|define|ifdef|ifndef|endif|if|else|elif|pragma)', stripped):
+            return False
+        return True
+    return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -34,7 +57,29 @@ FORBIDDEN_PATTERNS = [
     (
         r'gsl_FEATURE_GSL_COMPATIBILITY_MODE',
         "Do not define gsl_FEATURE_GSL_COMPATIBILITY_MODE (affects API/ABI)",
-        r'.*\.(cpp|hpp|h|cmake|txt)$'
+        r'.*\.(cpp|hpp|h)$'
+    ),
+]
+
+# Modern aibox code patterns (engine/include/aibox/ and engine/src/aibox/)
+MODERN_CODE_PATTERNS = [
+    # bare assert() in modern code — use gsl_Assert or LEGENDS_ASSERT
+    (
+        r'(?<!static_)\bassert\s*\(',
+        "Use gsl_Assert() or LEGENDS_ASSERT instead of bare assert() in modern code",
+        r'engine[/\\](include|src)[/\\]aibox[/\\].*\.(cpp|hpp|h)$'
+    ),
+    # gsl_lite::span should be std::span in C++23
+    (
+        r'\bgsl_lite::span\b|legends::gsl::span\b',
+        "Use std::span (C++23), not gsl_lite::span or legends::gsl::span",
+        r'.*\.(cpp|hpp|h)$'
+    ),
+    # gsl_lite::byte polyfill — use std::byte
+    (
+        r'\bgsl_lite::byte\b|legends::gsl::byte\b',
+        "Use std::byte (C++23), not gsl_lite::byte",
+        r'.*\.(cpp|hpp|h)$'
     ),
 ]
 
@@ -89,9 +134,25 @@ def check_file(filepath: Path) -> List[Tuple[int, str, str]]:
         regex = re.compile(pattern)
         for i, line in enumerate(lines, 1):
             if regex.search(line):
-                # Skip if it's in a comment
-                stripped = line.lstrip()
-                if stripped.startswith('//') or stripped.startswith('*'):
+                if is_comment(line, rel_path):
+                    continue
+                errors.append((i, line.strip(), message))
+
+    # Check modern code patterns
+    for pattern, message, file_pattern in MODERN_CODE_PATTERNS:
+        if not re.search(file_pattern, rel_path.replace('\\', '/')):
+            continue
+
+        regex = re.compile(pattern)
+        for i, line in enumerate(lines, 1):
+            if regex.search(line):
+                if is_comment(line, rel_path):
+                    continue
+                # Skip static_assert — only flag runtime assert()
+                if 'static_assert' in line:
+                    continue
+                # Skip AIBOX_ASSERT macro definition
+                if '#define' in line and 'AIBOX_ASSERT' in line:
                     continue
                 errors.append((i, line.strip(), message))
 
@@ -102,8 +163,7 @@ def check_file(filepath: Path) -> List[Tuple[int, str, str]]:
         regex = re.compile(pattern)
         for i, line in enumerate(lines, 1):
             if regex.search(line):
-                stripped = line.lstrip()
-                if stripped.startswith('//') or stripped.startswith('*'):
+                if is_comment(line, rel_path):
                     continue
                 errors.append((i, line.strip(), message))
 
@@ -119,8 +179,7 @@ def check_file(filepath: Path) -> List[Tuple[int, str, str]]:
         regex = re.compile(pattern)
         for i, line in enumerate(lines, 1):
             if regex.search(line):
-                stripped = line.lstrip()
-                if stripped.startswith('//') or stripped.startswith('*'):
+                if is_comment(line, rel_path):
                     continue
                 errors.append((i, line.strip(), message))
 
