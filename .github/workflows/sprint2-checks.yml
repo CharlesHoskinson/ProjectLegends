@@ -3,6 +3,7 @@ name: Sprint 2 Checks
 on:
   push:
     paths:
+      - 'CMakeLists.txt'
       - 'engine/**'
       - 'src/**'
       - 'include/**'
@@ -12,6 +13,7 @@ on:
       - '.github/baseline_globals.yaml'
   pull_request:
     paths:
+      - 'CMakeLists.txt'
       - 'engine/**'
       - 'src/**'
       - 'include/**'

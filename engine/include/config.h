@@ -17,7 +17,7 @@ typedef uintptr_t Bitu;
 
 /* Compiler-portable attributes */
 #if defined(__GNUC__) || defined(__clang__)
-#  define GCC_ATTRIBUTE(x) __attribute__(x)
+#  define GCC_ATTRIBUTE(x) __attribute__((x))
 #  define INLINE inline __attribute__((always_inline))
 #elif defined(_MSC_VER)
 #  define GCC_ATTRIBUTE(x)

@@ -33,7 +33,7 @@ TEST(GslContractTest, HandleRegistryAllocateNullThrows) {
     HandleRegistry registry;
     int* null_ptr = nullptr;
     EXPECT_THROW(
-        registry.allocate(null_ptr, HandleType::Emulator),
+        (void)registry.allocate(null_ptr, HandleType::Emulator),
         legends::gsl::fail_fast
     );
 }
@@ -42,7 +42,7 @@ TEST(GslContractTest, HandleRegistryAllocateInvalidTypeThrows) {
     HandleRegistry registry;
     int obj = 42;
     EXPECT_THROW(
-        registry.allocate(&obj, HandleType::Invalid),
+        (void)registry.allocate(&obj, HandleType::Invalid),
         legends::gsl::fail_fast
     );
 }
@@ -77,7 +77,7 @@ TEST(GslContractTest, SerializeTextScreenNullDataThrows) {
 }
 
 TEST(GslContractTest, EncodeUtf8NullOutputThrows) {
-    EXPECT_THROW(llm::encode_utf8(U'A', nullptr), legends::gsl::fail_fast);
+    EXPECT_THROW((void)llm::encode_utf8(U'A', nullptr), legends::gsl::fail_fast);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

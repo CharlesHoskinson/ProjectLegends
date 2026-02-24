@@ -256,12 +256,6 @@ Error trap_internal(const char* message, std::source_location loc) noexcept {
 // Context State (Placeholder - Full implementation in context module)
 // ─────────────────────────────────────────────────────────────────────────────
 
-DOSBoxContext* current_context() noexcept {
-    // Placeholder: returns nullptr until context module is implemented
-    // PR #9 will implement the full context structure
-    return nullptr;
-}
-
 void set_context_state(DOSBoxContext* ctx, ContextState state) noexcept {
     (void)ctx;
     if (state == ContextState::Failed) {

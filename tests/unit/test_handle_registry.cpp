@@ -121,14 +121,14 @@ TEST_F(HandleRegistryTest, AllocateAndValidate) {
 TEST_F(HandleRegistryTest, AllocateNullObjectThrows) {
     int* null_ptr = nullptr;
     EXPECT_THROW(
-        registry.allocate(null_ptr, HandleType::Emulator),
+        (void)registry.allocate(null_ptr, HandleType::Emulator),
         legends::gsl::fail_fast
     );
 }
 
 TEST_F(HandleRegistryTest, AllocateInvalidTypeThrows) {
     EXPECT_THROW(
-        registry.allocate(&test_object, HandleType::Invalid),
+        (void)registry.allocate(&test_object, HandleType::Invalid),
         legends::gsl::fail_fast
     );
 }
