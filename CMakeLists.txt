@@ -373,6 +373,7 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_pal_sdl3_backend.cpp
         # Contract Gates
         tests/unit/test_contract_gates.cpp
+        tests/unit/test_gsl_contracts.cpp
         # Extended Test Coverage (Phase 2)
         tests/unit/test_thread_safety.cpp
         tests/unit/test_error_codes.cpp
