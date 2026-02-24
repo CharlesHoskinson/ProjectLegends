@@ -73,17 +73,19 @@ struct LogState {
 LogState g_log_state;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Timing Config (cycles_per_ms set at create, timing state lives in g_context)
+// Timing Config (reads g_config.cpu_cycles; timing state lives in g_context)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-uint32_t g_cycles_per_ms = 3000;
+inline uint32_t cycles_per_ms() {
+    return g_config.cpu_cycles > 0 ? g_config.cpu_cycles : 3000;
+}
 
 inline uint64_t cycles_to_us(uint64_t cycles) {
-    return (cycles * 1000) / g_cycles_per_ms;
+    return (cycles * 1000) / cycles_per_ms();
 }
 
 inline uint64_t ms_to_cycles(uint32_t ms) {
-    return static_cast<uint64_t>(ms) * g_cycles_per_ms;
+    return static_cast<uint64_t>(ms) * cycles_per_ms();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -231,9 +233,6 @@ dosbox_lib_error_t dosbox_lib_create(
         }();
         g_context = std::make_unique<dosbox::DOSBoxContext>(ctx_config);
 
-        // Initialize timing config
-        g_cycles_per_ms = g_config.cpu_cycles > 0 ? g_config.cpu_cycles : 3000;
-
         // Reset mouse state (M5: prevent leaking between instances)
         g_mouse_last_buttons = 0;
 
@@ -305,7 +304,6 @@ dosbox_lib_error_t dosbox_lib_destroy(dosbox_lib_handle_t handle) {
 
     // Reset state
     aibox::headless::ResetState();
-    g_cycles_per_ms = 3000;
     g_instance_exists = false;
     g_owner_thread_id = std::thread::id{};
     g_last_error.clear();
