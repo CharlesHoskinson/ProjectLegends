@@ -241,13 +241,24 @@ endif()
 # gsl-lite is provided by the root CMakeLists.txt (v1.0.0).
 # Do NOT declare a separate FetchContent here — it would conflict.
 
-# Configure contract violations to terminate (fail-fast for debugging)
-set(GSL_LITE_OPT_CONTRACT_VIOLATION_TERMINATES ON CACHE BOOL "" FORCE)
-
 # Link gsl-lite to aibox_core (target provided by root build)
 target_link_libraries(aibox_core PUBLIC gsl::gsl-lite-v1)
 
-message(STATUS "gsl-lite: Contract checking enabled (provided by root build)")
+# gsl-lite v1 strict C++23 configuration for engine
+target_compile_definitions(aibox_core PRIVATE
+    gsl_CONFIG_DEFAULTS_VERSION=1
+    gsl_FEATURE_GSL_COMPATIBILITY_MODE=0
+    gsl_FEATURE_STRING_SPAN=0
+    gsl_FEATURE_BYTE=0
+    gsl_CONFIG_NOT_NULL_EXPLICIT_CTOR=1
+    gsl_CONFIG_TRANSPARENT_NOT_NULL=1
+    gsl_CONFIG_CONTRACT_CHECKING_ON
+    gsl_CONFIG_UNENFORCED_CONTRACTS_ELIDE
+    $<$<BOOL:${AIBOX_LIBRARY_MODE}>:gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1>
+    $<$<NOT:$<BOOL:${AIBOX_LIBRARY_MODE}>>:gsl_CONFIG_CONTRACT_VIOLATION_TERMINATES=1>
+)
+
+message(STATUS "gsl-lite: Contract checking enabled with strict v1 config")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # C++23 Feature Validation

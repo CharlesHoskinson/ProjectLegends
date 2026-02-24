@@ -207,7 +207,16 @@ target_compile_definitions(legends_core
     PRIVATE
         $<$<BOOL:${LEGENDS_HEADLESS}>:LEGENDS_HEADLESS=1>
         $<$<BOOL:${LEGENDS_LIBRARY_MODE}>:LEGENDS_LIBRARY_MODE=1>
-        # gsl-lite contract violation behavior:
+        # gsl-lite v1 strict C++23 configuration
+        gsl_CONFIG_DEFAULTS_VERSION=1
+        gsl_FEATURE_GSL_COMPATIBILITY_MODE=0
+        gsl_FEATURE_STRING_SPAN=0
+        gsl_FEATURE_BYTE=0
+        gsl_CONFIG_NOT_NULL_EXPLICIT_CTOR=1
+        gsl_CONFIG_TRANSPARENT_NOT_NULL=1
+        gsl_CONFIG_CONTRACT_CHECKING_ON
+        gsl_CONFIG_UNENFORCED_CONTRACTS_ELIDE
+        # Contract violation behavior (mode-dependent):
         # Library mode: throw (caught at FFI boundary)
         # Standalone mode: terminate (fail-fast)
         $<$<BOOL:${LEGENDS_LIBRARY_MODE}>:gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1>
