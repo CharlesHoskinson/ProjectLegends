@@ -1,37 +1,40 @@
 ## ADDED Requirements
 
-### Requirement: Single timing source of truth
-`g_time_state` SHALL be removed from `dosbox_library.cpp`. All timing queries SHALL route through `ctx->timing`. `emu_time_us` SHALL be computed from context directly.
+### Requirement: Single timing config source
+`g_cycles_per_ms` SHALL be removed from `dosbox_library.cpp`. All timing helpers SHALL
+read cycle rate from `g_config.cpu_cycles` via the `cycles_per_ms()` function.
 
-#### Scenario: g_time_state eliminated
+#### Scenario: g_cycles_per_ms eliminated
 - **WHEN** `dosbox_library.cpp` is inspected
-- **THEN** `g_time_state` SHALL NOT exist
+- **THEN** `g_cycles_per_ms` SHALL NOT exist as a global variable
 
-#### Scenario: Timing queries use context
-- **WHEN** any code queries emulation time
-- **THEN** it SHALL read from `ctx->timing`, not a separate global
+#### Scenario: Timing helpers use config
+- **WHEN** `cycles_to_us()` or `ms_to_cycles()` compute timing
+- **THEN** they SHALL read from `g_config.cpu_cycles`, not a separate global
 
-### Requirement: Unified context guards
-`aibox::ContextGuard` SHALL also set `dosbox::g_current_context` (since MachineContext wraps DOSBoxContext). All 33 compat shim calls SHALL resolve through either context pointer.
+### Requirement: Both context TLS pointers set during legends step
+`legends_step_cycles()` SHALL set both `dosbox::g_current_context` and
+`aibox::g_current_context` for the entire step scope, including input draining.
 
-#### Scenario: Both contexts agree
-- **WHEN** `aibox::ContextGuard` is active
-- **THEN** `dosbox::current_context()` and `aibox::current_context()` SHALL return pointers to the same underlying DOSBoxContext
+#### Scenario: dosbox context set during step
+- **WHEN** `legends_step_cycles()` is executing
+- **THEN** `dosbox::current_context()` SHALL return a valid non-null context
 
-#### Scenario: Compat shims work
-- **WHEN** a compat shim (pic_compat, memory_compat, dma_compat) calls `dosbox::current_context()`
-- **THEN** it SHALL receive the correct non-null context
+#### Scenario: Compat shims work during input drain
+- **WHEN** compat shims are called during `drain_input_to_engine()`
+- **THEN** they SHALL receive the correct non-null dosbox context
 
 ### Requirement: CPU globals sync convention
-Context fields SHALL be copied to CPU globals before every bridge call. CPU globals SHALL be copied back to context after every bridge call. This convention SHALL be documented in `cpu_bridge.h`.
+The save/restore pattern for `CPU_Cycles` SHALL be documented in `cpu_bridge.h`.
+Debug assertions SHALL verify the restore postcondition.
 
 #### Scenario: Documented convention
 - **WHEN** `cpu_bridge.h` is inspected
-- **THEN** the sync convention SHALL be documented in comments
+- **THEN** the sync convention SHALL be documented in comments before `execute_cycles`
 
-#### Scenario: Assertions at bridge boundaries
-- **WHEN** a bridge call begins or ends
-- **THEN** debug assertions SHALL verify globals match context
+#### Scenario: Debug assertion present
+- **WHEN** `cpu_bridge.cpp` executes in debug build
+- **THEN** `assert(CPU_Cycles == saved)` SHALL fire after restore
 
 ### Requirement: Determinism hashes unchanged
 Context unification SHALL NOT change any determinism test hash values.
