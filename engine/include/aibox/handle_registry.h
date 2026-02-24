@@ -267,7 +267,7 @@ public:
 
         ++active_count_;
 
-        auto i = static_cast<uint32_t>(std::distance(slots_.begin(), it));
+        auto i = gsl_lite::narrow<uint32_t>(std::distance(slots_.begin(), it));
         return PackedHandle::create(i, it->generation & PackedHandle::GenerationMask);
     }
 

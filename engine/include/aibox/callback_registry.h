@@ -184,7 +184,7 @@ public:
         it->active = true;
         ++active_count_;
 
-        auto id = static_cast<CallbackId>(std::distance(entries_.begin(), it));
+        auto id = gsl_lite::narrow<CallbackId>(std::distance(entries_.begin(), it));
         return CallbackToken(this, id);
     }
 

@@ -84,13 +84,15 @@ MODERN_CODE_PATTERNS = [
 ]
 
 # Direct gsl_lite:: usage (should use legends::gsl:: alias)
-# Exclude the bridge header which defines the alias
+# Exclude the bridge header which defines the alias and engine code which
+# includes <gsl-lite/gsl-lite.hpp> directly (lower layer, no legends bridge)
 DIRECT_GSL_LITE_PATTERN = (
     r'(?<!::)gsl_lite::',  # gsl_lite:: not preceded by ::
     "Use legends::gsl:: alias, not gsl_lite:: directly (see include/legends/gsl.hpp)",
     r'.*\.(cpp|hpp|h)$'
 )
 BRIDGE_HEADER_PATH = 'include/legends/gsl.hpp'
+ENGINE_CODE_PREFIXES = ['engine/include/aibox/', 'engine/src/aibox/']
 
 # Public headers where gsl-lite types must NOT appear
 PUBLIC_HEADER_PATTERNS = [
@@ -156,10 +158,12 @@ def check_file(filepath: Path) -> List[Tuple[int, str, str]]:
                     continue
                 errors.append((i, line.strip(), message))
 
-    # Check direct gsl_lite:: usage (excluding bridge header)
+    # Check direct gsl_lite:: usage (excluding bridge header and engine code)
     pattern, message, file_pattern = DIRECT_GSL_LITE_PATTERN
-    is_bridge_header = rel_path.replace('\\', '/').endswith(BRIDGE_HEADER_PATH)
-    if re.search(file_pattern, rel_path) and not is_bridge_header:
+    norm_path = rel_path.replace('\\', '/')
+    is_bridge_header = norm_path.endswith(BRIDGE_HEADER_PATH)
+    is_engine_code = any(prefix in norm_path for prefix in ENGINE_CODE_PREFIXES)
+    if re.search(file_pattern, rel_path) and not is_bridge_header and not is_engine_code:
         regex = re.compile(pattern)
         for i, line in enumerate(lines, 1):
             if regex.search(line):
