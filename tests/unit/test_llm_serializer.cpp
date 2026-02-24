@@ -8,6 +8,7 @@
 #endif
 
 #include <gtest/gtest.h>
+#include <legends/gsl.hpp>
 #include <legends/llm_serializer.h>
 #include <legends/llm_frame.h>
 #include <cstring>
@@ -587,4 +588,43 @@ TEST(FrameRoundTripTest, MaxSizeFrame) {
     // Both should handle max size without crashing
     EXPECT_GT(json.length(), content.length());
     EXPECT_GT(canonical.length(), content.length());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contract Violation Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(LlmSerializerContractTest, Cp437ToUtf8RejectsNullWithLength) {
+    EXPECT_THROW(cp437_to_utf8(nullptr, 5), legends::gsl::fail_fast);
+}
+
+TEST(LlmSerializerContractTest, Cp437ToUtf8AllowsNullWithZeroLength) {
+    EXPECT_NO_THROW(cp437_to_utf8(nullptr, 0));
+}
+
+TEST(LlmSerializerContractTest, EncodeUtf8RejectsNullOutput) {
+    EXPECT_THROW(encode_utf8(U'A', nullptr), legends::gsl::fail_fast);
+}
+
+TEST(LlmSerializerContractTest, SerializeRejectsNullData) {
+    EXPECT_THROW(
+        serialize_text_screen(nullptr, 80, 25, 0, 0, false),
+        legends::gsl::fail_fast
+    );
+}
+
+TEST(LlmSerializerContractTest, SerializeRejectsZeroColumns) {
+    uint8_t data[25]{};
+    EXPECT_THROW(
+        serialize_text_screen(data, 0, 25, 0, 0, false),
+        legends::gsl::fail_fast
+    );
+}
+
+TEST(LlmSerializerContractTest, SerializeRejectsZeroRows) {
+    uint8_t data[80]{};
+    EXPECT_THROW(
+        serialize_text_screen(data, 80, 0, 0, 0, false),
+        legends::gsl::fail_fast
+    );
 }

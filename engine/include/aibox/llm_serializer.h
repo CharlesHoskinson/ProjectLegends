@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <gsl-lite/gsl-lite.hpp>
 #include <array>
 #include <cstdint>
 #include <string>
@@ -84,7 +85,8 @@ constexpr std::array<char32_t, 256> CP437_TO_UNICODE = {{
  * @param[out] output Buffer to write UTF-8 bytes (must be at least 4 bytes)
  * @return Number of bytes written (1-4)
  */
-[[nodiscard]] inline size_t encode_utf8(char32_t codepoint, char* output) noexcept {
+[[nodiscard]] inline size_t encode_utf8(char32_t codepoint, char* output) {
+    gsl_Expects(output != nullptr);
     if (codepoint < 0x80) {
         output[0] = static_cast<char>(codepoint);
         return 1;

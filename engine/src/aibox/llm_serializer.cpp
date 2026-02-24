@@ -16,9 +16,10 @@ namespace aibox::llm {
 // ─────────────────────────────────────────────────────────────────────────────
 
 std::string cp437_to_utf8(const uint8_t* data, size_t length) {
-    if (data == nullptr || length == 0) {
+    if (length == 0) {
         return {};
     }
+    gsl_Expects(data != nullptr);
 
     std::string result;
     result.reserve(length * 2);  // Estimate: most chars need 1-2 bytes
@@ -247,9 +248,9 @@ std::string serialize_text_screen(
     bool cursor_visible,
     const SerializerOptions& options
 ) {
-    if (data == nullptr || columns == 0 || rows == 0) {
-        return {};
-    }
+    gsl_Expects(data != nullptr);
+    gsl_Expects(columns > 0);
+    gsl_Expects(rows > 0);
 
     std::ostringstream oss;
 
