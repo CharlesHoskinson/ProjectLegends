@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <gsl-lite/gsl-lite.hpp>
 #include <array>
 #include <cstdint>
 #include <span>
@@ -269,8 +270,8 @@ public:
      *
      * @param dac_data Raw DAC data (256 * 3 bytes, 6-bit values)
      */
-    void load_from_dac(const uint8_t* dac_data) noexcept {
-        if (dac_data == nullptr) return;
+    void load_from_dac(const uint8_t* dac_data) {
+        gsl_Expects(dac_data != nullptr);
 
         for (size_t i = 0; i < SIZE; ++i) {
             colors_[i] = RgbColor::from_vga_dac(
@@ -287,8 +288,8 @@ public:
      *
      * @param rgb_data RGB data (256 * 3 bytes, 8-bit values)
      */
-    void load_from_rgb(const uint8_t* rgb_data) noexcept {
-        if (rgb_data == nullptr) return;
+    void load_from_rgb(const uint8_t* rgb_data) {
+        gsl_Expects(rgb_data != nullptr);
 
         for (size_t i = 0; i < SIZE; ++i) {
             colors_[i] = {
@@ -310,8 +311,8 @@ public:
     /**
      * @brief Get raw data as byte array (R,G,B,R,G,B,...).
      */
-    void export_rgb(uint8_t* out) const noexcept {
-        if (out == nullptr) return;
+    void export_rgb(uint8_t* out) const {
+        gsl_Expects(out != nullptr);
         for (size_t i = 0; i < SIZE; ++i) {
             out[i * 3 + 0] = colors_[i].r;
             out[i * 3 + 1] = colors_[i].g;

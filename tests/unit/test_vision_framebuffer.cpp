@@ -4,6 +4,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <legends/gsl.hpp>
 #include "legends/vision_framebuffer.h"
 
 using namespace legends::vision;
@@ -502,4 +503,23 @@ TEST(EdgeCaseTest, ModeX) {
     EXPECT_EQ(info.width, 320);
     EXPECT_EQ(info.height, 240);
     EXPECT_TRUE(info.is_planar);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contract Violation Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(VgaPaletteContractTest, LoadFromDacRejectsNull) {
+    VgaPalette palette;
+    EXPECT_THROW(palette.load_from_dac(nullptr), legends::gsl::fail_fast);
+}
+
+TEST(VgaPaletteContractTest, LoadFromRgbRejectsNull) {
+    VgaPalette palette;
+    EXPECT_THROW(palette.load_from_rgb(nullptr), legends::gsl::fail_fast);
+}
+
+TEST(VgaPaletteContractTest, ExportRgbRejectsNull) {
+    VgaPalette palette;
+    EXPECT_THROW(palette.export_rgb(nullptr), legends::gsl::fail_fast);
 }
