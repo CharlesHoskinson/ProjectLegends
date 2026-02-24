@@ -124,6 +124,7 @@ ResolveError(op, inst, thread, cfg, buf, reent) ==
 (**************************************************************************)
 VARIABLES
     instance,       \* @type: Str;
+    preInstance,    \* @type: Str;  Instance state at time of last operation
     lastOp,         \* @type: Str;
     lastError,      \* @type: Str;
     threadState,    \* @type: Str;
@@ -132,7 +133,7 @@ VARIABLES
     reentState,     \* @type: Str;
     opCount         \* @type: Int;
 
-vars == <<instance, lastOp, lastError, threadState,
+vars == <<instance, preInstance, lastOp, lastError, threadState,
           configState, bufferState, reentState, opCount>>
 
 (**************************************************************************)
@@ -141,6 +142,7 @@ vars == <<instance, lastOp, lastError, threadState,
 
 TypeOK ==
     /\ instance \in InstanceState
+    /\ preInstance \in InstanceState
     /\ lastOp \in APIOperation \cup {"NONE"}
     /\ lastError \in ErrorCode
     /\ threadState \in ThreadState
@@ -161,7 +163,7 @@ TypeOK ==
 (*--------------------------------------------------------------------*)
 ErrorCodeDeterministic ==
     lastOp # "NONE" =>
-        lastError = ResolveError(lastOp, instance, threadState,
+        lastError = ResolveError(lastOp, preInstance, threadState,
                                   configState, bufferState, reentState)
 
 (*--------------------------------------------------------------------*)
@@ -172,7 +174,7 @@ ErrorCodeDeterministic ==
 (*--------------------------------------------------------------------*)
 SuccessRequiresValidState ==
     (lastError = "OK" /\ lastOp \in CoreOps)
-    => instance = "CREATED"
+    => preInstance = "CREATED"
 
 (*--------------------------------------------------------------------*)
 (* ErrorCodesComplete                                                 *)
@@ -190,7 +192,7 @@ ErrorCodesComplete ==
 (*--------------------------------------------------------------------*)
 NullHandleConsistent ==
     (lastError = "NULL_HANDLE") =>
-        (instance = "NONE" /\ lastOp \in CoreOps)
+        (preInstance = "NONE" /\ lastOp \in CoreOps)
 
 (*--------------------------------------------------------------------*)
 (* ReentrantCodeCorrect                                               *)
@@ -215,6 +217,7 @@ WrongThreadCodeCorrect ==
 
 Init ==
     /\ instance = "NONE"
+    /\ preInstance = "NONE"
     /\ lastOp = "NONE"
     /\ lastError = "OK"
     /\ threadState = "OWNER"
@@ -230,6 +233,7 @@ Init ==
 \* Execute an API operation with given preconditions
 ExecuteOp(op, thread, cfg, buf, reent) ==
     /\ opCount < MaxOps
+    /\ preInstance' = instance
     /\ threadState' = thread
     /\ configState' = cfg
     /\ bufferState' = buf

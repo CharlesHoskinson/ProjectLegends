@@ -290,7 +290,10 @@ CorruptSnapshot ==
     /\ corrupted' = TRUE
     \* Modify a field to simulate corruption
     /\ snap' = [snap EXCEPT !.now = snap.now + 1]
-    /\ UNCHANGED <<state, has_snap, has_loaded, loaded, saveAborted>>
+    \* Invalidate any prior load (snapshot is now corrupt)
+    /\ has_loaded' = FALSE
+    /\ loaded' = DummyState
+    /\ UNCHANGED <<state, has_snap, saveAborted>>
 
 \* Attempt to load corrupted snapshot -- rejected
 LoadCorrupted ==

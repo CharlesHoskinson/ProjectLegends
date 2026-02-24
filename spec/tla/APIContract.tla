@@ -400,11 +400,14 @@ KeyEvent ==
 PushAudio(frames) ==
     /\ currentThread = "MainThread"
     /\ instance = "CREATED"
+    /\ droppedFrames < 100  \* Bound model exploration
     /\ IF audioQueue + frames <= MaxAudioFrames
        THEN /\ audioQueue' = audioQueue + frames
             /\ UNCHANGED droppedFrames
-       ELSE /\ audioQueue' = MaxAudioFrames
-            /\ droppedFrames' = droppedFrames + (frames - (MaxAudioFrames - audioQueue))
+       ELSE LET dropped == frames - (MaxAudioFrames - audioQueue)
+                newDropped == droppedFrames + dropped
+            IN /\ audioQueue' = MaxAudioFrames
+               /\ droppedFrames' = IF newDropped > 100 THEN 100 ELSE newDropped
     /\ UNCHANGED <<instance, emuTime, stateHash, inputTrace,
                    activeBackend, currentThread, ownerThread,
                    inStep, videoMode, opCount, lastError>>

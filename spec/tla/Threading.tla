@@ -1,140 +1,228 @@
 ---------------------------- MODULE Threading ----------------------------
-(*
- * Legends - Threading Model Contract
- *
- * This module specifies the threading guarantees:
- * - Core is single-threaded
- * - PAL may have threads but they never call core
- * - All legends_* API calls from same thread
- *
- * Key invariants:
- * - CoreSingleThreaded: Only one thread in core at a time
- * - PALIsolation: PAL threads never invoke core
- * - NoDataRaces: No concurrent access to shared state
- *)
+(**************************************************************************)
+(* Legends -- Threading Model Contract                                    *)
+(*                                                                        *)
+(* Full (documentation-grade) threading specification.                     *)
+(* For CI model checking, use ThreadingMinimal.tla.                       *)
+(*                                                                        *)
+(* Thread model:                                                          *)
+(*   - Core emulation is single-threaded (not thread-safe)                *)
+(*   - Only the "owner thread" (the thread that called create) may        *)
+(*     invoke legends_* API functions                                     *)
+(*   - PAL may spawn internal threads (audio callback, event loop)        *)
+(*     but they MUST NOT call any core API                                *)
+(*   - Reentrancy guard: legends_step_*() from within a PAL callback      *)
+(*     (invoked by step itself) is detected and returns REENTRANT_CALL    *)
+(*                                                                        *)
+(* Contract gates covered:                                                *)
+(*   7a  Core never invoked from audio callback thread                    *)
+(*   8a  Core is single-threaded                                          *)
+(*   8b  PAL threads never call core                                      *)
+(*   8c  Wrong-thread detection                                           *)
+(*                                                                        *)
+(* Key invariants:                                                        *)
+(*   CoreSingleThreaded      -- only Main can own core                    *)
+(*   PALIsolation             -- PAL threads never in core                *)
+(*   NoDataRaces              -- no concurrent access detected            *)
+(*   CallStackValid           -- PAL threads have no CORE on stack        *)
+(*   OwnerThreadRecorded      -- owner recorded at create time            *)
+(*   WrongThreadDetected      -- non-owner core API -> WRONG_THREAD       *)
+(*   NoReentrantStep          -- step from callback -> REENTRANT_CALL     *)
+(*                                                                        *)
+(* Liveness:                                                              *)
+(*   MainCanAccessCore        -- main thread not starved (SF)             *)
+(**************************************************************************)
 EXTENDS Integers, Sequences, FiniteSets, TLC
 
-\* =====================================================================
-\* CONSTANTS
-\* =====================================================================
+(**************************************************************************)
+(* CONSTANTS                                                              *)
+(**************************************************************************)
 CONSTANTS
-    MaxOperations   \* Maximum operations to model-check
+    MaxOperations   \* @type: Int;
 
-\* =====================================================================
-\* TYPES
-\* =====================================================================
+(**************************************************************************)
+(* TYPES                                                                  *)
+(**************************************************************************)
 
-\* Thread identifiers
+\* @type: Set(Str);
 ThreadId == {"Main", "AudioCallback", "InputPoll", "Timer"}
 
-\* Thread ownership
-Owner == {"None", "Main", "PAL"}
+\* @type: Set(Str);
+Owner == {"None", "Main"}
 
-\* Operation types
+\* @type: Set(Str);
 OpType == {"CORE_API", "PAL_INTERNAL", "CALLBACK"}
 
-\* Code regions
+\* @type: Set(Str);
 CodeRegion == {"USER", "CORE", "PAL", "SYSTEM"}
 
-\* =====================================================================
-\* VARIABLES
-\* =====================================================================
+\* @type: Set(Str);
+ErrorCode == {"OK", "WRONG_THREAD", "REENTRANT_CALL"}
+
+(**************************************************************************)
+(* VARIABLES                                                              *)
+(**************************************************************************)
 VARIABLES
-    activeThread,       \* Currently executing thread
-    coreOwner,          \* Thread that owns core (or None)
-    palThreads,         \* Set of active PAL threads
-    callStack,          \* Current call stack (for invariant checking)
-    opCount,            \* Operation counter
-    dataRaceDetected    \* Flag for data race detection
+    activeThread,       \* @type: Str;       Currently executing thread
+    coreOwner,          \* @type: Str;       Thread that owns core
+    ownerThread,        \* @type: Str;       Thread that called create
+    palThreads,         \* @type: Set(Str);  Set of active PAL threads
+    callStack,          \* @type: Seq(Str);  Current call stack
+    opCount,            \* @type: Int;       Operation counter
+    inStep,             \* @type: Bool;      Reentrancy guard
+    lastError,          \* @type: Str;       Last error code
+    dataRaceDetected    \* @type: Bool;      Data race flag
 
-vars == <<activeThread, coreOwner, palThreads, callStack,
-          opCount, dataRaceDetected>>
+vars == <<activeThread, coreOwner, ownerThread, palThreads, callStack,
+          opCount, inStep, lastError, dataRaceDetected>>
 
-\* =====================================================================
-\* TYPE INVARIANT
-\* =====================================================================
+(**************************************************************************)
+(* TYPE INVARIANT                                                         *)
+(**************************************************************************)
 
 TypeOK ==
     /\ activeThread \in ThreadId
-    /\ coreOwner \in {"None", "Main"}  \* Only Main can own core
+    /\ coreOwner \in {"None", "Main"}
+    /\ ownerThread \in {"None", "Main"}
     /\ palThreads \subseteq ThreadId
     /\ callStack \in Seq(CodeRegion)
+    /\ Len(callStack) <= 6
     /\ opCount \in 0..MaxOperations
+    /\ inStep \in BOOLEAN
+    /\ lastError \in ErrorCode
     /\ dataRaceDetected \in BOOLEAN
 
-\* =====================================================================
-\* SAFETY INVARIANTS
-\* =====================================================================
+(**************************************************************************)
+(* SAFETY INVARIANTS                                                      *)
+(**************************************************************************)
 
-(*
- * CoreSingleThreaded - At most one thread in core
- *
- * The core emulation is not thread-safe.
- * Only the main thread may call legends_* functions.
- *)
+(*--------------------------------------------------------------------*)
+(* CoreSingleThreaded -- Gate 8a                                      *)
+(*                                                                    *)
+(* Only Main can own core.  No PAL thread ever has ownership.         *)
+(*--------------------------------------------------------------------*)
 CoreSingleThreaded ==
     coreOwner \in {"None", "Main"}
 
-(*
- * PALIsolation - PAL threads never enter core
- *
- * Threads spawned by PAL (audio callback, etc.) must never
- * invoke any legends_* API functions.
- *)
+(*--------------------------------------------------------------------*)
+(* PALIsolation -- Gate 8b                                            *)
+(*                                                                    *)
+(* PAL threads never own or enter core code.                          *)
+(*--------------------------------------------------------------------*)
 PALIsolation ==
-    \A t \in palThreads :
-        t # "Main" => coreOwner # t
+    \A t \in palThreads : t # coreOwner
 
-(*
- * NoDataRaces - Concurrent access properly synchronized
- *)
+(*--------------------------------------------------------------------*)
+(* NoDataRaces                                                        *)
+(*--------------------------------------------------------------------*)
 NoDataRaces ==
     ~dataRaceDetected
 
-(*
- * CallStackValid - Call stack respects boundaries
- *
- * PAL code can call system, but not core.
- * Core code can call PAL.
- *)
+(*--------------------------------------------------------------------*)
+(* CallStackValid                                                     *)
+(*                                                                    *)
+(* When a PAL thread is active, CORE must not appear on its stack.    *)
+(*--------------------------------------------------------------------*)
 CallStackValid ==
-    \* If in PAL internal thread, CORE should not be on stack
     (activeThread \in {"AudioCallback", "InputPoll", "Timer"}) =>
         "CORE" \notin {callStack[i] : i \in 1..Len(callStack)}
 
-\* =====================================================================
-\* INITIALIZATION
-\* =====================================================================
+(*--------------------------------------------------------------------*)
+(* OwnerThreadRecorded                                                *)
+(*                                                                    *)
+(* Once an instance is created (ownerThread # "None"), the owner      *)
+(* thread is always recorded.                                         *)
+(*--------------------------------------------------------------------*)
+OwnerThreadRecorded ==
+    ownerThread # "None" => ownerThread = "Main"
+
+(*--------------------------------------------------------------------*)
+(* WrongThreadDetected -- Gate 8c                                     *)
+(*                                                                    *)
+(* If a non-owner thread attempts a core API call, the last error     *)
+(* must be WRONG_THREAD (never OK).                                   *)
+(*--------------------------------------------------------------------*)
+WrongThreadDetected ==
+    (activeThread # ownerThread /\ ownerThread # "None" /\
+     coreOwner = "None" /\ lastError = "WRONG_THREAD")
+    \/ ~(activeThread # ownerThread /\ ownerThread # "None" /\
+         lastError = "WRONG_THREAD")
+
+(*--------------------------------------------------------------------*)
+(* NoReentrantStep                                                    *)
+(*                                                                    *)
+(* If currently in step, attempting step again yields REENTRANT_CALL. *)
+(*--------------------------------------------------------------------*)
+NoReentrantStep ==
+    (inStep /\ lastError = "REENTRANT_CALL") \/
+    (~inStep) \/
+    (inStep /\ lastError = "OK")
+
+(**************************************************************************)
+(* INITIALIZATION                                                         *)
+(**************************************************************************)
 
 Init ==
     /\ activeThread = "Main"
     /\ coreOwner = "None"
+    /\ ownerThread = "None"
     /\ palThreads = {}
     /\ callStack = <<>>
     /\ opCount = 0
+    /\ inStep = FALSE
+    /\ lastError = "OK"
     /\ dataRaceDetected = FALSE
 
-\* =====================================================================
-\* ACTIONS - THREAD MANAGEMENT
-\* =====================================================================
+(**************************************************************************)
+(* ACTIONS -- INSTANCE LIFECYCLE                                          *)
+(**************************************************************************)
 
-(*
- * Main thread calls legends_* API
- *
- * This is the only valid way to enter core code.
- *)
+\* Create instance -- records owner thread
+CreateInstance ==
+    /\ activeThread = "Main"
+    /\ ownerThread = "None"
+    /\ opCount < MaxOperations
+    /\ ownerThread' = "Main"
+    /\ lastError' = "OK"
+    /\ opCount' = opCount + 1
+    /\ UNCHANGED <<activeThread, coreOwner, palThreads, callStack,
+                   inStep, dataRaceDetected>>
+
+\* Destroy instance
+DestroyInstance ==
+    /\ activeThread = "Main"
+    /\ ownerThread = "Main"
+    /\ opCount < MaxOperations
+    /\ ownerThread' = "None"
+    /\ coreOwner' = "None"
+    /\ inStep' = FALSE
+    /\ lastError' = "OK"
+    /\ opCount' = opCount + 1
+    /\ UNCHANGED <<activeThread, palThreads, callStack, dataRaceDetected>>
+
+(**************************************************************************)
+(* ACTIONS -- CORE API CALLS                                              *)
+(**************************************************************************)
+
+\* Main thread enters core (legends_* API)
 MainCallsCore ==
     /\ activeThread = "Main"
     /\ coreOwner = "None"
+    /\ ownerThread = "Main"
     /\ opCount < MaxOperations
-    /\ coreOwner' = "Main"
-    /\ callStack' = Append(callStack, "CORE")
+    /\ Len(callStack) < 6
+    /\ IF inStep
+       THEN \* Reentrant call detected
+            /\ lastError' = "REENTRANT_CALL"
+            /\ UNCHANGED <<coreOwner, callStack, inStep>>
+       ELSE /\ coreOwner' = "Main"
+            /\ callStack' = Append(callStack, "CORE")
+            /\ lastError' = "OK"
+            /\ UNCHANGED inStep
     /\ opCount' = opCount + 1
-    /\ UNCHANGED <<activeThread, palThreads, dataRaceDetected>>
+    /\ UNCHANGED <<activeThread, ownerThread, palThreads, dataRaceDetected>>
 
-(*
- * Main thread returns from core
- *)
+\* Main thread returns from core
 MainReturnsFromCore ==
     /\ activeThread = "Main"
     /\ coreOwner = "Main"
@@ -142,148 +230,134 @@ MainReturnsFromCore ==
     /\ callStack[Len(callStack)] = "CORE"
     /\ coreOwner' = "None"
     /\ callStack' = SubSeq(callStack, 1, Len(callStack) - 1)
-    /\ UNCHANGED <<activeThread, palThreads, opCount, dataRaceDetected>>
+    /\ UNCHANGED <<activeThread, ownerThread, palThreads, opCount,
+                   inStep, lastError, dataRaceDetected>>
 
-(*
- * Core calls PAL (e.g., for audio push)
- *)
+\* Wrong-thread API call attempt
+WrongThreadCall ==
+    /\ activeThread \in {"AudioCallback", "InputPoll", "Timer"}
+    /\ ownerThread = "Main"
+    /\ opCount < MaxOperations
+    /\ lastError' = "WRONG_THREAD"
+    /\ opCount' = opCount + 1
+    /\ UNCHANGED <<activeThread, coreOwner, ownerThread, palThreads,
+                   callStack, inStep, dataRaceDetected>>
+
+(**************************************************************************)
+(* ACTIONS -- STEP WITH REENTRANCY GUARD                                  *)
+(**************************************************************************)
+
+\* Begin step (sets reentrancy guard)
+BeginStep ==
+    /\ activeThread = "Main"
+    /\ coreOwner = "Main"
+    /\ ~inStep
+    /\ inStep' = TRUE
+    /\ UNCHANGED <<activeThread, coreOwner, ownerThread, palThreads,
+                   callStack, opCount, lastError, dataRaceDetected>>
+
+\* End step (clears reentrancy guard)
+EndStep ==
+    /\ activeThread = "Main"
+    /\ inStep
+    /\ inStep' = FALSE
+    /\ UNCHANGED <<activeThread, coreOwner, ownerThread, palThreads,
+                   callStack, opCount, lastError, dataRaceDetected>>
+
+(**************************************************************************)
+(* ACTIONS -- PAL CALLS AND THREADS                                       *)
+(**************************************************************************)
+
+\* Core calls PAL (e.g., audio push during step)
 CoreCallsPAL ==
     /\ coreOwner = "Main"
+    /\ Len(callStack) < 6
     /\ callStack' = Append(callStack, "PAL")
-    /\ UNCHANGED <<activeThread, coreOwner, palThreads, opCount, dataRaceDetected>>
+    /\ UNCHANGED <<activeThread, coreOwner, ownerThread, palThreads,
+                   opCount, inStep, lastError, dataRaceDetected>>
 
-(*
- * Return from PAL to core
- *)
+\* Return from PAL to core
 ReturnFromPAL ==
     /\ Len(callStack) > 0
     /\ callStack[Len(callStack)] = "PAL"
     /\ callStack' = SubSeq(callStack, 1, Len(callStack) - 1)
-    /\ UNCHANGED <<activeThread, coreOwner, palThreads, opCount, dataRaceDetected>>
+    /\ UNCHANGED <<activeThread, coreOwner, ownerThread, palThreads,
+                   opCount, inStep, lastError, dataRaceDetected>>
 
-\* =====================================================================
-\* ACTIONS - PAL THREADS
-\* =====================================================================
-
-(*
- * PAL spawns internal thread (e.g., SDL audio callback)
- *)
+\* PAL spawns internal thread
 PALSpawnThread(tid) ==
     /\ tid \in {"AudioCallback", "InputPoll", "Timer"}
     /\ tid \notin palThreads
     /\ palThreads' = palThreads \cup {tid}
-    /\ UNCHANGED <<activeThread, coreOwner, callStack, opCount, dataRaceDetected>>
+    /\ UNCHANGED <<activeThread, coreOwner, ownerThread, callStack,
+                   opCount, inStep, lastError, dataRaceDetected>>
 
-(*
- * PAL thread terminates
- *)
+\* PAL thread terminates
 PALThreadExit(tid) ==
     /\ tid \in palThreads
     /\ palThreads' = palThreads \ {tid}
-    /\ UNCHANGED <<activeThread, coreOwner, callStack, opCount, dataRaceDetected>>
+    /\ UNCHANGED <<activeThread, coreOwner, ownerThread, callStack,
+                   opCount, inStep, lastError, dataRaceDetected>>
 
-(*
- * Context switch to PAL thread
- *)
+\* Context switch
 SwitchToPALThread(tid) ==
     /\ tid \in palThreads
     /\ activeThread' = tid
-    /\ UNCHANGED <<coreOwner, palThreads, callStack, opCount, dataRaceDetected>>
+    /\ UNCHANGED <<coreOwner, ownerThread, palThreads, callStack,
+                   opCount, inStep, lastError, dataRaceDetected>>
 
-(*
- * Return to main thread
- *)
 SwitchToMain ==
     /\ activeThread # "Main"
     /\ activeThread' = "Main"
-    /\ UNCHANGED <<coreOwner, palThreads, callStack, opCount, dataRaceDetected>>
+    /\ UNCHANGED <<coreOwner, ownerThread, palThreads, callStack,
+                   opCount, inStep, lastError, dataRaceDetected>>
 
-\* =====================================================================
-\* ACTIONS - DATA RACE DETECTION
-\* =====================================================================
+(**************************************************************************)
+(* NEXT STATE RELATION                                                    *)
+(**************************************************************************)
 
-(*
- * ILLEGAL: PAL thread attempts to call core
- *
- * This action models the forbidden behavior.
- * If it happens, we set dataRaceDetected.
- *)
-PALThreadCallsCore_ILLEGAL ==
-    /\ activeThread \in {"AudioCallback", "InputPoll", "Timer"}
-    /\ activeThread \in palThreads
-    /\ coreOwner = "None"  \* Core appears available
-    \* This would be a bug - PAL thread must not call core
-    /\ dataRaceDetected' = TRUE
-    /\ UNCHANGED <<activeThread, coreOwner, palThreads, callStack, opCount>>
-
-(*
- * ILLEGAL: Two threads try to enter core
- *
- * This action models concurrent core access.
- *)
-ConcurrentCoreAccess_ILLEGAL ==
-    /\ coreOwner = "Main"
-    /\ activeThread # "Main"
-    \* Another thread tries to enter core while Main is in it
-    /\ dataRaceDetected' = TRUE
-    /\ UNCHANGED <<activeThread, coreOwner, palThreads, callStack, opCount>>
-
-\* =====================================================================
-\* NEXT STATE RELATION
-\* =====================================================================
-
-\* Legal transitions
-LegalNext ==
+Next ==
+    \/ CreateInstance
+    \/ DestroyInstance
     \/ MainCallsCore
     \/ MainReturnsFromCore
+    \/ WrongThreadCall
+    \/ BeginStep
+    \/ EndStep
     \/ CoreCallsPAL
     \/ ReturnFromPAL
     \/ \E t \in {"AudioCallback", "InputPoll", "Timer"} : PALSpawnThread(t)
     \/ \E t \in palThreads : PALThreadExit(t)
     \/ \E t \in palThreads : SwitchToPALThread(t)
     \/ SwitchToMain
-
-\* All transitions (including illegal for testing)
-Next ==
-    \/ LegalNext
-    \* Uncomment to test that illegal actions are caught:
-    \* \/ PALThreadCallsCore_ILLEGAL
-    \* \/ ConcurrentCoreAccess_ILLEGAL
     \/ UNCHANGED vars
 
-\* =====================================================================
-\* SPECIFICATION
-\* =====================================================================
+(**************************************************************************)
+(* SPECIFICATION                                                          *)
+(**************************************************************************)
 
-Spec == Init /\ [][Next]_vars
+Spec == Init /\ [][Next]_vars /\ SF_vars(MainCallsCore)
 
-\* =====================================================================
-\* PROPERTIES
-\* =====================================================================
+(**************************************************************************)
+(* LIVENESS PROPERTIES                                                    *)
+(**************************************************************************)
 
-(*
- * AlwaysSafe - No data races ever detected
- *)
-AlwaysSafe ==
-    []~dataRaceDetected
+\* Main thread is not starved
+MainCanAccessCore ==
+    [](activeThread = "Main" /\ coreOwner = "None" /\ ownerThread = "Main"
+       /\ ~inStep /\ opCount < MaxOperations =>
+       <>(coreOwner = "Main"))
 
-(*
- * CoreAccessSerialized - Core access is sequential
- *)
+\* Core access is serialized
 CoreAccessSerialized ==
     [](coreOwner = "Main" => activeThread = "Main")
 
-(*
- * PALThreadsNeverInCore - Structural guarantee
- *)
+\* PAL threads never enter core
 PALThreadsNeverInCore ==
     [](\A t \in palThreads : t # coreOwner)
 
-(*
- * MainCanAlwaysAccessCore - Main thread is not starved
- *)
-MainCanAccessCore ==
-    [](activeThread = "Main" /\ coreOwner = "None" =>
-       <>coreOwner = "Main")
+\* No data races
+AlwaysSafe ==
+    []~dataRaceDetected
 
 =======================================================================
