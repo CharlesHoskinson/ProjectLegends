@@ -62,8 +62,8 @@ TEST_F(MemoryAPITest, NullBufferReturnsError) {
 TEST_F(MemoryAPITest, NullHandleReturnsError) {
     uint8_t buf[4] = {};
     auto err = dosbox_lib_read_memory(nullptr, 0x100, buf, 4);
-    EXPECT_EQ(err, DOSBOX_LIB_ERR_NULL_HANDLE);
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_HANDLE);
 
     err = dosbox_lib_write_memory(nullptr, buf, 0x100, 4);
-    EXPECT_EQ(err, DOSBOX_LIB_ERR_NULL_HANDLE);
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_HANDLE);
 }

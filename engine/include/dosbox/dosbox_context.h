@@ -1173,11 +1173,11 @@ struct LfbRegion {
  * When disabled, addresses wrap at 1MB boundary (8086 compatibility).
  */
 struct A20State {
-    bool enabled = true;         ///< A20 gate enabled (default: enabled)
+    bool enabled = false;        ///< A20 gate enabled (default: disabled, 8086 compat)
     uint8_t controlport = 0;     ///< Control port value (port 92h state)
 
     void reset() noexcept {
-        enabled = true;
+        enabled = false;
         controlport = 0;
     }
 };

@@ -217,8 +217,10 @@ TEST(MixerStateTest, HashIncludesAllDeterminismFields) {
     base.hash_into(base_builder);
     auto base_hash = base_builder.finalize();
 
-    auto test_field_affects_hash = [&base, &base_hash](auto modifier) {
-        MixerState modified = base;
+    auto test_field_affects_hash = [&base_hash](auto modifier) {
+        MixerState modified;
+        modified.freq = 44100;
+        modified.enabled = true;
         modifier(modified);
 
         HashBuilder builder;

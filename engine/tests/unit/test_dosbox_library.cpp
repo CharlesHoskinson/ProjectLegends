@@ -114,7 +114,7 @@ TEST_F(DOSBoxLibraryLifecycleTest, InitAndDestroySucceeds) {
 TEST_F(DOSBoxLibraryLifecycleTest, InitFailsWithNullHandle) {
     auto err = dosbox_lib_init(nullptr);
 
-    EXPECT_EQ(err, DOSBOX_LIB_ERR_NULL_HANDLE);
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_HANDLE);
 }
 
 TEST_F(DOSBoxLibraryLifecycleTest, ResetSucceeds) {
@@ -179,7 +179,7 @@ TEST_F(DOSBoxLibraryStepTest, StepFailsWithNullHandle) {
 
     auto err = dosbox_lib_step_ms(nullptr, 100, &result);
 
-    EXPECT_EQ(err, DOSBOX_LIB_ERR_NULL_HANDLE);
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_HANDLE);
 }
 
 TEST_F(DOSBoxLibraryStepTest, GetEmuTimeSucceeds) {

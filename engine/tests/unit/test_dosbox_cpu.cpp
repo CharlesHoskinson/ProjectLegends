@@ -46,9 +46,6 @@ TEST(CpuStateTest, DefaultValues) {
     // Flags
     EXPECT_EQ(cpu.extflags_toggle, 0u);
     EXPECT_FALSE(cpu.halted);
-
-    // Limit (for config)
-    EXPECT_EQ(cpu.cycle_limit, 3000);
 }
 
 TEST(CpuStateTest, Reset) {

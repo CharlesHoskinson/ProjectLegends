@@ -271,6 +271,7 @@ TEST(PicIntegration, TicksCounter) {
  */
 TEST(PicController, RegisterDefaults) {
     DOSBoxContext ctx(ContextConfig::minimal());
+    ctx.pic.reset();  // Set hardware defaults (initialize() calls this)
 
     // Master controller
     EXPECT_EQ(ctx.pic.controllers[0].controller_index, 0u);

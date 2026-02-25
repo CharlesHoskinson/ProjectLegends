@@ -372,22 +372,22 @@ TEST_F(ExplicitContextHashTest, MemoryStateDefaultValues) {
     EXPECT_EQ(ctx_->memory.handler_pages, 0u);
     EXPECT_EQ(ctx_->memory.reported_pages, 0u);
     EXPECT_EQ(ctx_->memory.address_bits, 20u);
-    EXPECT_TRUE(ctx_->memory.a20.enabled);
+    EXPECT_FALSE(ctx_->memory.a20.enabled);  // 8086 default: A20 disabled
     EXPECT_EQ(ctx_->memory.a20.controlport, 0u);
 }
 
 TEST_F(ExplicitContextHashTest, MemoryA20StateAffectsHash) {
-    auto hash_enabled = get_state_hash(ctx_.get(), HashMode::Fast);
-    ASSERT_TRUE(hash_enabled.has_value());
-
-    // Toggle A20 gate
-    ctx_->memory.a20.enabled = false;
-
     auto hash_disabled = get_state_hash(ctx_.get(), HashMode::Fast);
     ASSERT_TRUE(hash_disabled.has_value());
 
+    // Toggle A20 gate on
+    ctx_->memory.a20.enabled = true;
+
+    auto hash_enabled = get_state_hash(ctx_.get(), HashMode::Fast);
+    ASSERT_TRUE(hash_enabled.has_value());
+
     // A20 state change should change hash
-    EXPECT_NE(hash_enabled.value(), hash_disabled.value());
+    EXPECT_NE(hash_disabled.value(), hash_enabled.value());
 }
 
 TEST_F(ExplicitContextHashTest, MemoryConfigAffectsHash) {
@@ -425,7 +425,7 @@ TEST_F(ExplicitContextHashTest, MemoryStateReset) {
     // Modify memory state
     ctx_->memory.pages = 4096;
     ctx_->memory.address_bits = 32;
-    ctx_->memory.a20.enabled = false;
+    ctx_->memory.a20.enabled = true;
     ctx_->memory.lfb.pages = 128;
 
     // Reset should restore defaults
@@ -433,7 +433,7 @@ TEST_F(ExplicitContextHashTest, MemoryStateReset) {
 
     EXPECT_EQ(ctx_->memory.pages, 0u);
     EXPECT_EQ(ctx_->memory.address_bits, 20u);
-    EXPECT_TRUE(ctx_->memory.a20.enabled);
+    EXPECT_FALSE(ctx_->memory.a20.enabled);  // 8086 default: A20 disabled
     EXPECT_EQ(ctx_->memory.lfb.pages, 0u);
 }
 

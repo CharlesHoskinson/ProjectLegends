@@ -93,11 +93,18 @@ add_executable(aibox_unit_tests
 target_link_libraries(aibox_unit_tests PRIVATE
     aibox_core
     aibox_test_fixtures
+    gsl::gsl-lite-v1
     GTest::gtest_main
 )
 
-# Enable library mode for tests
-target_compile_definitions(aibox_unit_tests PRIVATE AIBOX_LIBRARY_MODE=1)
+# Enable library mode for tests (contract violations throw instead of terminate)
+target_compile_definitions(aibox_unit_tests PRIVATE
+    AIBOX_LIBRARY_MODE=1
+    AIBOX_HEADLESS=1
+    gsl_CONFIG_DEFAULTS_VERSION=1
+    gsl_CONFIG_CONTRACT_CHECKING_ON
+    gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
+)
 
 # Discover tests for CTest
 gtest_discover_tests(aibox_unit_tests
