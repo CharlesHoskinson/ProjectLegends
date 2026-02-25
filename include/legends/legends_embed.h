@@ -476,6 +476,44 @@ legends_error_t legends_mouse_event(
 );
 
 /* =========================================================================
+ * AUDIO CAPTURE API (Phase -1)
+ * ========================================================================= */
+
+/**
+ * @brief Capture audio samples from the emulator.
+ *
+ * Two-call pattern:
+ *   1. Call with buffer=NULL to get available sample count
+ *   2. Call with buffer to pop samples (destructive read)
+ *
+ * Samples are interleaved S16LE stereo at 44100 Hz.
+ *
+ * @param handle Valid handle
+ * @param[out] buffer Output buffer (NULL to query available count)
+ * @param buffer_count Buffer capacity in int16_t elements
+ * @param[out] count_out Available/actual sample count
+ * @return LEGENDS_OK on success
+ */
+legends_error_t legends_capture_audio(
+    legends_handle handle,
+    int16_t* buffer,
+    size_t buffer_count,
+    size_t* count_out
+);
+
+/**
+ * @brief Check if audio subsystem is active.
+ *
+ * @param handle Valid handle
+ * @param[out] active_out Receives 1 if audio is active, 0 otherwise
+ * @return LEGENDS_OK on success
+ */
+legends_error_t legends_is_audio_active(
+    legends_handle handle,
+    int* active_out
+);
+
+/* =========================================================================
  * SAVE/LOAD API
  * ========================================================================= */
 

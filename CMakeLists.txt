@@ -670,6 +670,9 @@ if(LEGENDS_BUILD_TESTS)
         # Debugging Report Remediation (F1, F2)
         tests/integration/test_v2_load_safety.cpp
         tests/integration/test_load_state_atomicity.cpp
+        # Phase -1: Engine I/O Plumbing
+        tests/integration/test_framebuffer_plumbing.cpp
+        tests/integration/test_audio_plumbing.cpp
     )
 
     legends_set_strict_cxx_standard(legends_integration_tests)

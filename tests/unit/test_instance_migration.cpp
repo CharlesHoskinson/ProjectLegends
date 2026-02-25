@@ -541,10 +541,10 @@ TEST_F(InstanceMigrationTest, InstanceFrame_IsolatedBetweenInstances) {
     ASSERT_EQ(legends_destroy(handle_), LEGENDS_OK);
     handle_ = nullptr;
 
-    // New instance should have default frame state
+    // New instance should have default frame state (cursor at origin)
     ASSERT_EQ(create_default(), LEGENDS_OK);
     inst = get_inst();
-    EXPECT_EQ(inst->frame_state.cursor_x, 4);  // Test pattern sets cursor to col 4
+    EXPECT_EQ(inst->frame_state.cursor_x, 0);
     EXPECT_EQ(inst->frame_state.cursor_y, 0);
 }
 
@@ -597,10 +597,9 @@ TEST_F(InstanceMigrationTest, InstanceFrame_CursorPositionPerInstance) {
     int visible = 0;
     ASSERT_EQ(legends_get_cursor(handle_, &x, &y, &visible), LEGENDS_OK);
 
-    // Test pattern sets cursor to (4, 0) with visible=true
-    EXPECT_EQ(x, 4);
+    // Default state: cursor at origin
+    EXPECT_EQ(x, 0);
     EXPECT_EQ(y, 0);
-    EXPECT_EQ(visible, 1);
 }
 
 TEST_F(InstanceMigrationTest, InstanceFrame_SaveLoadPreservesState) {

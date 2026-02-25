@@ -376,6 +376,84 @@ void VgaState::free_hw() noexcept {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// VGA Hardware Data Accessors (Phase -1: Engine I/O Plumbing)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+bool VgaState::get_dac_palette(uint8_t rgb_out[768]) const {
+#ifndef AIBOX_HEADLESS
+    if (hw == nullptr) return false;
+    for (int i = 0; i < 256; ++i) {
+        uint8_t r6 = hw->dac.rgb[i].red;
+        uint8_t g6 = hw->dac.rgb[i].green;
+        uint8_t b6 = hw->dac.rgb[i].blue;
+        // Scale 6-bit to 8-bit: (val << 2) | (val >> 4)
+        rgb_out[i * 3 + 0] = static_cast<uint8_t>((r6 << 2) | (r6 >> 4));
+        rgb_out[i * 3 + 1] = static_cast<uint8_t>((g6 << 2) | (g6 >> 4));
+        rgb_out[i * 3 + 2] = static_cast<uint8_t>((b6 << 2) | (b6 >> 4));
+    }
+    return true;
+#else
+    (void)rgb_out;
+    return false;
+#endif
+}
+
+size_t VgaState::get_font_data(uint8_t* buffer, size_t buffer_size, uint8_t* char_height_out) const {
+#ifndef AIBOX_HEADLESS
+    if (hw == nullptr) return 0;
+
+    // Determine character height from display dimensions
+    uint8_t ch_height = 16;
+    if (height > 0 && text_mode) {
+        uint8_t derived = static_cast<uint8_t>(height / 25);
+        if (derived >= 8 && derived <= 32) {
+            ch_height = derived;
+        }
+    }
+
+    if (char_height_out) *char_height_out = ch_height;
+
+    size_t font_size = 256 * static_cast<size_t>(ch_height);
+    if (buffer == nullptr || buffer_size < font_size) return font_size;
+
+    // Read from font table or raw font array
+    const uint8_t* font_src = hw->draw.font_tables[0];
+    if (font_src != nullptr) {
+        std::memcpy(buffer, font_src, font_size);
+    } else {
+        std::memcpy(buffer, hw->draw.font, font_size);
+    }
+    return font_size;
+#else
+    (void)buffer; (void)buffer_size;
+    if (char_height_out) *char_height_out = 16;
+    return 0;
+#endif
+}
+
+size_t VgaState::get_indexed_pixels(uint8_t* buffer, size_t buffer_size) const {
+#ifndef AIBOX_HEADLESS
+    if (hw == nullptr || hw->mem.linear == nullptr) return 0;
+    size_t pixel_count = static_cast<size_t>(width) * height;
+    if (buffer == nullptr || buffer_size < pixel_count) return pixel_count;
+    std::memcpy(buffer, hw->mem.linear, pixel_count);
+    return pixel_count;
+#else
+    (void)buffer; (void)buffer_size;
+    return 0;
+#endif
+}
+
+bool VgaState::is_linear_8bpp_mode() const {
+#ifndef AIBOX_HEADLESS
+    if (hw == nullptr) return false;
+    return (hw->mode == M_VGA || hw->mode == M_LIN8);
+#else
+    return false;
+#endif
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // PicState Implementation
 // ═══════════════════════════════════════════════════════════════════════════════
 

@@ -497,6 +497,125 @@ dosbox_lib_error_t dosbox_lib_get_display_info(
     dosbox_lib_display_info_t* info_out
 );
 
+/* =========================================================================
+ * VGA DATA ACCESS API (Phase -1: Engine I/O Plumbing)
+ * ========================================================================= */
+
+/**
+ * @brief Get VGA text buffer contents.
+ *
+ * Two-call pattern: call with buffer=NULL to get cell count.
+ * Each cell is uint16_t: low byte = character, high byte = attribute.
+ * Count = text_columns × text_rows.
+ *
+ * @param handle Valid handle
+ * @param buffer Output buffer (NULL to query count)
+ * @param buffer_count Buffer capacity in uint16_t elements
+ * @param count_out Actual/required cell count
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_get_text_buffer(
+    dosbox_lib_handle_t handle,
+    uint16_t* buffer,
+    size_t buffer_count,
+    size_t* count_out
+);
+
+/**
+ * @brief Get VGA indexed pixel data (graphics modes).
+ *
+ * Two-call pattern: call with buffer=NULL to get required size.
+ * Returns 8bpp indexed pixels for Mode 13h (320×200).
+ * Returns DOSBOX_LIB_ERR_NOT_SUPPORTED for planar modes.
+ *
+ * @param handle Valid handle
+ * @param buffer Output buffer (NULL to query size)
+ * @param buffer_size Buffer size in bytes
+ * @param size_out Actual/required byte count
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_get_indexed_pixels(
+    dosbox_lib_handle_t handle,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* size_out
+);
+
+/**
+ * @brief Get VGA DAC palette (256 RGB triplets).
+ *
+ * Reads the VGA DAC and scales 6-bit values to 8-bit.
+ * Output is 768 bytes: 256 entries × 3 bytes (R, G, B).
+ *
+ * @param handle Valid handle
+ * @param rgb_out 768-byte output buffer
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_get_palette(
+    dosbox_lib_handle_t handle,
+    uint8_t rgb_out[768]
+);
+
+/**
+ * @brief Get VGA font data (1bpp glyph bitmaps).
+ *
+ * Two-call pattern: call with buffer=NULL to get required size.
+ * Returns 256 characters × char_height bytes of 1bpp bitmap data.
+ *
+ * @param handle Valid handle
+ * @param buffer Output buffer (NULL to query size)
+ * @param buffer_size Buffer size in bytes
+ * @param size_out Actual/required byte count
+ * @param char_height_out Receives scanlines per character (typically 16)
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_get_font_data(
+    dosbox_lib_handle_t handle,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* size_out,
+    uint8_t* char_height_out
+);
+
+/* =========================================================================
+ * AUDIO API (Phase -1: Engine I/O Plumbing)
+ * ========================================================================= */
+
+/**
+ * @brief Enable or disable audio before instance creation.
+ *
+ * Must be called before dosbox_lib_create() to take effect.
+ * handle may be NULL (pre-create global setting).
+ *
+ * @param handle Handle (may be NULL for pre-create setting)
+ * @param enabled 1 to enable audio, 0 to disable
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_set_audio_enabled(
+    dosbox_lib_handle_t handle,
+    int enabled
+);
+
+/**
+ * @brief Get audio samples from the engine (destructive read).
+ *
+ * Two-call pattern: call with buffer=NULL to query available count.
+ * Pops samples from the engine's audio ring buffer.
+ * Samples are interleaved S16LE stereo at 44100 Hz.
+ *
+ * @param handle Valid handle
+ * @param buffer Output buffer (NULL to query available count)
+ * @param buffer_count Buffer capacity in int16_t elements
+ * @param count_out Available/actual sample count
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_get_audio_samples(
+    dosbox_lib_handle_t handle,
+    int16_t* buffer,
+    size_t buffer_count,
+    size_t* count_out
+);
+
 #ifdef __cplusplus
 }
 #endif

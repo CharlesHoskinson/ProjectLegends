@@ -585,6 +585,10 @@ TEST_F(DosboxxCaptureTest, CaptureTextReturnsInfo) {
 }
 
 TEST_F(DosboxxCaptureTest, CaptureTextFillsBuffer) {
+    // Set up predictable test pattern for unit test
+    auto* inst = reinterpret_cast<legends_instance*>(handle_);
+    inst->frame_state.init_test_pattern();
+
     size_t count;
     legends_capture_text(handle_, nullptr, 0, &count, nullptr);
 
@@ -592,7 +596,7 @@ TEST_F(DosboxxCaptureTest, CaptureTextFillsBuffer) {
     auto err = legends_capture_text(handle_, cells.data(), cells.size(), &count, nullptr);
     EXPECT_EQ(err, LEGENDS_OK);
 
-    // First character should be 'C' from "C:\>" prompt
+    // First character should be 'C' from "C:\>" prompt (from test pattern)
     EXPECT_EQ(cells[0].character, 'C');
     EXPECT_EQ(cells[0].attribute, 0x07);  // Light gray on black
 }
@@ -626,6 +630,10 @@ TEST_F(DosboxxCaptureTest, CaptureRgbQuerySize) {
 }
 
 TEST_F(DosboxxCaptureTest, CaptureRgbFillsBuffer) {
+    // Set up predictable test pattern for unit test
+    auto* inst = reinterpret_cast<legends_instance*>(handle_);
+    inst->frame_state.init_test_pattern();
+
     size_t size;
     uint16_t width, height;
     legends_capture_rgb(handle_, nullptr, 0, &size, &width, &height);
@@ -709,6 +717,10 @@ TEST_F(DosboxxCaptureTest, ResetSetsDirty) {
 // Cursor Tests
 
 TEST_F(DosboxxCaptureTest, GetCursorWorks) {
+    // Set up predictable test pattern for unit test
+    auto* inst = reinterpret_cast<legends_instance*>(handle_);
+    inst->frame_state.init_test_pattern();
+
     uint8_t x, y;
     int visible;
     auto err = legends_get_cursor(handle_, &x, &y, &visible);
@@ -720,6 +732,10 @@ TEST_F(DosboxxCaptureTest, GetCursorWorks) {
 }
 
 TEST_F(DosboxxCaptureTest, GetCursorWorksWithNullOutputs) {
+    // Set up predictable test pattern for unit test
+    auto* inst = reinterpret_cast<legends_instance*>(handle_);
+    inst->frame_state.init_test_pattern();
+
     // Should work even if some outputs are null
     auto err = legends_get_cursor(handle_, nullptr, nullptr, nullptr);
     EXPECT_EQ(err, LEGENDS_OK);

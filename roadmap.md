@@ -3982,7 +3982,7 @@ Changes incorporated from `feedbackGemini.md` compatibility gap analysis:
 
 ### v2.0.0 (2026-02-25) — Deep Review Revision
 
-Changes incorporated from `feedbackGPT.md` deep review:
+Changes incorporated from deep review:
 
 **Critical fixes:**
 - Added **Phase -1: Engine I/O Plumbing** (REQ-PLUMB-001 through 005) — addresses real framebuffer and audio paths not being wired

@@ -53,6 +53,9 @@ dosbox_lib_config_t g_config;
 std::string g_config_path_owned;
 std::string g_working_dir_owned;
 
+// Audio enable flag (Phase -1: set before create, read during create)
+bool g_audio_enabled = false;
+
 // Last error message
 std::string g_last_error;
 
@@ -257,7 +260,7 @@ dosbox_lib_error_t dosbox_lib_create(
             c.memory_size = static_cast<size_t>(g_config.memory_kb) * 1024;
             c.cpu_cycles = g_config.cpu_cycles > 0 ? g_config.cpu_cycles : 3000;
             c.deterministic = (g_config.deterministic != 0);
-            c.sound_enabled = false;  // Library mode: headless
+            c.sound_enabled = g_audio_enabled;
             return c;
         }();
         g_context = std::make_unique<dosbox::DOSBoxContext>(ctx_config);
@@ -1366,6 +1369,202 @@ dosbox_lib_error_t dosbox_lib_write_memory(
     }
 
     std::memcpy(g_context->memory.base + address, buffer, size);
+    return DOSBOX_LIB_OK;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VGA Data Access API (Phase -1: Engine I/O Plumbing)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_get_text_buffer(
+    dosbox_lib_handle_t handle,
+    uint16_t* buffer,
+    size_t buffer_count,
+    size_t* count_out
+) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(count_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    // Text mode: 80 columns × 25 rows = 2000 cells
+    const size_t text_columns = 80;
+    const size_t text_rows = 25;
+    const size_t cell_count = text_columns * text_rows;
+    *count_out = cell_count;
+
+    if (buffer == nullptr) {
+        return DOSBOX_LIB_OK;  // Query count only
+    }
+
+    if (buffer_count < cell_count) {
+        return DOSBOX_LIB_ERR_BUFFER_TOO_SMALL;
+    }
+
+    // Read VGA text memory at B8000h: each cell is 2 bytes (char + attr)
+    // In the guest address space, text video memory starts at 0xB8000
+    constexpr uint32_t TEXT_MEM_BASE = 0xB8000;
+    const size_t byte_count = cell_count * 2;
+
+    if (g_context->memory.base == nullptr ||
+        TEXT_MEM_BASE + byte_count > g_context->memory.size) {
+        g_last_error = "Text memory region not accessible";
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+
+    const uint8_t* text_mem = g_context->memory.base + TEXT_MEM_BASE;
+    for (size_t i = 0; i < cell_count; ++i) {
+        uint8_t ch = text_mem[i * 2];
+        uint8_t attr = text_mem[i * 2 + 1];
+        buffer[i] = static_cast<uint16_t>(ch) | (static_cast<uint16_t>(attr) << 8);
+    }
+
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_get_indexed_pixels(
+    dosbox_lib_handle_t handle,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* size_out
+) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(size_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    const auto& vga = g_context->vga;
+
+    // Only support linear 8bpp modes (Mode 13h)
+    if (!vga.is_linear_8bpp_mode()) {
+        return DOSBOX_LIB_ERR_NOT_SUPPORTED;
+    }
+
+    const size_t pixel_count = static_cast<size_t>(vga.width) * vga.height;
+    *size_out = pixel_count;
+
+    if (buffer == nullptr) {
+        return DOSBOX_LIB_OK;  // Query size only
+    }
+
+    if (buffer_size < pixel_count) {
+        return DOSBOX_LIB_ERR_BUFFER_TOO_SMALL;
+    }
+
+    size_t copied = vga.get_indexed_pixels(buffer, buffer_size);
+    if (copied == 0) {
+        g_last_error = "VGA linear memory not available";
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_get_palette(
+    dosbox_lib_handle_t handle,
+    uint8_t rgb_out[768]
+) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(rgb_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    if (!g_context->vga.get_dac_palette(rgb_out)) {
+        // VGA hardware not available (headless mode) — return default
+        return DOSBOX_LIB_ERR_NOT_SUPPORTED;
+    }
+
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_get_font_data(
+    dosbox_lib_handle_t handle,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* size_out,
+    uint8_t* char_height_out
+) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(size_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    // Query font size (also sets char_height_out)
+    uint8_t ch_height = 16;
+    size_t font_size = g_context->vga.get_font_data(nullptr, 0, &ch_height);
+
+    if (font_size == 0) {
+        // VGA hardware not available (headless mode)
+        // Return default size so callers know the expected dimensions
+        ch_height = 16;
+        font_size = 256 * 16;
+        *size_out = font_size;
+        if (char_height_out != nullptr) *char_height_out = ch_height;
+        return DOSBOX_LIB_ERR_NOT_SUPPORTED;
+    }
+
+    *size_out = font_size;
+    if (char_height_out != nullptr) *char_height_out = ch_height;
+
+    if (buffer == nullptr) {
+        return DOSBOX_LIB_OK;  // Query size only
+    }
+
+    if (buffer_size < font_size) {
+        return DOSBOX_LIB_ERR_BUFFER_TOO_SMALL;
+    }
+
+    g_context->vga.get_font_data(buffer, buffer_size, &ch_height);
+    return DOSBOX_LIB_OK;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Audio API (Phase -1: Engine I/O Plumbing)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_set_audio_enabled(
+    dosbox_lib_handle_t /* handle */,
+    int enabled
+) {
+    // This is a pre-create global setting; handle may be NULL
+    g_audio_enabled = (enabled != 0);
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_get_audio_samples(
+    dosbox_lib_handle_t handle,
+    int16_t* buffer,
+    size_t buffer_count,
+    size_t* count_out
+) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(count_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    auto& audio = g_context->buffer_audio();
+
+    if (buffer == nullptr) {
+        // Query available sample count
+        auto all = audio.get_all_samples();
+        *count_out = all.size();
+        return DOSBOX_LIB_OK;
+    }
+
+    // Pop requested number of samples from the ring buffer
+    size_t to_pop = buffer_count;
+    auto samples = audio.pop_samples(to_pop);
+    *count_out = samples.size();
+
+    if (!samples.empty()) {
+        std::memcpy(buffer, samples.data(), samples.size() * sizeof(int16_t));
+    }
+
     return DOSBOX_LIB_OK;
 }
 

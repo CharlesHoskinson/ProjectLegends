@@ -896,6 +896,9 @@ legends_error_t legends_create(
             return LEGENDS_ERR_INTERNAL;
         }
 
+        // Enable audio before engine creation (Phase -1)
+        dosbox_lib_set_audio_enabled(nullptr, 1);
+
         // Initialize DOSBox-X Engine Bridge (PR #22)
         dosbox_lib_config_t engine_config = DOSBOX_LIB_CONFIG_INIT;
         engine_config.memory_kb = inst->config.memory_kb;
@@ -926,9 +929,8 @@ legends_error_t legends_create(
         inst->time_state.reset();
         inst->time_state.cycles_per_ms = mc.cpu_cycles;
 
-        // Initialize frame state with test pattern
+        // Initialize frame state (real data synced from engine after stepping)
         inst->frame_state.reset();
-        inst->frame_state.init_test_pattern();
 
         // Initialize input state
         inst->input_state.reset();
@@ -1269,7 +1271,7 @@ legends_error_t legends_capture_rgb(
 
     if (inst->frame_state.is_text_mode) {
         width = inst->frame_state.columns * 8;
-        height = inst->frame_state.rows * 16;
+        height = inst->frame_state.rows * inst->frame_state.char_height;
     } else {
         width = inst->frame_state.gfx_width;
         height = inst->frame_state.gfx_height;
@@ -1298,6 +1300,8 @@ legends_error_t legends_capture_rgb(
 
     if (inst->frame_state.is_text_mode) {
         const auto& palette = inst->frame_state.palette;
+        const auto& font = inst->frame_state.font_data;
+        const uint8_t ch_h = inst->frame_state.char_height;
 
         for (uint16_t row = 0; row < inst->frame_state.rows; ++row) {
             for (uint16_t col = 0; col < inst->frame_state.columns; ++col) {
@@ -1312,24 +1316,29 @@ legends_error_t legends_capture_rgb(
                 legends::vision::RgbColor fg_color = palette[fg_idx];
                 legends::vision::RgbColor bg_color = palette[bg_idx];
 
-                for (int py = 0; py < 16; ++py) {
+                for (int py = 0; py < ch_h; ++py) {
+                    // Look up glyph row from font bitmap
+                    uint8_t glyph_row = 0;
+                    size_t font_offset = static_cast<size_t>(ch) * ch_h + py;
+                    if (!font.empty() && font_offset < font.size()) {
+                        glyph_row = font[font_offset];
+                    } else if (ch != ' ' && ch != 0) {
+                        // Fallback: solid block when font data not yet available
+                        glyph_row = 0xFF;
+                    }
+
                     for (int px = 0; px < 8; ++px) {
                         size_t pixel_x = col * 8 + px;
-                        size_t pixel_y = row * 16 + py;
+                        size_t pixel_y = row * ch_h + py;
                         size_t pixel_idx = (pixel_y * width + pixel_x) * 3;
 
-                        bool is_lit = (ch != ' ' && ch != 0) &&
-                                     ((px + py) % 2 == 0);
+                        // 1bpp bitmap: MSB is leftmost pixel
+                        bool is_fg = (glyph_row >> (7 - px)) & 1;
+                        const auto& color = is_fg ? fg_color : bg_color;
 
-                        if (is_lit) {
-                            buffer[pixel_idx + 0] = fg_color.r;
-                            buffer[pixel_idx + 1] = fg_color.g;
-                            buffer[pixel_idx + 2] = fg_color.b;
-                        } else {
-                            buffer[pixel_idx + 0] = bg_color.r;
-                            buffer[pixel_idx + 1] = bg_color.g;
-                            buffer[pixel_idx + 2] = bg_color.b;
-                        }
+                        buffer[pixel_idx + 0] = color.r;
+                        buffer[pixel_idx + 1] = color.g;
+                        buffer[pixel_idx + 2] = color.b;
                     }
                 }
             }
@@ -1383,6 +1392,54 @@ legends_error_t legends_get_cursor(
     if (y_out != nullptr) { *y_out = inst->frame_state.cursor_y; }
     if (visible_out != nullptr) { *visible_out = inst->frame_state.cursor_visible ? 1 : 0; }
 
+    return LEGENDS_OK;
+}
+
+/* =========================================================================
+ * AUDIO CAPTURE API - Phase -1 Implementation
+ * ========================================================================= */
+
+legends_error_t legends_capture_audio(
+    legends_handle handle,
+    int16_t* buffer,
+    size_t buffer_count,
+    size_t* count_out
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+    LEGENDS_REQUIRE(count_out != nullptr, LEGENDS_ERR_NULL_POINTER);
+
+    if (!inst->engine_handle) {
+        *count_out = 0;
+        return LEGENDS_OK;
+    }
+
+    return dosbox_to_legends_error(
+        dosbox_lib_get_audio_samples(inst->engine_handle, buffer, buffer_count, count_out));
+}
+
+legends_error_t legends_is_audio_active(
+    legends_handle handle,
+    int* active_out
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+    LEGENDS_REQUIRE(active_out != nullptr, LEGENDS_ERR_NULL_POINTER);
+
+    // Audio is active if the engine was created with audio enabled
+    // Check by querying if there's audio infrastructure available
+    if (!inst->engine_handle) {
+        *active_out = 0;
+        return LEGENDS_OK;
+    }
+
+    // Try to query sample count — if the engine supports it, audio is active
+    size_t available = 0;
+    auto err = dosbox_lib_get_audio_samples(inst->engine_handle, nullptr, 0, &available);
+    // Audio is active if the call succeeds (even if no samples yet)
+    *active_out = (err == DOSBOX_LIB_OK) ? 1 : 0;
     return LEGENDS_OK;
 }
 
@@ -1542,6 +1599,48 @@ void sync_state_from_engine(legends_instance* inst) {
         inst->frame_state.gfx_width = display.width;
         inst->frame_state.gfx_height = display.height;
         inst->frame_state.dirty = true;
+    }
+
+    // Palette sync (Phase -1)
+    uint8_t palette_rgb[768];
+    if (dosbox_lib_get_palette(inst->engine_handle, palette_rgb) == DOSBOX_LIB_OK) {
+        for (int i = 0; i < 256; ++i) {
+            inst->frame_state.palette.set(i, legends::vision::RgbColor{
+                palette_rgb[i * 3],
+                palette_rgb[i * 3 + 1],
+                palette_rgb[i * 3 + 2]
+            });
+        }
+    }
+
+    // Framebuffer data sync (Phase -1)
+    if (inst->frame_state.is_text_mode) {
+        // Text buffer
+        size_t count = 0;
+        dosbox_lib_get_text_buffer(inst->engine_handle, nullptr, 0, &count);
+        if (count > 0 && count <= FrameState::MAX_TEXT_CELLS) {
+            dosbox_lib_get_text_buffer(inst->engine_handle,
+                inst->frame_state.text_buffer.data(), count, &count);
+        }
+        // Font data
+        size_t font_size = 0;
+        uint8_t ch_height = 0;
+        dosbox_lib_get_font_data(inst->engine_handle, nullptr, 0, &font_size, &ch_height);
+        if (font_size > 0) {
+            inst->frame_state.font_data.resize(font_size);
+            inst->frame_state.char_height = ch_height;
+            dosbox_lib_get_font_data(inst->engine_handle,
+                inst->frame_state.font_data.data(), font_size, &font_size, &ch_height);
+        }
+    } else {
+        // Indexed pixels for graphics modes
+        size_t px_count = 0;
+        dosbox_lib_get_indexed_pixels(inst->engine_handle, nullptr, 0, &px_count);
+        if (px_count > 0) {
+            inst->frame_state.indexed_pixels.resize(px_count);
+            dosbox_lib_get_indexed_pixels(inst->engine_handle,
+                inst->frame_state.indexed_pixels.data(), px_count, &px_count);
+        }
     }
 }
 

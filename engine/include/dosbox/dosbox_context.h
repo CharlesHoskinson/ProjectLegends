@@ -751,6 +751,24 @@ struct VgaState {
      * Excludes fps (derived from timing).
      */
     void hash_into(class HashBuilder& builder) const;
+
+    // ─────────────────────────────────────────────────────────────────────
+    // VGA Hardware Data Accessors (Phase -1: Engine I/O Plumbing)
+    // Implemented in dosbox_context.cpp where VGA_Type_t is fully defined.
+    // Returns false / 0 when hw == nullptr (headless mode).
+    // ─────────────────────────────────────────────────────────────────────
+
+    /** Get DAC palette as 768 bytes (256 × RGB, 6-bit scaled to 8-bit). */
+    bool get_dac_palette(uint8_t rgb_out[768]) const;
+
+    /** Get font data from VGA draw state. Returns actual byte count, 0 on failure. */
+    size_t get_font_data(uint8_t* buffer, size_t buffer_size, uint8_t* char_height_out) const;
+
+    /** Get indexed pixels from VGA linear memory. Returns pixel count, 0 on failure. */
+    size_t get_indexed_pixels(uint8_t* buffer, size_t buffer_size) const;
+
+    /** Check if mode is linear 8bpp (Mode 13h / LIN8). */
+    bool is_linear_8bpp_mode() const;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

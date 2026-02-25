@@ -71,6 +71,33 @@ All 3 partial global migrations are complete. Multi-instance support validated.
 
 ---
 
+## Phase -1 — Engine I/O Plumbing (In Progress)
+
+### Complete
+
+- [x] VGA text buffer access via `dosbox_lib_get_text_buffer()` (REQ-PLUMB-001)
+- [x] VGA palette access via `dosbox_lib_get_palette()` (REQ-PLUMB-001)
+- [x] VGA font data access via `dosbox_lib_get_font_data()` (REQ-PLUMB-001)
+- [x] VGA indexed pixel access via `dosbox_lib_get_indexed_pixels()` (REQ-PLUMB-001)
+- [x] Real framebuffer sync in `sync_state_from_engine()` (REQ-PLUMB-001)
+- [x] Font-based glyph rendering in `legends_capture_rgb()` text mode (REQ-PLUMB-001)
+- [x] Removed synthetic test pattern from `legends_create()` (REQ-PLUMB-001)
+- [x] Audio capture API: `legends_capture_audio()`, `legends_is_audio_active()` (REQ-PLUMB-003)
+- [x] Engine audio pull via `dosbox_lib_get_audio_samples()` (REQ-PLUMB-003)
+- [x] Audio enabled at engine creation (REQ-PLUMB-003)
+- [x] VGA context accessors: `get_dac_palette()`, `get_font_data()`, `get_indexed_pixels()` (REQ-PLUMB-001)
+- [x] Integration tests: `test_framebuffer_plumbing.cpp`, `test_audio_plumbing.cpp`
+- [x] Unit tests updated for real engine state (explicit `init_test_pattern()` in tests)
+- [x] MSVC build compatibility (`/utf-8`, `__attribute__((weak))`, narrowing casts)
+
+### Remaining
+
+- [ ] Cursor position sync from BDA via `dosbox_lib_get_cursor_info()` (REQ-PLUMB-002)
+- [ ] Cursor rendering in `legends_capture_rgb()` text mode (REQ-PLUMB-002)
+- [ ] Presentation contract integration test (REQ-PLUMB-005)
+
+---
+
 ## Tier 2 — Immediate Priorities (Parallelizable)
 
 ### 8. Cross-platform build verification

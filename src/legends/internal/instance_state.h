@@ -109,6 +109,9 @@ struct FrameState {
     std::vector<uint8_t> indexed_pixels;
     legends::vision::VgaPalette palette;
 
+    std::vector<uint8_t> font_data;   // 256 × char_height bytes of 1bpp glyphs
+    uint8_t char_height = 16;         // Scanlines per character (from engine)
+
     bool dirty = true;
 
     void reset() {
@@ -126,6 +129,8 @@ struct FrameState {
         gfx_height = 200;
         indexed_pixels.clear();
         palette = legends::vision::VgaPalette{};
+        font_data.clear();
+        char_height = 16;
         dirty = true;
     }
 
