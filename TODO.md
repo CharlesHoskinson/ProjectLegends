@@ -90,11 +90,11 @@ All 3 partial global migrations are complete. Multi-instance support validated.
 - [x] Unit tests updated for real engine state (explicit `init_test_pattern()` in tests)
 - [x] MSVC build compatibility (`/utf-8`, `__attribute__((weak))`, narrowing casts)
 
-### Remaining
-
-- [ ] Cursor position sync from BDA via `dosbox_lib_get_cursor_info()` (REQ-PLUMB-002)
-- [ ] Cursor rendering in `legends_capture_rgb()` text mode (REQ-PLUMB-002)
-- [ ] Presentation contract integration test (REQ-PLUMB-005)
+- [x] Cursor position sync from BDA via `dosbox_lib_get_cursor_info()` (REQ-PLUMB-002)
+- [x] Cursor rendering in `legends_capture_rgb()` text mode (REQ-PLUMB-002)
+- [x] Cursor sync in `sync_state_from_engine()` (REQ-PLUMB-002)
+- [x] Presentation contract integration test (REQ-PLUMB-005)
+- [x] `CursorPositionSynced` integration test (REQ-PLUMB-002)
 
 ---
 

@@ -1343,6 +1343,37 @@ legends_error_t legends_capture_rgb(
                 }
             }
         }
+
+        // Cursor rendering (Phase -1, REQ-PLUMB-002)
+        if (inst->frame_state.cursor_visible &&
+            inst->frame_state.cursor_x < inst->frame_state.columns &&
+            inst->frame_state.cursor_y < inst->frame_state.rows) {
+
+            uint8_t cx = inst->frame_state.cursor_x;
+            uint8_t cy = inst->frame_state.cursor_y;
+            uint8_t cstart = inst->frame_state.cursor_start & 0x1F;
+            uint8_t cend = inst->frame_state.cursor_end;
+
+            // Get foreground color from the character attribute at cursor position
+            size_t cursor_cell = cy * inst->frame_state.columns + cx;
+            uint8_t cursor_attr = static_cast<uint8_t>(
+                (inst->frame_state.text_buffer[cursor_cell] >> 8) & 0xFF);
+            uint8_t cursor_fg_idx = cursor_attr & 0x0F;
+            legends::vision::RgbColor cursor_color = inst->frame_state.palette[cursor_fg_idx];
+
+            // Draw cursor block from start to end scanlines
+            for (int py = cstart; py <= cend && py < ch_h; ++py) {
+                for (int px = 0; px < 8; ++px) {
+                    size_t pixel_x = cx * 8 + px;
+                    size_t pixel_y = cy * ch_h + py;
+                    size_t pixel_idx = (pixel_y * width + pixel_x) * 3;
+
+                    buffer[pixel_idx + 0] = cursor_color.r;
+                    buffer[pixel_idx + 1] = cursor_color.g;
+                    buffer[pixel_idx + 2] = cursor_color.b;
+                }
+            }
+        }
     } else {
         size_t pixel_count = static_cast<size_t>(width) * height;
 
@@ -1641,6 +1672,17 @@ void sync_state_from_engine(legends_instance* inst) {
             dosbox_lib_get_indexed_pixels(inst->engine_handle,
                 inst->frame_state.indexed_pixels.data(), px_count, &px_count);
         }
+    }
+
+    // Cursor sync (Phase -1, REQ-PLUMB-002)
+    dosbox_lib_cursor_info_t cursor;
+    if (dosbox_lib_get_cursor_info(inst->engine_handle, &cursor) == DOSBOX_LIB_OK) {
+        inst->frame_state.cursor_x = cursor.col;
+        inst->frame_state.cursor_y = cursor.row;
+        inst->frame_state.cursor_visible = (cursor.visible != 0);
+        inst->frame_state.cursor_start = cursor.start_line;
+        inst->frame_state.cursor_end = cursor.end_line;
+        inst->frame_state.active_page = cursor.active_page;
     }
 }
 

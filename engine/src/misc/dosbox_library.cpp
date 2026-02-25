@@ -1568,4 +1568,51 @@ dosbox_lib_error_t dosbox_lib_get_audio_samples(
     return DOSBOX_LIB_OK;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Display API — Cursor
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_get_cursor_info(
+    dosbox_lib_handle_t handle,
+    dosbox_lib_cursor_info_t* info_out
+) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(info_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    auto* mem_base = g_context->memory.base;
+    if (mem_base == nullptr || g_context->memory.size < 0x500) {
+        LIB_LOG_ERROR("Memory not initialized for BDA read");
+        return DOSBOX_LIB_ERR_NOT_INITIALIZED;
+    }
+
+    // BDA segment 0x40 => physical offset 0x400
+    constexpr uint32_t BDA_BASE = 0x400;
+
+    // Active page: BDA offset 0x62
+    uint8_t active_page = mem_base[BDA_BASE + 0x62];
+
+    // Cursor position: BDA offset 0x50, 2 bytes per page (col, row)
+    uint8_t col = mem_base[BDA_BASE + 0x50 + active_page * 2u];
+    uint8_t row = mem_base[BDA_BASE + 0x50 + active_page * 2u + 1u];
+
+    // Cursor type: BDA offset 0x60 (end scanline), 0x61 (start scanline)
+    uint8_t cursor_end   = mem_base[BDA_BASE + 0x60];
+    uint8_t cursor_start = mem_base[BDA_BASE + 0x61];
+
+    // Hidden if start_line bit 5 is set
+    uint8_t visible = (cursor_start & 0x20) ? 0 : 1;
+
+    info_out->col = col;
+    info_out->row = row;
+    info_out->active_page = active_page;
+    info_out->visible = visible;
+    info_out->start_line = cursor_start & 0x1F;
+    info_out->end_line = cursor_end;
+
+    return DOSBOX_LIB_OK;
+}
+
 } // extern "C"

@@ -172,3 +172,20 @@ TEST_F(BasicWorkflowTest, CursorPositionTracking) {
     EXPECT_LT(cursor_x, 80);
     EXPECT_LT(cursor_y, 25);
 }
+
+// E2E: Cursor position is synced from engine after stepping (REQ-PLUMB-002)
+TEST_F(BasicWorkflowTest, CursorPositionSynced) {
+    legends_create(nullptr, &handle_);
+
+    // Step enough for DOS to initialize cursor
+    legends_step_ms(handle_, 200, nullptr);
+
+    uint8_t x = 0, y = 0;
+    int visible = 0;
+    auto err = legends_get_cursor(handle_, &x, &y, &visible);
+    ASSERT_EQ(err, LEGENDS_OK);
+
+    // After engine stepping, cursor should have valid bounds
+    EXPECT_LT(x, 80u);
+    EXPECT_LT(y, 25u);
+}

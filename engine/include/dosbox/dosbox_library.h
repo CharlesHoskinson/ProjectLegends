@@ -616,6 +616,34 @@ dosbox_lib_error_t dosbox_lib_get_audio_samples(
     size_t* count_out
 );
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Display API — Cursor
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * @brief Cursor information read from the BIOS Data Area.
+ */
+typedef struct {
+    uint8_t col;            /**< Cursor column */
+    uint8_t row;            /**< Cursor row */
+    uint8_t active_page;    /**< Active display page */
+    uint8_t visible;        /**< 1 = visible, 0 = hidden */
+    uint8_t start_line;     /**< Cursor start scanline */
+    uint8_t end_line;       /**< Cursor end scanline */
+} dosbox_lib_cursor_info_t;
+
+/**
+ * @brief Get cursor position and shape from the BIOS Data Area.
+ *
+ * @param handle Valid handle
+ * @param info_out Receives cursor information
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_get_cursor_info(
+    dosbox_lib_handle_t handle,
+    dosbox_lib_cursor_info_t* info_out
+);
+
 #ifdef __cplusplus
 }
 #endif

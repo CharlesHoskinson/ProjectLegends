@@ -72,7 +72,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         add_compile_options(-O2)
     endif()
 elseif(MSVC)
-    add_compile_options(/W4 /permissive-)
+    add_compile_options(/W4 /permissive- /utf-8)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif()
 
@@ -673,6 +673,7 @@ if(LEGENDS_BUILD_TESTS)
         # Phase -1: Engine I/O Plumbing
         tests/integration/test_framebuffer_plumbing.cpp
         tests/integration/test_audio_plumbing.cpp
+        tests/integration/test_presentation_contract.cpp
     )
 
     legends_set_strict_cxx_standard(legends_integration_tests)
