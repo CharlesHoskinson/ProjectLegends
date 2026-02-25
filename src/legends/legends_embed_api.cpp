@@ -841,6 +841,13 @@ legends_error_t legends_create(
             g_pre_creation_error = "API version mismatch";
             return LEGENDS_ERR_VERSION_MISMATCH;
         }
+        if (config->cpu_cycles != 0 &&
+            (config->cpu_cycles < 100 || config->cpu_cycles > 1000000)) {
+            g_active_instance.store(nullptr, std::memory_order_release);
+            delete inst;
+            g_pre_creation_error = "cpu_cycles out of range (0=auto, or 100..1000000)";
+            return LEGENDS_ERR_INVALID_CONFIG;
+        }
         // Store config (deep copy strings so caller can free originals)
         inst->config = *config;
         if (config->config_path) {
@@ -949,15 +956,8 @@ legends_error_t legends_destroy(legends_handle handle) {
     }
 
     auto* inst = get_instance(handle);
-
-    // Backward compatibility: if handle doesn't match active instance
-    // (e.g. old sentinel (void*)1), fall back to destroying the active instance.
-    // This supports existing test cleanup patterns.
     if (inst == nullptr) {
-        inst = g_active_instance.load(std::memory_order_acquire);
-        if (inst == nullptr) {
-            return LEGENDS_OK;  // Nothing to destroy
-        }
+        return LEGENDS_ERR_NULL_HANDLE;
     }
 
     // Verify caller is on owner thread
@@ -985,6 +985,14 @@ legends_error_t legends_destroy(legends_handle handle) {
     delete inst;
 
     return LEGENDS_OK;
+}
+
+legends_error_t legends_force_destroy(void) {
+    auto* inst = g_active_instance.load(std::memory_order_acquire);
+    if (inst == nullptr) {
+        return LEGENDS_OK;
+    }
+    return legends_destroy(reinterpret_cast<legends_handle>(inst));
 }
 
 legends_error_t legends_reset(legends_handle handle) {
@@ -1436,24 +1444,19 @@ legends_error_t legends_text_input(
             const ScancodeMapping& mapping = ASCII_TO_SCANCODE[ch];
 
             if (mapping.scancode != 0) {
-                if (mapping.needs_shift) {
-                    if (!inst->input_state.enqueue_key(SCANCODE_LSHIFT, true, false)) {
-                        LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
-                    }
-                }
-
-                if (!inst->input_state.enqueue_key(mapping.scancode, true, false)) {
-                    LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
-                }
-
-                if (!inst->input_state.enqueue_key(mapping.scancode, false, false)) {
+                size_t slots_needed = mapping.needs_shift ? 4 : 2;
+                size_t available = InputState::EFFECTIVE_CAPACITY - inst->input_state.size();
+                if (available < slots_needed) {
                     LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
                 }
 
                 if (mapping.needs_shift) {
-                    if (!inst->input_state.enqueue_key(SCANCODE_LSHIFT, false, false)) {
-                        LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
-                    }
+                    inst->input_state.enqueue_key(SCANCODE_LSHIFT, true, false);
+                }
+                inst->input_state.enqueue_key(mapping.scancode, true, false);
+                inst->input_state.enqueue_key(mapping.scancode, false, false);
+                if (mapping.needs_shift) {
+                    inst->input_state.enqueue_key(SCANCODE_LSHIFT, false, false);
                 }
             }
             ++p;

@@ -235,6 +235,16 @@ legends_error_t legends_create(
 legends_error_t legends_destroy(legends_handle handle);
 
 /**
+ * @brief Force-destroy the active instance (test cleanup).
+ *
+ * Destroys the active instance regardless of handle.
+ * Intended for test fixtures that need to clean up leaked instances.
+ *
+ * @return LEGENDS_OK if an instance was destroyed, or no instance exists
+ */
+legends_error_t legends_force_destroy(void);
+
+/**
  * @brief Soft reset the emulator.
  *
  * Resets CPU, memory, and devices to initial state. Configuration preserved.
