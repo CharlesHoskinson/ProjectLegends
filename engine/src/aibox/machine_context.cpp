@@ -198,6 +198,10 @@ Result<void> MachineContext::initialize() {
     return Ok();
 }
 
+// DEPRECATED(M10): This stub does not execute real CPU instructions.
+// All production step execution routes through dosbox_lib_step_cycles() ->
+// dosbox::execute_cycles() in cpu_bridge.cpp. This stub only increments
+// counters and will be removed in a future cleanup pass.
 Result<uint32_t> MachineContext::step(uint32_t ms) {
     // Check precondition (REQ-GSE-020, REQ-GSE-021)
     if (state_ != MachineState::Initialized &&
@@ -219,12 +223,10 @@ Result<uint32_t> MachineContext::step(uint32_t ms) {
         for (uint32_t t = 0; t < ms && !stop_requested_.load(std::memory_order_acquire); t++) {
             virtual_ticks_ms_++;
 
-            // Execute one millisecond worth of cycles
             uint32_t cycles_this_ms = config_.cpu_cycles;
             total_cycles_ += cycles_this_ms;
 
-            // TODO: Actual emulation would go here
-            // For now, just increment counters
+            // No real CPU execution — counter increment only (see deprecation note)
 
             steps++;
         }
@@ -371,13 +373,17 @@ Result<void> MachineContext::init_cpu() {
     return Ok();
 }
 
+// H4/M5: These init stubs delegate to DOSBox-X engine bridge.
+// Initialization is handled by dosbox_lib_init() -> DOSBoxContext.
+// Kept for MachineContext interface compatibility but are intentional no-ops.
+
 Result<void> MachineContext::init_pic() {
-    // TODO: pic = std::make_unique<PicController>();
+    // Initialization handled by DOSBox-X engine bridge
     return Ok();
 }
 
 Result<void> MachineContext::init_pit() {
-    // TODO: pit = std::make_unique<PitTimer>();
+    // Initialization handled by DOSBox-X engine bridge
     return Ok();
 }
 
@@ -387,28 +393,27 @@ Result<void> MachineContext::init_dma() {
 }
 
 Result<void> MachineContext::init_vga() {
-    // TODO: vga = std::make_unique<VgaContext>(config_.vga_memory);
+    // Initialization handled by DOSBox-X engine bridge
     return Ok();
 }
 
 Result<void> MachineContext::init_input() {
-    // TODO: keyboard = std::make_unique<KeyboardController>();
-    // TODO: mouse = std::make_unique<MouseController>();
+    // Initialization handled by DOSBox-X engine bridge
     return Ok();
 }
 
 Result<void> MachineContext::init_sound() {
-    // TODO: sound = std::make_unique<SoundSubsystem>(config_);
+    // Initialization handled by DOSBox-X engine bridge
     return Ok();
 }
 
 Result<void> MachineContext::init_dos() {
-    // TODO: dos = std::make_unique<DosKernel>(*this);
+    // Initialization handled by DOSBox-X engine bridge
     return Ok();
 }
 
 Result<void> MachineContext::init_bios() {
-    // TODO: Load ROM images, setup interrupt handlers
+    // Initialization handled by DOSBox-X engine bridge
     return Ok();
 }
 

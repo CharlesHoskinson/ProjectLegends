@@ -12,6 +12,7 @@
 #include "dosbox/cpu_bridge.h"
 #include "dosbox/dosbox_context.h"
 #include "cpu.h"
+#include "pic.h"
 #include "callback.h"
 
 #include <gsl-lite/gsl-lite.hpp>
@@ -86,7 +87,14 @@ CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
     cpu_cycles_count_t saved = CPU_Cycles;
     CPU_Cycles = budget;
 
+    // Process pending PIC events before CPU execution (C2 fix)
+    if (PIC_RunQueue())
+        result.events_processed++;
+
     Bits ret = (*cpudecoder)();
+
+    // Check for NMI after execution (C2 fix)
+    CPU_Check_NMI();
 
     // Compute consumed cycles (decoder may overshoot by 1 instruction)
     cpu_cycles_count_t consumed = budget - CPU_Cycles;

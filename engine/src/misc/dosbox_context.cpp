@@ -892,6 +892,9 @@ int dosbox_init(dosbox_handle_t handle) {
     return DOSBOX_OK;
 }
 
+// DEPRECATED(M10): Routes through MachineContext::step() which is a counter-
+// incrementing stub. Production code uses dosbox_lib_step_cycles() instead.
+// Only called from test_dosbox_context.cpp. Will be removed in a future pass.
 int dosbox_step(dosbox_handle_t handle, uint32_t ms) {
     auto h = dosbox::InstanceHandle::from_opaque(handle);
     auto* ctx = dosbox::get_context(h);
@@ -1103,6 +1106,8 @@ Result<void> DOSBoxContext::initialize() {
     return Ok();
 }
 
+// DEPRECATED(M10): Counter-incrementing stub — does not execute real CPU
+// instructions. Production code uses dosbox::execute_cycles() via cpu_bridge.cpp.
 Result<uint32_t> DOSBoxContext::step(uint32_t ms) {
     if (!initialized_) {
         return Err(Error(ErrorCode::InvalidState, "Not initialized"));
@@ -1112,12 +1117,9 @@ Result<uint32_t> DOSBoxContext::step(uint32_t ms) {
         return Err(Error(ErrorCode::InvalidState, "Stop requested"));
     }
 
-    // Calculate cycles for this step
     uint32_t cycles = ms * config_.cpu_cycles;
 
-    // TODO: In future PRs, this will execute actual CPU cycles
-    // For now, just update timing state
-
+    // No real CPU execution — counter increment only (see deprecation note)
     timing.total_cycles += cycles;
     timing.virtual_ticks_ms += ms;
     cpu_state.cycles += cycles;

@@ -138,6 +138,11 @@ constexpr std::array<char32_t, 256> CP437_TO_UNICODE = {{
 // Box Drawing Characters (UTF-8)
 // ─────────────────────────────────────────────────────────────────────────────
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4566) // Unicode chars in codepage 1252 — strings are UTF-8 literals
+#endif
+
 namespace box {
 
 /// Double line box drawing characters
@@ -162,6 +167,10 @@ constexpr const char* LIGHT_BOT_LEFT   = "\u2514";  // └
 constexpr const char* LIGHT_BOT_RIGHT  = "\u2518";  // ┘
 
 } // namespace box
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Text Serialization

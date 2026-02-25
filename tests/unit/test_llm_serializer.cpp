@@ -595,11 +595,11 @@ TEST(FrameRoundTripTest, MaxSizeFrame) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 TEST(LlmSerializerContractTest, Cp437ToUtf8RejectsNullWithLength) {
-    EXPECT_THROW(cp437_to_utf8(nullptr, 5), legends::gsl::fail_fast);
+    EXPECT_THROW((void)cp437_to_utf8(nullptr, 5), legends::gsl::fail_fast);
 }
 
 TEST(LlmSerializerContractTest, Cp437ToUtf8AllowsNullWithZeroLength) {
-    EXPECT_NO_THROW(cp437_to_utf8(nullptr, 0));
+    EXPECT_NO_THROW((void)cp437_to_utf8(nullptr, 0));
 }
 
 TEST(LlmSerializerContractTest, EncodeUtf8RejectsNullOutput) {
@@ -608,7 +608,7 @@ TEST(LlmSerializerContractTest, EncodeUtf8RejectsNullOutput) {
 
 TEST(LlmSerializerContractTest, SerializeRejectsNullData) {
     EXPECT_THROW(
-        serialize_text_screen(nullptr, 80, 25, 0, 0, false),
+        (void)serialize_text_screen(nullptr, 80, 25, 0, 0, false),
         legends::gsl::fail_fast
     );
 }
@@ -616,7 +616,7 @@ TEST(LlmSerializerContractTest, SerializeRejectsNullData) {
 TEST(LlmSerializerContractTest, SerializeRejectsZeroColumns) {
     uint8_t data[25]{};
     EXPECT_THROW(
-        serialize_text_screen(data, 0, 25, 0, 0, false),
+        (void)serialize_text_screen(data, 0, 25, 0, 0, false),
         legends::gsl::fail_fast
     );
 }
@@ -624,7 +624,7 @@ TEST(LlmSerializerContractTest, SerializeRejectsZeroColumns) {
 TEST(LlmSerializerContractTest, SerializeRejectsZeroRows) {
     uint8_t data[80]{};
     EXPECT_THROW(
-        serialize_text_screen(data, 80, 0, 0, 0, false),
+        (void)serialize_text_screen(data, 80, 0, 0, 0, false),
         legends::gsl::fail_fast
     );
 }

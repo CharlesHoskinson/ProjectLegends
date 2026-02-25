@@ -8,7 +8,9 @@
 
 #include <gtest/gtest.h>
 #include <legends/legends_embed.h>
+#include "internal/legends_instance.h"
 #include <cstring>
+#include <stdexcept>
 #include <vector>
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2504,4 +2506,97 @@ TEST_F(DeterminismHardeningTest, MultiCheckpointMixedOrderRestore) {
     uint8_t verifyC2[32];
     legends_get_state_hash(handle_, verifyC2);
     EXPECT_EQ(std::memcmp(hashC, verifyC2, 32), 0) << "Restore C (second) failed";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reentrancy Guard Tests (Item 8 / M1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ReentrancyGuardTest : public ::testing::Test {
+protected:
+    legends_handle handle_ = nullptr;
+
+    void SetUp() override {
+        legends_destroy(reinterpret_cast<legends_handle>(1));
+        auto err = legends_create(nullptr, &handle_);
+        ASSERT_EQ(err, LEGENDS_OK);
+        ASSERT_NE(handle_, nullptr);
+
+        // Simulate being inside a step call
+        auto* inst = reinterpret_cast<legends_instance*>(handle_);
+        inst->in_step = true;
+    }
+
+    void TearDown() override {
+        // Must clear in_step before destroy
+        auto* inst = reinterpret_cast<legends_instance*>(handle_);
+        if (inst) inst->in_step = false;
+        legends_destroy(handle_);
+    }
+};
+
+TEST_F(ReentrancyGuardTest, KeyEventRejectsReentrantCall) {
+    EXPECT_EQ(legends_key_event(handle_, 0x1C, 1), LEGENDS_ERR_REENTRANT_CALL);
+}
+
+TEST_F(ReentrancyGuardTest, KeyEventExtRejectsReentrantCall) {
+    EXPECT_EQ(legends_key_event_ext(handle_, 0x1C, 1), LEGENDS_ERR_REENTRANT_CALL);
+}
+
+TEST_F(ReentrancyGuardTest, TextInputRejectsReentrantCall) {
+    EXPECT_EQ(legends_text_input(handle_, "hello"), LEGENDS_ERR_REENTRANT_CALL);
+}
+
+TEST_F(ReentrancyGuardTest, MouseEventRejectsReentrantCall) {
+    EXPECT_EQ(legends_mouse_event(handle_, 10, 20, 0), LEGENDS_ERR_REENTRANT_CALL);
+}
+
+TEST_F(ReentrancyGuardTest, SaveStateRejectsReentrantCall) {
+    size_t size = 0;
+    EXPECT_EQ(legends_save_state(handle_, nullptr, 0, &size), LEGENDS_ERR_REENTRANT_CALL);
+}
+
+TEST_F(ReentrancyGuardTest, LoadStateRejectsReentrantCall) {
+    uint8_t dummy[64] = {};
+    EXPECT_EQ(legends_load_state(handle_, dummy, sizeof(dummy)), LEGENDS_ERR_REENTRANT_CALL);
+}
+
+TEST_F(ReentrancyGuardTest, ResetRejectsReentrantCall) {
+    EXPECT_EQ(legends_reset(handle_), LEGENDS_ERR_REENTRANT_CALL);
+}
+
+TEST_F(ReentrancyGuardTest, StepCyclesRejectsReentrantCall) {
+    EXPECT_EQ(legends_step_cycles(handle_, 100, nullptr), LEGENDS_ERR_REENTRANT_CALL);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Exception-Safe Callback Tests (Item 12 / M6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+static void throwing_log_callback(int /*level*/, const char* /*msg*/, void* /*ud*/) {
+    throw std::runtime_error("callback threw");
+}
+
+class CallbackSafetyTest : public ::testing::Test {
+protected:
+    legends_handle handle_ = nullptr;
+
+    void SetUp() override {
+        legends_destroy(reinterpret_cast<legends_handle>(1));
+        auto err = legends_create(nullptr, &handle_);
+        ASSERT_EQ(err, LEGENDS_OK);
+    }
+
+    void TearDown() override {
+        legends_destroy(handle_);
+    }
+};
+
+TEST_F(CallbackSafetyTest, ThrowingLogCallbackDoesNotCrash) {
+    legends_set_log_callback(handle_, throwing_log_callback, nullptr);
+
+    // This should not crash — the callback exception is swallowed
+    auto err = legends_step_cycles(handle_, 100, nullptr);
+    // We don't assert the specific error; just that we didn't crash
+    (void)err;
 }

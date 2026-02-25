@@ -808,10 +808,14 @@ legends_error_t legends_create(
             std::memory_order_acq_rel, std::memory_order_acquire)) {
         // owned_inst destructor handles cleanup automatically
         if (expected && expected->log_state.callback) {
-            expected->log_state.callback(
-                0,  // LOG_LEVEL_ERROR
-                "Instance already exists - only one instance per process allowed",
-                expected->log_state.userdata);
+            try {
+                expected->log_state.callback(
+                    0,  // LOG_LEVEL_ERROR
+                    "Instance already exists - only one instance per process allowed",
+                    expected->log_state.userdata);
+            } catch (...) {
+                // Cannot propagate exceptions across C ABI boundary
+            }
         }
         g_pre_creation_error = "Instance already exists - only one instance per process allowed";
         return LEGENDS_ERR_ALREADY_CREATED;
@@ -987,6 +991,7 @@ legends_error_t legends_reset(legends_handle handle) {
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(inst->machine != nullptr, LEGENDS_ERR_NOT_INITIALIZED);
 
     try {
@@ -1062,7 +1067,15 @@ legends_error_t legends_step_cycles(
         // Set dosbox context TLS pointer so compat shims resolve during
         // the entire step scope (including input draining).
         void* raw_ctx = nullptr;
-        dosbox_lib_get_context_ptr(inst->engine_handle, &raw_ctx);
+        auto ctx_err = dosbox_lib_get_context_ptr(inst->engine_handle, &raw_ctx);
+        if (ctx_err != DOSBOX_LIB_OK || raw_ctx == nullptr) {
+            inst->last_error = "Failed to get engine context pointer";
+            if (result_out != nullptr) {
+                result_out->stop_reason = LEGENDS_STOP_ERROR;
+            }
+            return (ctx_err != DOSBOX_LIB_OK) ? dosbox_to_legends_error(ctx_err)
+                                               : LEGENDS_ERR_NOT_INITIALIZED;
+        }
         auto* dctx = static_cast<dosbox::DOSBoxContext*>(raw_ctx);
         dosbox::ContextGuard dosbox_guard(*dctx);
 
@@ -1377,6 +1390,7 @@ legends_error_t legends_key_event(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
 
     if (!inst->input_state.enqueue_key(scancode, is_down != 0, false)) {
         LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
@@ -1394,6 +1408,7 @@ legends_error_t legends_key_event_ext(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
 
     if (!inst->input_state.enqueue_key(scancode, is_down != 0, true)) {
         LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
@@ -1410,6 +1425,7 @@ legends_error_t legends_text_input(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(utf8_text != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     const char* p = utf8_text;
@@ -1469,6 +1485,7 @@ legends_error_t legends_mouse_event(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
 
     if (!inst->input_state.enqueue_mouse(delta_x, delta_y, buttons)) {
         LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Mouse event queue full");
@@ -1511,6 +1528,17 @@ void sync_state_from_engine(legends_instance* inst) {
         inst->pics[1].irr = pic_state.slave_irr;
         inst->pics[1].imr = pic_state.slave_imr;
         inst->pics[1].isr = pic_state.slave_isr;
+    }
+
+    // Sync display mode from engine (H8)
+    dosbox_lib_display_info_t display;
+    if (dosbox_lib_get_display_info(inst->engine_handle, &display) == DOSBOX_LIB_OK) {
+        inst->frame_state.is_text_mode = (display.is_text_mode != 0);
+        inst->frame_state.columns = display.text_columns;
+        inst->frame_state.rows = display.text_rows;
+        inst->frame_state.gfx_width = display.width;
+        inst->frame_state.gfx_height = display.height;
+        inst->frame_state.dirty = true;
     }
 }
 
@@ -1635,6 +1663,7 @@ legends_error_t legends_save_state(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(size_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     // Calculate required size
@@ -1653,54 +1682,57 @@ legends_error_t legends_save_state(
     uint8_t* ptr = static_cast<uint8_t*>(buffer);
     uint8_t* data_start = ptr + sizeof(SaveStateHeader);
 
-    // Write header
-    SaveStateHeader* header = reinterpret_cast<SaveStateHeader*>(ptr);
-    header->magic = SAVESTATE_MAGIC;
-    header->version = SAVESTATE_VERSION;
-    header->total_size = static_cast<uint32_t>(required_size);
-    // Checksum filled in at end
-    std::memset(header->_reserved, 0, sizeof(header->_reserved));
+    // Build header on stack to avoid unaligned access on caller buffer (H9)
+    SaveStateHeader header{};
+    header.magic = SAVESTATE_MAGIC;
+    header.version = SAVESTATE_VERSION;
+    header.total_size = static_cast<uint32_t>(required_size);
+    std::memset(header._reserved, 0, sizeof(header._reserved));
 
     size_t offset = sizeof(SaveStateHeader);
 
     // Write time state
-    header->time_offset = static_cast<uint32_t>(offset);
-    SaveStateTime* time_section = reinterpret_cast<SaveStateTime*>(ptr + offset);
-    time_section->total_cycles = inst->time_state.total_cycles;
-    time_section->emu_time_us = inst->time_state.emu_time_us;
-    time_section->cycles_per_ms = inst->time_state.cycles_per_ms;
-    time_section->_pad = 0;
+    header.time_offset = static_cast<uint32_t>(offset);
+    SaveStateTime time_section{};
+    time_section.total_cycles = inst->time_state.total_cycles;
+    time_section.emu_time_us = inst->time_state.emu_time_us;
+    time_section.cycles_per_ms = inst->time_state.cycles_per_ms;
+    time_section._pad = 0;
+    std::memcpy(ptr + offset, &time_section, sizeof(time_section));
     offset += sizeof(SaveStateTime);
 
     // Write CPU state
-    header->cpu_offset = static_cast<uint32_t>(offset);
-    SaveStateCPU* cpu_section = reinterpret_cast<SaveStateCPU*>(ptr + offset);
-    cpu_section->interrupt_flag = inst->machine ? (inst->machine->cpu.flags.interrupt ? 1 : 0) : 0;
-    cpu_section->halted = inst->machine ? (inst->machine->cpu.halted ? 1 : 0) : 0;
-    cpu_section->mode = 0;  // Real mode for now
-    cpu_section->_pad = 0;
-    std::memset(cpu_section->_reserved, 0, sizeof(cpu_section->_reserved));
+    header.cpu_offset = static_cast<uint32_t>(offset);
+    SaveStateCPU cpu_section{};
+    cpu_section.interrupt_flag = inst->machine ? (inst->machine->cpu.flags.interrupt ? 1 : 0) : 0;
+    cpu_section.halted = inst->machine ? (inst->machine->cpu.halted ? 1 : 0) : 0;
+    cpu_section.mode = 0;  // Real mode for now
+    cpu_section._pad = 0;
+    std::memset(cpu_section._reserved, 0, sizeof(cpu_section._reserved));
+    std::memcpy(ptr + offset, &cpu_section, sizeof(cpu_section));
     offset += sizeof(SaveStateCPU);
 
     // Write PIC state (CRITICAL for TLA+ compliance)
-    header->pic_offset = static_cast<uint32_t>(offset);
-    SaveStatePIC* pic_section = reinterpret_cast<SaveStatePIC*>(ptr + offset);
-    pic_section->pics[0] = inst->pics[0];
-    pic_section->pics[1] = inst->pics[1];
+    header.pic_offset = static_cast<uint32_t>(offset);
+    SaveStatePIC pic_section{};
+    pic_section.pics[0] = inst->pics[0];
+    pic_section.pics[1] = inst->pics[1];
+    std::memcpy(ptr + offset, &pic_section, sizeof(pic_section));
     offset += sizeof(SaveStatePIC);
 
     // Write DMA state (portable serialization)
-    header->dma_offset = static_cast<uint32_t>(offset);
+    header.dma_offset = static_cast<uint32_t>(offset);
     for (int i = 0; i < 8; ++i) {
         serialize_dma_channel(ptr + offset, inst->dma[i]);
         offset += WIRE_DMA_CHANNEL_SIZE;
     }
 
     // Write event queue (CRITICAL for TLA+ compliance - event queue MUST be serialized)
-    header->event_queue_offset = static_cast<uint32_t>(offset);
-    SaveStateEventQueueHeader* eq_header = reinterpret_cast<SaveStateEventQueueHeader*>(ptr + offset);
-    eq_header->event_count = static_cast<uint32_t>(inst->event_queue.event_count);
-    eq_header->next_event_id = inst->event_queue.next_event_id;
+    header.event_queue_offset = static_cast<uint32_t>(offset);
+    SaveStateEventQueueHeader eq_header{};
+    eq_header.event_count = static_cast<uint32_t>(inst->event_queue.event_count);
+    eq_header.next_event_id = inst->event_queue.next_event_id;
+    std::memcpy(ptr + offset, &eq_header, sizeof(eq_header));
     offset += sizeof(SaveStateEventQueueHeader);
 
     // Write events
@@ -1710,13 +1742,14 @@ legends_error_t legends_save_state(
     }
 
     // Write input state (unified queue with portable serialization)
-    header->input_offset = static_cast<uint32_t>(offset);
-    SaveStateInputHeader* input_header = reinterpret_cast<SaveStateInputHeader*>(ptr + offset);
+    header.input_offset = static_cast<uint32_t>(offset);
+    SaveStateInputHeader input_hdr{};
     size_t input_count = inst->input_state.size();
-    input_header->event_count = static_cast<uint32_t>(input_count);
-    input_header->next_sequence_lo = static_cast<uint32_t>(inst->input_state.next_sequence & 0xFFFFFFFF);
-    input_header->next_sequence_hi = static_cast<uint32_t>(inst->input_state.next_sequence >> 32);
-    input_header->_reserved = 0;
+    input_hdr.event_count = static_cast<uint32_t>(input_count);
+    input_hdr.next_sequence_lo = static_cast<uint32_t>(inst->input_state.next_sequence & 0xFFFFFFFF);
+    input_hdr.next_sequence_hi = static_cast<uint32_t>(inst->input_state.next_sequence >> 32);
+    input_hdr._reserved = 0;
+    std::memcpy(ptr + offset, &input_hdr, sizeof(input_hdr));
     offset += sizeof(SaveStateInputHeader);
 
     // Write unified input events with portable serialization
@@ -1727,22 +1760,23 @@ legends_error_t legends_save_state(
     }
 
     // Write frame state
-    header->frame_offset = static_cast<uint32_t>(offset);
-    SaveStateFrameHeader* frame_header = reinterpret_cast<SaveStateFrameHeader*>(ptr + offset);
-    frame_header->is_text_mode = inst->frame_state.is_text_mode ? 1 : 0;
-    frame_header->columns = inst->frame_state.columns;
-    frame_header->rows = inst->frame_state.rows;
-    frame_header->cursor_x = inst->frame_state.cursor_x;
-    frame_header->cursor_y = inst->frame_state.cursor_y;
-    frame_header->cursor_visible = inst->frame_state.cursor_visible ? 1 : 0;
-    frame_header->active_page = inst->frame_state.active_page;
-    frame_header->_pad = 0;
-    frame_header->gfx_width = inst->frame_state.gfx_width;
-    frame_header->gfx_height = inst->frame_state.gfx_height;
+    header.frame_offset = static_cast<uint32_t>(offset);
+    SaveStateFrameHeader frame_hdr{};
+    frame_hdr.is_text_mode = inst->frame_state.is_text_mode ? 1 : 0;
+    frame_hdr.columns = inst->frame_state.columns;
+    frame_hdr.rows = inst->frame_state.rows;
+    frame_hdr.cursor_x = inst->frame_state.cursor_x;
+    frame_hdr.cursor_y = inst->frame_state.cursor_y;
+    frame_hdr.cursor_visible = inst->frame_state.cursor_visible ? 1 : 0;
+    frame_hdr.active_page = inst->frame_state.active_page;
+    frame_hdr._pad = 0;
+    frame_hdr.gfx_width = inst->frame_state.gfx_width;
+    frame_hdr.gfx_height = inst->frame_state.gfx_height;
     size_t text_size = inst->frame_state.text_cell_count() * sizeof(uint16_t);
     size_t pixels_size = inst->frame_state.indexed_pixels.size();
-    frame_header->text_buffer_size = static_cast<uint32_t>(text_size);
-    frame_header->indexed_pixels_size = static_cast<uint32_t>(pixels_size);
+    frame_hdr.text_buffer_size = static_cast<uint32_t>(text_size);
+    frame_hdr.indexed_pixels_size = static_cast<uint32_t>(pixels_size);
+    std::memcpy(ptr + offset, &frame_hdr, sizeof(frame_hdr));
     offset += sizeof(SaveStateFrameHeader);
 
     // Write text buffer
@@ -1766,7 +1800,7 @@ legends_error_t legends_save_state(
             return LEGENDS_ERR_BUFFER_TOO_SMALL;
         }
 
-        header->engine_offset = static_cast<uint32_t>(offset);
+        header.engine_offset = static_cast<uint32_t>(offset);
 
         size_t actual_engine_size = 0;
         auto engine_err = dosbox_lib_save_state(
@@ -1794,18 +1828,21 @@ legends_error_t legends_save_state(
 
         // Use actual size written, not pre-computed size
         // This ensures header and checksum match actual data
-        header->engine_size = static_cast<uint32_t>(actual_engine_size);
+        header.engine_size = static_cast<uint32_t>(actual_engine_size);
         offset += actual_engine_size;
     } else {
-        header->engine_offset = 0;
-        header->engine_size = 0;
+        header.engine_offset = 0;
+        header.engine_size = 0;
     }
 
     // Calculate checksum based on actual written data (offset),
     // not pre-computed required_size, in case actual sizes differed
     const size_t actual_data_size = offset - sizeof(SaveStateHeader);
-    header->total_size = static_cast<uint32_t>(offset);  // Update to actual total
-    header->checksum = crc32(data_start, actual_data_size);
+    header.total_size = static_cast<uint32_t>(offset);
+    header.checksum = crc32(data_start, actual_data_size);
+
+    // Write header to buffer (memcpy avoids unaligned access on caller buffer)
+    std::memcpy(ptr, &header, sizeof(header));
 
     // Update size_out to actual written size
     *size_out = offset;
@@ -1864,21 +1901,32 @@ static legends_error_t load_state_v2_legacy(
     // V2 Phase 1: Validate ALL section data (no global mutations)
     // ─────────────────────────────────────────────────────────────────────────
 
-    const SaveStateTime* time_section = reinterpret_cast<const SaveStateTime*>(ptr + header->time_offset);
-    const SaveStateCPU* cpu_section = reinterpret_cast<const SaveStateCPU*>(ptr + header->cpu_offset);
-    const SaveStatePIC* pic_section = reinterpret_cast<const SaveStatePIC*>(ptr + header->pic_offset);
+    // memcpy to aligned locals to avoid UB on caller buffer (H9)
+    SaveStateTime time_v2_local;
+    std::memcpy(&time_v2_local, ptr + header->time_offset, sizeof(time_v2_local));
+    const SaveStateTime* time_section = &time_v2_local;
+
+    SaveStateCPU cpu_v2_local;
+    std::memcpy(&cpu_v2_local, ptr + header->cpu_offset, sizeof(cpu_v2_local));
+    const SaveStateCPU* cpu_section = &cpu_v2_local;
+
+    SaveStatePIC pic_v2_local;
+    std::memcpy(&pic_v2_local, ptr + header->pic_offset, sizeof(pic_v2_local));
+    const SaveStatePIC* pic_section = &pic_v2_local;
 
     // Validate event queue
-    const SaveStateEventQueueHeader* eq_header =
-        reinterpret_cast<const SaveStateEventQueueHeader*>(ptr + header->event_queue_offset);
+    SaveStateEventQueueHeader eq_v2_local;
+    std::memcpy(&eq_v2_local, ptr + header->event_queue_offset, sizeof(eq_v2_local));
+    const SaveStateEventQueueHeader* eq_header = &eq_v2_local;
     VALIDATE_COUNT_MAX(eq_header->event_count, EventQueueState::MAX_EVENTS, "V2: event_count");
     size_t v2_events_data_size = static_cast<size_t>(eq_header->event_count) * sizeof(ScheduledEvent);
     size_t eq_data_offset = header->event_queue_offset + sizeof(SaveStateEventQueueHeader);
     VALIDATE_DATA_BOUNDS(eq_data_offset, v2_events_data_size, verified_size);
 
     // Validate V2 input
-    const SaveStateInputHeader_V2* input_header_v2 =
-        reinterpret_cast<const SaveStateInputHeader_V2*>(ptr + header->input_offset);
+    SaveStateInputHeader_V2 input_v2_local;
+    std::memcpy(&input_v2_local, ptr + header->input_offset, sizeof(input_v2_local));
+    const SaveStateInputHeader_V2* input_header_v2 = &input_v2_local;
     VALIDATE_COUNT_MAX(input_header_v2->key_queue_size, V2_MAX_KEY_EVENTS, "V2: key_queue_size");
     VALIDATE_COUNT_MAX(input_header_v2->mouse_queue_size, V2_MAX_MOUSE_EVENTS, "V2: mouse_queue_size");
     size_t total_events = input_header_v2->key_queue_size + input_header_v2->mouse_queue_size;
@@ -1894,8 +1942,9 @@ static legends_error_t load_state_v2_legacy(
     VALIDATE_DATA_BOUNDS(input_data_offset + key_data_size, mouse_data_size, verified_size);
 
     // Validate frame header fields (matching V3 sanity checks)
-    const SaveStateFrameHeader* frame_header =
-        reinterpret_cast<const SaveStateFrameHeader*>(ptr + header->frame_offset);
+    SaveStateFrameHeader frame_v2_local;
+    std::memcpy(&frame_v2_local, ptr + header->frame_offset, sizeof(frame_v2_local));
+    const SaveStateFrameHeader* frame_header = &frame_v2_local;
     if (frame_header->is_text_mode > 1) {
         LEGENDS_ERROR(LEGENDS_ERR_INVALID_STATE, "V2: invalid bool value for is_text_mode");
     }
@@ -2047,6 +2096,7 @@ legends_error_t legends_load_state(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(buffer != nullptr, LEGENDS_ERR_NULL_POINTER);
 
 
@@ -2055,7 +2105,11 @@ legends_error_t legends_load_state(
     }
 
     const uint8_t* ptr = static_cast<const uint8_t*>(buffer);
-    const SaveStateHeader* header = reinterpret_cast<const SaveStateHeader*>(ptr);
+
+    // memcpy header to aligned local to avoid UB on caller buffer (H9)
+    SaveStateHeader header_local;
+    std::memcpy(&header_local, ptr, sizeof(header_local));
+    const SaveStateHeader* header = &header_local;
 
     // Validate magic
     if (header->magic != SAVESTATE_MAGIC) {
@@ -2118,20 +2172,32 @@ legends_error_t legends_load_state(
     // All reads below are from the save state buffer only.
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Read section headers (section bounds validated above)
-    const SaveStateTime* time_section = reinterpret_cast<const SaveStateTime*>(ptr + header->time_offset);
-    const SaveStateCPU* cpu_section = reinterpret_cast<const SaveStateCPU*>(ptr + header->cpu_offset);
-    const SaveStatePIC* pic_section = reinterpret_cast<const SaveStatePIC*>(ptr + header->pic_offset);
+    // Read section headers via memcpy to avoid unaligned access (H9)
+    SaveStateTime time_local;
+    std::memcpy(&time_local, ptr + header->time_offset, sizeof(time_local));
+    const SaveStateTime* time_section = &time_local;
+
+    SaveStateCPU cpu_local;
+    std::memcpy(&cpu_local, ptr + header->cpu_offset, sizeof(cpu_local));
+    const SaveStateCPU* cpu_section = &cpu_local;
+
+    SaveStatePIC pic_local;
+    std::memcpy(&pic_local, ptr + header->pic_offset, sizeof(pic_local));
+    const SaveStatePIC* pic_section = &pic_local;
 
     // Validate event queue
-    const SaveStateEventQueueHeader* eq_header = reinterpret_cast<const SaveStateEventQueueHeader*>(ptr + header->event_queue_offset);
+    SaveStateEventQueueHeader eq_local;
+    std::memcpy(&eq_local, ptr + header->event_queue_offset, sizeof(eq_local));
+    const SaveStateEventQueueHeader* eq_header = &eq_local;
     VALIDATE_COUNT_MAX(eq_header->event_count, EventQueueState::MAX_EVENTS, "event_count");
     size_t events_data_size = static_cast<size_t>(eq_header->event_count) * sizeof(ScheduledEvent);
     size_t eq_data_offset = header->event_queue_offset + sizeof(SaveStateEventQueueHeader);
     VALIDATE_DATA_BOUNDS(eq_data_offset, events_data_size, verified_size);
 
     // Validate input state
-    const SaveStateInputHeader* input_header = reinterpret_cast<const SaveStateInputHeader*>(ptr + header->input_offset);
+    SaveStateInputHeader input_local;
+    std::memcpy(&input_local, ptr + header->input_offset, sizeof(input_local));
+    const SaveStateInputHeader* input_header = &input_local;
     VALIDATE_COUNT_MAX(input_header->event_count, InputState::EFFECTIVE_CAPACITY, "input_event_count");
     size_t input_data_size = static_cast<size_t>(input_header->event_count) * WIRE_INPUT_EVENT_SIZE;
     size_t input_data_offset = header->input_offset + sizeof(SaveStateInputHeader);
@@ -2150,7 +2216,9 @@ legends_error_t legends_load_state(
     }
 
     // Validate frame state
-    const SaveStateFrameHeader* frame_header = reinterpret_cast<const SaveStateFrameHeader*>(ptr + header->frame_offset);
+    SaveStateFrameHeader frame_local;
+    std::memcpy(&frame_local, ptr + header->frame_offset, sizeof(frame_local));
+    const SaveStateFrameHeader* frame_header = &frame_local;
     constexpr size_t max_text_buffer_bytes = FrameState::MAX_TEXT_CELLS * sizeof(uint16_t);
     VALIDATE_COUNT_MAX(frame_header->text_buffer_size, max_text_buffer_bytes, "text_buffer_size");
     VALIDATE_COUNT_MAX(frame_header->indexed_pixels_size, MAX_INDEXED_PIXELS_SIZE, "indexed_pixels_size");

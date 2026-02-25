@@ -48,7 +48,11 @@ struct LogState {
 
     void log(int level, const char* message) const {
         if (callback != nullptr && message != nullptr) {
-            callback(level, message, userdata);
+            try {
+                callback(level, message, userdata);
+            } catch (...) {
+                // Cannot propagate exceptions across C ABI boundary
+            }
         }
     }
 

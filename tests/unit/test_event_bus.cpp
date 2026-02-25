@@ -463,7 +463,7 @@ TEST_F(ExternalEventBridgeTest, RejectsNullCallback) {
 TEST_F(InternalEventBusTest, RejectsNullHandler) {
     // Subscribing with empty handler violates gsl_Expects precondition
     EXPECT_THROW(
-        bus.subscribe(InternalEventHandler{}),
+        (void)bus.subscribe(InternalEventHandler{}),
         legends::gsl::fail_fast
     );
 }

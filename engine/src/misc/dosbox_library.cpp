@@ -31,6 +31,11 @@ namespace {
 // Instance State
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Handle sentinel — a recognizable non-null constant that is unlikely to be
+// a valid heap or stack pointer. Validation checks for this value instead of
+// just != nullptr, which catches stale/random pointers. (M8)
+constexpr uintptr_t HANDLE_SENTINEL = 0x444F5358; // "DOSX"
+
 // Single instance enforcement
 std::atomic<bool> g_instance_exists{false};
 
@@ -42,6 +47,11 @@ std::unique_ptr<dosbox::DOSBoxContext> g_context;
 
 // Configuration stored from create
 dosbox_lib_config_t g_config;
+
+// Deep copies of config strings (M9) — g_config.config_path and
+// g_config.working_dir point into these owned buffers after deep-copy.
+std::string g_config_path_owned;
+std::string g_working_dir_owned;
 
 // Last error message
 std::string g_last_error;
@@ -94,6 +104,11 @@ inline uint64_t ms_to_cycles(uint32_t ms) {
 
 #define LIB_REQUIRE(cond, err) \
     do { if (!(cond)) return (err); } while(0)
+
+// Validate handle matches the sentinel value (M8)
+#define LIB_VALIDATE_HANDLE(h) \
+    LIB_REQUIRE((h) == reinterpret_cast<dosbox_lib_handle_t>(HANDLE_SENTINEL), \
+                DOSBOX_LIB_ERR_INVALID_HANDLE)
 
 #define LIB_CHECK_THREAD() \
     do { \
@@ -211,6 +226,20 @@ dosbox_lib_error_t dosbox_lib_create(
             return DOSBOX_LIB_ERR_VERSION_MISMATCH;
         }
         g_config = *config;
+
+        // Deep-copy string fields so caller can free originals (M9)
+        if (g_config.config_path) {
+            g_config_path_owned = g_config.config_path;
+            g_config.config_path = g_config_path_owned.c_str();
+        } else {
+            g_config_path_owned.clear();
+        }
+        if (g_config.working_dir) {
+            g_working_dir_owned = g_config.working_dir;
+            g_config.working_dir = g_working_dir_owned.c_str();
+        } else {
+            g_working_dir_owned.clear();
+        }
     } else {
         // Defaults
         g_config = dosbox_lib_config_t{};
@@ -236,8 +265,8 @@ dosbox_lib_error_t dosbox_lib_create(
         // Reset mouse state (M5: prevent leaking between instances)
         g_mouse_last_buttons = 0;
 
-        // Return sentinel handle (actual pointer not exposed)
-        *handle_out = reinterpret_cast<dosbox_lib_handle_t>(static_cast<uintptr_t>(1));
+        // Return sentinel handle (actual pointer not exposed) (M8)
+        *handle_out = reinterpret_cast<dosbox_lib_handle_t>(HANDLE_SENTINEL);
         g_last_error.clear();
 
         LIB_LOG_INFO("DOSBox-X library instance created");
@@ -252,7 +281,7 @@ dosbox_lib_error_t dosbox_lib_create(
 }
 
 dosbox_lib_error_t dosbox_lib_init(dosbox_lib_handle_t handle) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -290,6 +319,10 @@ dosbox_lib_error_t dosbox_lib_destroy(dosbox_lib_handle_t handle) {
     if (handle == nullptr) {
         return DOSBOX_LIB_OK;
     }
+    // Validate sentinel (M8) — reject random non-null pointers
+    if (handle != reinterpret_cast<dosbox_lib_handle_t>(HANDLE_SENTINEL)) {
+        return DOSBOX_LIB_ERR_INVALID_HANDLE;
+    }
 
     // M6: Check thread affinity (same pattern as other thread-checked functions)
     LIB_CHECK_THREAD();
@@ -308,12 +341,14 @@ dosbox_lib_error_t dosbox_lib_destroy(dosbox_lib_handle_t handle) {
     g_owner_thread_id = std::thread::id{};
     g_last_error.clear();
     g_log_state.reset();
+    g_config_path_owned.clear();
+    g_working_dir_owned.clear();
 
     return DOSBOX_LIB_OK;
 }
 
 dosbox_lib_error_t dosbox_lib_reset(dosbox_lib_handle_t handle) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -356,7 +391,7 @@ dosbox_lib_error_t dosbox_lib_step_cycles(
     uint64_t cycles,
     dosbox_lib_step_result_t* result_out
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -422,7 +457,7 @@ dosbox_lib_error_t dosbox_lib_step_ms(
     uint32_t ms,
     dosbox_lib_step_result_t* result_out
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
@@ -437,7 +472,7 @@ dosbox_lib_error_t dosbox_lib_get_emu_time(
     dosbox_lib_handle_t handle,
     uint64_t* time_us_out
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(time_us_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -450,7 +485,7 @@ dosbox_lib_error_t dosbox_lib_get_total_cycles(
     dosbox_lib_handle_t handle,
     uint64_t* cycles_out
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(cycles_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -467,7 +502,7 @@ dosbox_lib_error_t dosbox_lib_get_context_ptr(
     dosbox_lib_handle_t handle,
     void** ctx_out
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_REQUIRE(ctx_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
@@ -483,7 +518,7 @@ dosbox_lib_error_t dosbox_lib_get_state_hash(
     dosbox_lib_handle_t handle,
     uint8_t hash_out[32]
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(hash_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -511,7 +546,7 @@ dosbox_lib_error_t dosbox_lib_save_state(
     size_t buffer_size,
     size_t* size_out
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(size_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -769,7 +804,7 @@ dosbox_lib_error_t dosbox_lib_load_state(
     const void* buffer,
     size_t buffer_size
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(buffer != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -1103,7 +1138,7 @@ dosbox_lib_error_t dosbox_lib_set_log_callback(
     dosbox_lib_log_callback_t callback,
     void* userdata
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
@@ -1122,7 +1157,7 @@ dosbox_lib_error_t dosbox_lib_inject_key(
     int pressed,
     int extended
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -1163,7 +1198,7 @@ dosbox_lib_error_t dosbox_lib_inject_mouse(
     int16_t delta_y,
     uint8_t buttons
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -1236,7 +1271,7 @@ dosbox_lib_error_t dosbox_lib_get_pic_state(
     dosbox_lib_handle_t handle,
     dosbox_lib_pic_state_t* state_out
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(state_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -1255,6 +1290,32 @@ dosbox_lib_error_t dosbox_lib_get_pic_state(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// VGA/Display State API (H8)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_get_display_info(
+    dosbox_lib_handle_t handle,
+    dosbox_lib_display_info_t* info_out
+) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(info_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    const auto& vga = g_context->vga;
+    info_out->width = vga.width;
+    info_out->height = vga.height;
+    info_out->bpp = vga.bpp;
+    info_out->is_text_mode = vga.text_mode ? 1 : 0;
+    // Default text dimensions — DOSBox-X text mode is 80x25 unless changed
+    info_out->text_columns = 80;
+    info_out->text_rows = 25;
+
+    return DOSBOX_LIB_OK;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Memory Access API (Phase A)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1264,7 +1325,7 @@ dosbox_lib_error_t dosbox_lib_read_memory(
     void* buffer,
     size_t size
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(buffer != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
@@ -1289,7 +1350,7 @@ dosbox_lib_error_t dosbox_lib_write_memory(
     uint32_t address,
     size_t size
 ) {
-    LIB_REQUIRE(handle != nullptr, DOSBOX_LIB_ERR_NULL_HANDLE);
+    LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(buffer != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);

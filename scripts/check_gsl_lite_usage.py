@@ -204,7 +204,7 @@ def check_directory(root: Path) -> int:
         files.extend(root.glob(pattern))
 
     # Exclude third-party/vendor directories
-    exclude_dirs = ['build', 'cmake-build', 'third_party', 'vendor', 'external']
+    exclude_dirs = ['build', 'build_test', 'cmake-build', 'third_party', 'vendor', 'external', '_deps']
     files = [
         f for f in files
         if not any(excl in f.parts for excl in exclude_dirs)

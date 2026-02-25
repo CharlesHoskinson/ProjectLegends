@@ -53,6 +53,12 @@ void E_Exit(const char* format, ...) {
 Bitu PIC_IRQCheck = 0;
 Bitu PIC_Ticks = 0;
 
+bool PIC_RunQueue(void) {
+    // Stub: no PIC event queue in library mode yet.
+    // When real PIC hardware is integrated, this will process pending events.
+    return false;
+}
+
 /* ── GFX / UI ─────────────────────────────────────────────────────── */
 
 void GFX_SetTitle(int32_t, int, Bits, bool) { }

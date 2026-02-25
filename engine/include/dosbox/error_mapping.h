@@ -68,6 +68,7 @@ static inline const char* dosbox_lib_error_name(dosbox_lib_error_t err) {
         case DOSBOX_LIB_ERR_NOT_SUPPORTED:    return "DOSBOX_LIB_ERR_NOT_SUPPORTED";
         case DOSBOX_LIB_ERR_INTERNAL:         return "DOSBOX_LIB_ERR_INTERNAL";
         case DOSBOX_LIB_ERR_WRONG_THREAD:     return "DOSBOX_LIB_ERR_WRONG_THREAD";
+        case DOSBOX_LIB_ERR_INVALID_HANDLE:  return "DOSBOX_LIB_ERR_INVALID_HANDLE";
         default:                              return "DOSBOX_LIB_ERR_UNKNOWN";
     }
 }

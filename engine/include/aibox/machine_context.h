@@ -29,7 +29,8 @@
 
 namespace aibox {
 
-// Forward declarations for subsystems not yet implemented
+// Forward declarations for subsystem types used in MachineContext interface.
+// These are intentionally unimplemented — initialization delegates to DOSBox-X engine bridge.
 class VgaContext;
 class DosKernel;
 class PicController;

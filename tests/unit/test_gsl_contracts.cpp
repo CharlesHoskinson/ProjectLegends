@@ -66,12 +66,12 @@ TEST(GslContractTest, VgaPaletteExportRgbNullThrows) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 TEST(GslContractTest, Cp437ToUtf8NullWithLengthThrows) {
-    EXPECT_THROW(llm::cp437_to_utf8(nullptr, 10), legends::gsl::fail_fast);
+    EXPECT_THROW((void)llm::cp437_to_utf8(nullptr, 10), legends::gsl::fail_fast);
 }
 
 TEST(GslContractTest, SerializeTextScreenNullDataThrows) {
     EXPECT_THROW(
-        llm::serialize_text_screen(nullptr, 80, 25, 0, 0, false),
+        (void)llm::serialize_text_screen(nullptr, 80, 25, 0, 0, false),
         legends::gsl::fail_fast
     );
 }
@@ -87,11 +87,12 @@ TEST(GslContractTest, EncodeUtf8NullOutputThrows) {
 TEST(GslContractTest, FailFastIsThrowable) {
     // Verify that legends::gsl::fail_fast is a catchable exception type,
     // confirming gsl_CONFIG_CONTRACT_VIOLATION_THROWS is active.
+    bool caught = false;
     try {
         throw legends::gsl::fail_fast("test");
     } catch (const legends::gsl::fail_fast& e) {
         EXPECT_NE(std::string(e.what()).find("test"), std::string::npos);
-        return;
+        caught = true;
     }
-    FAIL() << "legends::gsl::fail_fast should be catchable";
+    EXPECT_TRUE(caught) << "legends::gsl::fail_fast should be catchable";
 }

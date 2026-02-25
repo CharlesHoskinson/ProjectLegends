@@ -66,6 +66,7 @@ typedef int32_t dosbox_lib_error_t;
 #define DOSBOX_LIB_ERR_NOT_SUPPORTED     -12
 #define DOSBOX_LIB_ERR_INTERNAL          -13
 #define DOSBOX_LIB_ERR_WRONG_THREAD      -14
+#define DOSBOX_LIB_ERR_INVALID_HANDLE    -15
 
 /* =========================================================================
  * HANDLE TYPE
@@ -466,6 +467,34 @@ typedef struct {
 dosbox_lib_error_t dosbox_lib_get_pic_state(
     dosbox_lib_handle_t handle,
     dosbox_lib_pic_state_t* state_out
+);
+
+/* =========================================================================
+ * VGA/DISPLAY STATE API (H8)
+ * ========================================================================= */
+
+/**
+ * @brief Display mode information from the engine.
+ */
+typedef struct {
+    uint16_t width;          /**< Display width in pixels */
+    uint16_t height;         /**< Display height in pixels */
+    uint8_t  bpp;            /**< Bits per pixel */
+    uint8_t  is_text_mode;   /**< 1 if text mode, 0 if graphics */
+    uint8_t  text_columns;   /**< Text mode columns (typically 80) */
+    uint8_t  text_rows;      /**< Text mode rows (typically 25) */
+} dosbox_lib_display_info_t;
+
+/**
+ * @brief Get current display mode info from the engine.
+ *
+ * @param handle Valid handle
+ * @param info_out Receives display info
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_get_display_info(
+    dosbox_lib_handle_t handle,
+    dosbox_lib_display_info_t* info_out
 );
 
 #ifdef __cplusplus
