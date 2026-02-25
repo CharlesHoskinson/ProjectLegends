@@ -20,14 +20,13 @@
 class DosboxxEmbedTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Ensure no instance exists at start
-        // (previous test may have left one)
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        // Best-effort cleanup: null handle is a no-op.
+        // Tests must destroy instances with the real handle.
+        legends_destroy(nullptr);
     }
 
     void TearDown() override {
-        // Clean up any instance that was created
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_destroy(nullptr);
     }
 };
 
@@ -229,16 +228,16 @@ TEST_F(DosboxxEmbedTest, DestroyNullIsNoOp) {
     EXPECT_EQ(err, LEGENDS_OK);
 }
 
-TEST_F(DosboxxEmbedTest, DestroyTwiceIsOk) {
+TEST_F(DosboxxEmbedTest, DestroyTwiceReturnsError) {
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
     auto err1 = legends_destroy(handle);
     EXPECT_EQ(err1, LEGENDS_OK);
 
-    // Second destroy should also be OK (idempotent)
+    // Second destroy returns error (handle is now invalid)
     auto err2 = legends_destroy(handle);
-    EXPECT_EQ(err2, LEGENDS_OK);
+    EXPECT_EQ(err2, LEGENDS_ERR_NULL_HANDLE);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -388,7 +387,7 @@ protected:
 
     void SetUp() override {
         // Clean up any previous instance
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
 
         auto err = legends_create(nullptr, &handle_);
         ASSERT_EQ(err, LEGENDS_OK);
@@ -553,7 +552,7 @@ protected:
 
     void SetUp() override {
         // Clean up any previous instance
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
 
         auto err = legends_create(nullptr, &handle_);
         ASSERT_EQ(err, LEGENDS_OK);
@@ -756,7 +755,7 @@ protected:
 
     void SetUp() override {
         // Clean up any previous instance
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
 
         auto err = legends_create(nullptr, &handle_);
         ASSERT_EQ(err, LEGENDS_OK);
@@ -953,7 +952,7 @@ protected:
 
     void SetUp() override {
         // Clean up any previous instance
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
 
         auto err = legends_create(nullptr, &handle_);
         ASSERT_EQ(err, LEGENDS_OK);
@@ -1394,7 +1393,7 @@ protected:
 
     void SetUp() override {
         // Clean up any previous instance
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
 
         auto err = legends_create(nullptr, &handle_);
         ASSERT_EQ(err, LEGENDS_OK);
@@ -1543,7 +1542,7 @@ protected:
     legends_handle handle_ = nullptr;
 
     void SetUp() override {
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
         auto err = legends_create(nullptr, &handle_);
         ASSERT_EQ(err, LEGENDS_OK);
     }
@@ -1742,7 +1741,7 @@ protected:
 
     void SetUp() override {
         // Clean up any previous instance
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
 
         auto err = legends_create(nullptr, &handle_);
         ASSERT_EQ(err, LEGENDS_OK);
@@ -2191,7 +2190,7 @@ protected:
     legends_handle handle_ = nullptr;
 
     void SetUp() override {
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
         auto err = legends_create(nullptr, &handle_);
         ASSERT_EQ(err, LEGENDS_OK);
     }
@@ -2321,7 +2320,7 @@ protected:
     legends_handle handle_ = nullptr;
 
     void SetUp() override {
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
         auto err = legends_create(nullptr, &handle_);
         ASSERT_EQ(err, LEGENDS_OK);
     }

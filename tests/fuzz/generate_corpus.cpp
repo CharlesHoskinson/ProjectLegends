@@ -36,7 +36,7 @@ static void generate_corpus(const char* output_dir) {
     legends_handle handle = nullptr;
 
     // Clean up any existing instance
-    legends_destroy(reinterpret_cast<legends_handle>(1));
+    legends_force_destroy();
 
     auto err = legends_create(nullptr, &handle);
     if (err != LEGENDS_OK) {

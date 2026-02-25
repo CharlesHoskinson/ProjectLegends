@@ -17,7 +17,7 @@ protected:
     void SetUp() override {
         pal::Platform::shutdown();
         pal::Platform::initialize(pal::Backend::Headless);
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
     }
 
     void TearDown() override {

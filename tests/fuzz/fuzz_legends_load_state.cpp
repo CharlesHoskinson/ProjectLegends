@@ -27,7 +27,7 @@ static bool g_initialized = false;
 static void ensure_initialized() {
     if (!g_initialized) {
         // First destroy any existing instance
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
 
         auto err = legends_create(nullptr, &g_handle);
         if (err != LEGENDS_OK) {

@@ -503,6 +503,7 @@ dosbox_lib_error_t dosbox_lib_get_context_ptr(
     void** ctx_out
 ) {
     LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
     LIB_REQUIRE(ctx_out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
@@ -1335,7 +1336,7 @@ dosbox_lib_error_t dosbox_lib_read_memory(
     if (g_context->memory.base == nullptr || size == 0) {
         return DOSBOX_LIB_ERR_INVALID_STATE;
     }
-    if (static_cast<uint64_t>(address) + size > g_context->memory.size) {
+    if (size > g_context->memory.size || address > g_context->memory.size - size) {
         g_last_error = "Memory read out of bounds";
         return DOSBOX_LIB_ERR_INVALID_STATE;
     }
@@ -1359,7 +1360,7 @@ dosbox_lib_error_t dosbox_lib_write_memory(
     if (g_context->memory.base == nullptr || size == 0) {
         return DOSBOX_LIB_ERR_INVALID_STATE;
     }
-    if (static_cast<uint64_t>(address) + size > g_context->memory.size) {
+    if (size > g_context->memory.size || address > g_context->memory.size - size) {
         g_last_error = "Memory write out of bounds";
         return DOSBOX_LIB_ERR_INVALID_STATE;
     }

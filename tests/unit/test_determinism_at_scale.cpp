@@ -23,7 +23,7 @@ protected:
     void SetUp() override {
         pal::Platform::shutdown();
         pal::Platform::initialize(pal::Backend::Headless);
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
     }
 
     void TearDown() override {
@@ -85,7 +85,7 @@ TEST_F(DeterminismAtScaleTest, TwoRunsProduceSameHash) {
     // Must re-init platform between instances (single-instance V1)
     pal::Platform::shutdown();
     pal::Platform::initialize(pal::Backend::Headless);
-    legends_destroy(reinterpret_cast<legends_handle>(1));
+    legends_force_destroy();
 
     // Run 2 (identical)
     auto h2 = create_instance();
@@ -111,7 +111,7 @@ TEST_F(DeterminismAtScaleTest, MidpointSaveLoadMatchesStraightRun) {
     // Split run: 50K, save, load, 50K more
     pal::Platform::shutdown();
     pal::Platform::initialize(pal::Backend::Headless);
-    legends_destroy(reinterpret_cast<legends_handle>(1));
+    legends_force_destroy();
 
     auto h2 = create_instance();
     legends_step_cycles(h2, 50000, nullptr);
@@ -183,7 +183,7 @@ TEST_F(DeterminismAtScaleTest, InputReplayIsDeterministic) {
     // Re-init for second run
     pal::Platform::shutdown();
     pal::Platform::initialize(pal::Backend::Headless);
-    legends_destroy(reinterpret_cast<legends_handle>(1));
+    legends_force_destroy();
 
     auto hash2 = run_with_input();
 
@@ -206,7 +206,7 @@ TEST_F(DeterminismAtScaleTest, DifferentInputsProduceDifferentHashes) {
 
     pal::Platform::shutdown();
     pal::Platform::initialize(pal::Backend::Headless);
-    legends_destroy(reinterpret_cast<legends_handle>(1));
+    legends_force_destroy();
 
     // Run with key 'B'
     auto h2 = create_instance();

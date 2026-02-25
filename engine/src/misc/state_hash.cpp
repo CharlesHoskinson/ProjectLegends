@@ -298,8 +298,10 @@ Result<StateHash> get_state_hash(DOSBoxContext* ctx, HashMode mode) {
     // - VGA registers and VRAM
     // - All device states
     if (mode == HashMode::Full) {
-        const char* full_marker = "FULL_MODE";
-        builder.update(full_marker, std::strlen(full_marker));
+        if (ctx->memory.base != nullptr && ctx->memory.size > 0) {
+            builder.update(ctx->memory.base, ctx->memory.size);
+        }
+        // VGA and device state will be added in Phase B serialization
     }
 
     return Ok(builder.finalize());

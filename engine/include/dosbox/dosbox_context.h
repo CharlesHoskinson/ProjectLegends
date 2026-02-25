@@ -392,6 +392,47 @@ struct MixedFraction {
  * Full thread-safe access patterns will be implemented in future PRs.
  */
 struct MixerState {
+    MixerState() = default;
+    MixerState(const MixerState&) = delete;
+    MixerState& operator=(const MixerState&) = delete;
+
+    MixerState(MixerState&& o) noexcept
+        : freq(o.freq), blocksize(o.blocksize)
+        , mastervol{o.mastervol[0], o.mastervol[1]}
+        , recordvol{o.recordvol[0], o.recordvol[1]}
+        , work_in(o.work_in.load(std::memory_order_relaxed))
+        , work_out(o.work_out.load(std::memory_order_relaxed))
+        , work_wrap(o.work_wrap), pos(o.pos), done(o.done)
+        , samples_per_ms(o.samples_per_ms)
+        , samples_this_ms(o.samples_this_ms)
+        , samples_rendered(o.samples_rendered)
+        , enabled(o.enabled), nosound(o.nosound)
+        , swapstereo(o.swapstereo), sampleaccurate(o.sampleaccurate)
+        , prebuffer_wait(o.prebuffer_wait), mute(o.mute)
+        , prebuffer_samples(o.prebuffer_samples)
+        , sample_counter(o.sample_counter)
+        , start_pic_time(o.start_pic_time)
+    {}
+
+    MixerState& operator=(MixerState&& o) noexcept {
+        freq = o.freq; blocksize = o.blocksize;
+        mastervol[0] = o.mastervol[0]; mastervol[1] = o.mastervol[1];
+        recordvol[0] = o.recordvol[0]; recordvol[1] = o.recordvol[1];
+        work_in.store(o.work_in.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        work_out.store(o.work_out.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        work_wrap = o.work_wrap; pos = o.pos; done = o.done;
+        samples_per_ms = o.samples_per_ms;
+        samples_this_ms = o.samples_this_ms;
+        samples_rendered = o.samples_rendered;
+        enabled = o.enabled; nosound = o.nosound;
+        swapstereo = o.swapstereo; sampleaccurate = o.sampleaccurate;
+        prebuffer_wait = o.prebuffer_wait; mute = o.mute;
+        prebuffer_samples = o.prebuffer_samples;
+        sample_counter = o.sample_counter;
+        start_pic_time = o.start_pic_time;
+        return *this;
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Core Configuration (from mixer struct, lines 94-95)
     // Set during init, read-only during execution
@@ -413,8 +454,8 @@ struct MixerState {
     // [CALLBACK] marks fields read by audio callback thread.
     // ─────────────────────────────────────────────────────────────────────────
 
-    uint32_t work_in = 0;            ///< Write position (producer) [CALLBACK reads]
-    uint32_t work_out = 0;           ///< Read position (consumer) [CALLBACK writes]
+    std::atomic<uint32_t> work_in{0};   ///< Write position (producer) [CALLBACK reads]
+    std::atomic<uint32_t> work_out{0};  ///< Read position (consumer) [CALLBACK writes]
     uint32_t work_wrap = 0;          ///< Buffer wrap point
     uint32_t pos = 0;                ///< Current playback position
     uint32_t done = 0;               ///< Samples completed this frame
@@ -460,8 +501,8 @@ struct MixerState {
         blocksize = 1024;
         mastervol[0] = mastervol[1] = 1.0f;
         recordvol[0] = recordvol[1] = 1.0f;
-        work_in = 0;
-        work_out = 0;
+        work_in.store(0, std::memory_order_relaxed);
+        work_out.store(0, std::memory_order_relaxed);
         work_wrap = 0;
         pos = 0;
         done = 0;

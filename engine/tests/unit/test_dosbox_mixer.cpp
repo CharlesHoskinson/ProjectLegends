@@ -60,8 +60,8 @@ TEST(MixerStateTest, DefaultValues) {
     EXPECT_FLOAT_EQ(mixer.recordvol[1], 1.0f);
 
     // Ring buffer state
-    EXPECT_EQ(mixer.work_in, 0u);
-    EXPECT_EQ(mixer.work_out, 0u);
+    EXPECT_EQ(mixer.work_in.load(), 0u);
+    EXPECT_EQ(mixer.work_out.load(), 0u);
     EXPECT_EQ(mixer.work_wrap, 0u);
     EXPECT_EQ(mixer.pos, 0u);
     EXPECT_EQ(mixer.done, 0u);
@@ -97,8 +97,8 @@ TEST(MixerStateTest, Reset) {
     mixer.mastervol[1] = 0.8f;
     mixer.recordvol[0] = 0.3f;
     mixer.recordvol[1] = 0.7f;
-    mixer.work_in = 1000;
-    mixer.work_out = 500;
+    mixer.work_in.store(1000);
+    mixer.work_out.store(500);
     mixer.work_wrap = 4096;
     mixer.pos = 200;
     mixer.done = 100;
@@ -127,8 +127,8 @@ TEST(MixerStateTest, Reset) {
     EXPECT_FLOAT_EQ(mixer.mastervol[1], 1.0f);
     EXPECT_FLOAT_EQ(mixer.recordvol[0], 1.0f);
     EXPECT_FLOAT_EQ(mixer.recordvol[1], 1.0f);
-    EXPECT_EQ(mixer.work_in, 0u);
-    EXPECT_EQ(mixer.work_out, 0u);
+    EXPECT_EQ(mixer.work_in.load(), 0u);
+    EXPECT_EQ(mixer.work_out.load(), 0u);
     EXPECT_EQ(mixer.work_wrap, 0u);
     EXPECT_EQ(mixer.pos, 0u);
     EXPECT_EQ(mixer.done, 0u);
@@ -336,8 +336,8 @@ TEST(MixerHashTest, RingBufferStateAffectsHash) {
     auto hash1 = result1.value();
 
     // Change ring buffer state
-    ctx.mixer.work_in = 1000;
-    ctx.mixer.work_out = 500;
+    ctx.mixer.work_in.store(1000);
+    ctx.mixer.work_out.store(500);
 
     auto result2 = get_state_hash(HashMode::Fast);
     ASSERT_TRUE(result2.has_value());
@@ -398,7 +398,7 @@ TEST(ContextMixerTest, ResetClearsMixerState) {
 
     // Modify mixer state
     ctx.mixer.sample_counter = 100000;
-    ctx.mixer.work_in = 500;
+    ctx.mixer.work_in.store(500);
     ctx.mixer.mute = true;
 
     // Reset
@@ -406,7 +406,7 @@ TEST(ContextMixerTest, ResetClearsMixerState) {
 
     // Mixer state should be reset
     EXPECT_EQ(ctx.mixer.sample_counter, 0u);
-    EXPECT_EQ(ctx.mixer.work_in, 0u);
+    EXPECT_EQ(ctx.mixer.work_in.load(), 0u);
     EXPECT_FALSE(ctx.mixer.mute);
 }
 

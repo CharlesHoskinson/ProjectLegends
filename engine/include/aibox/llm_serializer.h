@@ -146,6 +146,10 @@ constexpr std::array<char32_t, 256> CP437_TO_UNICODE = {{
 namespace box {
 
 /// Double line box drawing characters
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4566)  // Unicode chars in non-Unicode codepage
+#endif
 constexpr const char* TOP_LEFT     = "\u2554";  // ╔
 constexpr const char* TOP_RIGHT    = "\u2557";  // ╗
 constexpr const char* BOTTOM_LEFT  = "\u255A";  // ╚
@@ -165,6 +169,10 @@ constexpr const char* LIGHT_TOP_LEFT   = "\u250C";  // ┌
 constexpr const char* LIGHT_TOP_RIGHT  = "\u2510";  // ┐
 constexpr const char* LIGHT_BOT_LEFT   = "\u2514";  // └
 constexpr const char* LIGHT_BOT_RIGHT  = "\u2518";  // ┘
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 } // namespace box
 

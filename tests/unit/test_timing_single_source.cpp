@@ -18,7 +18,7 @@ protected:
     void SetUp() override {
         pal::Platform::shutdown();
         pal::Platform::initialize(pal::Backend::Headless);
-        legends_destroy(reinterpret_cast<legends_handle>(1));
+        legends_force_destroy();
         legends_config_t cfg = LEGENDS_CONFIG_INIT;
         legends_create(&cfg, &handle_);
     }

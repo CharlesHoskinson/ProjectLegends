@@ -148,8 +148,8 @@ void MixerState::hash_into(HashBuilder& builder) const {
     builder.update(recordvol[1]);
 
     // Ring buffer state (critical for determinism)
-    builder.update(work_in);
-    builder.update(work_out);
+    builder.update(work_in.load(std::memory_order_relaxed));
+    builder.update(work_out.load(std::memory_order_relaxed));
     builder.update(work_wrap);
     builder.update(pos);
     builder.update(done);
