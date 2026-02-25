@@ -1,6 +1,10 @@
+## Status: COMPLETE
+
+CPU bridge wired to real `(*cpudecoder)()` execution with cycle management, callback dispatch, and context sync. Known limitation: `PIC_RunQueue()` and `CPU_Check_NMI()` not called in the execution loop — timer/interrupt-driven code may not fire. See AUDIT.md finding C2.
+
 ## Context
 
-`cpu_bridge.cpp` is the most critical stub in the codebase. It declares the CPU execution interface but increments counters in a loop. The real DOSBox-X execution path runs through `Normal_Loop()` -> `PIC_RunQueue()` -> `(*cpudecoder)()`, none of which the bridge calls.
+`cpu_bridge.cpp` was the most critical stub in the codebase. It declared the CPU execution interface but incremented counters in a loop. The real DOSBox-X execution path runs through `Normal_Loop()` -> `PIC_RunQueue()` -> `(*cpudecoder)()`. The bridge now calls `(*cpudecoder)()` directly but skips `PIC_RunQueue()` and `CPU_Check_NMI()`.
 
 ## Goals / Non-Goals
 

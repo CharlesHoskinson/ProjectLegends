@@ -1,3 +1,7 @@
+## Status: BLOCKED on Phase B completion
+
+Prerequisites (Phase A CPU bridge, Phase C context unification) are complete. Phase B serialization is ~60% done — CPU GPR and RAM serialization gaps prevent meaningful long-cycle determinism testing. Existing short-cycle (<200K) determinism tests prove the approach works. See AUDIT.md test gaps section.
+
 ## Context
 
 Existing determinism tests run <200K cycles in text mode. The roadmap goal is 1M+ cycles in text and graphics modes. Phases A (CPU bridge), B (serialization), and C (context unification) must be complete before this phase can produce meaningful results.

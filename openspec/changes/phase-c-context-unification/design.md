@@ -1,3 +1,7 @@
+## Status: MOSTLY COMPLETE
+
+Both TLS context pointers set during step scope via `dosbox::ContextGuard`. `g_cycles_per_ms` eliminated. CPU sync convention documented with debug assertions. 2 `g_current_context` pointers remain (aibox + dosbox layers) — merging would be too invasive. See AUDIT.md finding H2.
+
 ## Context
 
 Two context management issues and one documentation gap create divergence risk.

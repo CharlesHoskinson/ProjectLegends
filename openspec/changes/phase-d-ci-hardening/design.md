@@ -1,6 +1,10 @@
+## Status: ~80% COMPLETE
+
+4 sanitizers in CI (ASan/UBSan/TSan/MSan), 3 fuzz targets (including input injection), 11 TLA+ model checks, lcov coverage, gsl-lite check wired. Remaining: MSan suppression cleanup, coverage README badge, PIC C++ unit tests. See AUDIT.md CI section for full pipeline inventory.
+
 ## Context
 
-CI already covers more than the audit acknowledged: fuzzing (60s smoke), TLA+ (4 specs), coverage (lcov), TSan, ASan, UBSan, clang-tidy. Remaining gaps: MSan, coverage dashboard, unwired gsl-lite check, input fuzzing, PIC C++ tests.
+CI now covers: 4 sanitizers (ASan, UBSan, TSan, MSan), 3 fuzz targets (60s smoke), 11 TLA+ model checks, lcov coverage, clang-tidy, gsl-lite usage check. Remaining gaps: coverage README badge, PIC C++ unit tests matching TLA+ spec coverage.
 
 ## Goals / Non-Goals
 

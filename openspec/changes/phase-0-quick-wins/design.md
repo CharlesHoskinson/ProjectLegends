@@ -1,3 +1,7 @@
+## Status: COMPLETE
+
+All tasks completed. Dead code removed, gsl-lite linkage fixed, reentrancy guard enforced, config strings deep-copied, headless globals wrapped, README updated.
+
 ## Context
 
 Post-audit codebase with 3,343 tests passing and CI green. Several Critical/High findings are trivially fixable but add noise. Clearing them before larger phases prevents compounding debt.

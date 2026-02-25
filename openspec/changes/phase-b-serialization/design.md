@@ -1,6 +1,10 @@
+## Status: ~60% COMPLETE
+
+V4 format implemented (680 bytes, 8 subsystems). Wire format, PIC/Mixer/VGA/DOS structs, section_count, V3 backward compat all done. Remaining: CPU GPR serialization, RAM contents, round-trip tests for VGA/DOS/V3 compat, full integration test. See AUDIT.md finding H1 for gaps.
+
 ## Context
 
-Engine-layer V3 covers 5 of 9 subsystems (timing, partial PIC, keyboard, CPU, memory). Legends-layer adds DMA, events, input, and frame state. Mixer, VGA, DOS kernel, and full PIC are not serialized. No endianness handling exists.
+Engine-layer V4 now covers 8 subsystems (timing, full PIC, keyboard, CPU cycles, memory, mixer, VGA config, DOS kernel). Legends-layer adds DMA, events, input, and frame state. Wire format helpers provide portable LE encoding. CPU GPRs (EAX-EDI, segment registers) and RAM contents are not yet serialized.
 
 ## Goals / Non-Goals
 
