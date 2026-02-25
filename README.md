@@ -25,6 +25,7 @@ Project Legends treats the emulator as a library. The host application controls 
 - Deterministic stepping via `step_ms()` and `step_cycles()`
 - Full state serialization with integrity verification
 - Platform abstraction supporting headless, SDL2, and SDL3 backends
+- Wasm sandbox support (headless Wasmtime/WASI target for sandboxed execution)
 - Stable C ABI for FFI from Rust, Python, or other languages
 
 ---
@@ -235,7 +236,7 @@ int main() {
 
 ```
 ProjectLegends/
-├── engine/                     # DOSBox-X core (refactored)
+├── engine/                     # DOSBox-X core (GPL-2.0-only)
 │   ├── include/dosbox/         # Engine headers
 │   │   ├── dosbox_context.h    # Context structure
 │   │   ├── dosbox_library.h    # Library mode API
@@ -245,13 +246,21 @@ ProjectLegends/
 │   │   └── misc/cpu_bridge.cpp      # CPU execution bridge
 │   └── tests/
 │
-├── include/legends/            # Public API
+├── include/legends/            # Public API (GPL-2.0-only)
 │   └── legends_embed.h
 │
-├── src/legends/                # Legends layer
+├── include/legends_ipc/        # IPC protocol headers (MIT)
+│
+├── src/legends/                # Legends layer (GPL-2.0-only)
 │   └── legends_embed_api.cpp
 │
-├── src/pal/                    # Platform backends
+├── src/legends_ipc/            # IPC serialization library (MIT)
+│
+├── src/legends_proxy/          # IPC proxy for legends_embed.h (MIT)
+│
+├── src/engine_host/            # Engine host process (GPL-2.0-only)
+│
+├── src/pal/                    # Platform backends (GPL-2.0-only)
 │   ├── headless/
 │   ├── sdl2/
 │   └── sdl3/
@@ -262,7 +271,18 @@ ProjectLegends/
 │   ├── CONTRACT.md             # API contract
 │   └── tla/                    # TLA+ specifications
 │
+├── wit/                       # WIT interface for Wasm component
+│   └── legends-emulator.wit   # Core emulator WIT package
+│
+├── docs/
+│   └── design/
+│       └── GPL2_PROCESS_ISOLATION_DESIGN.md  # TDD-LIC-001
+│
+├── wasm.md                    # Wasm sandbox requirements
 ├── ARCHITECTURE.md
+├── COPYING                     # GNU GPL v2 license text
+├── LICENSE                     # Multi-component license overview
+├── NOTICE                      # Copyright attributions + SPDX
 ├── TODO.md
 └── README.md
 ```
@@ -302,7 +322,22 @@ cmake --build build
 
 ## License
 
-GPL-2.0, consistent with DOSBox-X.
+Project Legends is a multi-component project with two license scopes:
+
+- **Engine & core** (`engine/`, `src/legends/`, `src/engine_host/`) — **GPL-2.0-only**, consistent with DOSBox-X
+- **IPC protocol** (`include/legends_ipc/`, `src/legends_ipc/`) — **MIT**, enabling non-GPL applications to communicate with the engine host
+
+Under the process isolation architecture, the GPL-licensed engine runs in a
+separate process (`legends_engine_host`) and communicates with the application
+shell via the MIT-licensed IPC protocol. See
+[`docs/design/GPL2_PROCESS_ISOLATION_DESIGN.md`](docs/design/GPL2_PROCESS_ISOLATION_DESIGN.md)
+for the full technical design.
+
+SPDX expression: `GPL-2.0-only AND MIT`
+
+- [`COPYING`](COPYING) — Full GNU GPL v2 license text
+- [`LICENSE`](LICENSE) — Multi-component license overview
+- [`NOTICE`](NOTICE) — Copyright attributions and third-party dependencies
 
 ---
 

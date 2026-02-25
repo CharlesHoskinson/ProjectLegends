@@ -15,6 +15,8 @@ This document describes the architectural design of Project Legends, an embeddab
 7. [Determinism Guarantees](#determinism-guarantees)
 8. [File Organization](#file-organization)
 9. [Module Graph (Sprint 3)](#module-graph-sprint-3)
+10. [Process Isolation Architecture](#process-isolation-architecture)
+11. [Wasm Sandbox Architecture](#wasm-sandbox-architecture)
 
 ---
 
@@ -535,6 +537,183 @@ Metrics collected using `scripts/measure_rebuild.py`:
 - Header change rebuild: **<3s** (target was <10s)
 - Single .cpp change: **<2s** (target was <5s)
 - Module isolation working: refactored headers trigger minimal rebuilds
+
+---
+
+## Process Isolation Architecture
+
+> **Design document:** `docs/design/GPL2_PROCESS_ISOLATION_DESIGN.md` (TDD-LIC-001)
+
+The project supports two build modes controlled by the `LEGENDS_USE_IPC` CMake option:
+
+### Build Modes
+
+| Mode | CMake Option | Output Binaries | License Implications |
+|------|-------------|-----------------|---------------------|
+| **Monolithic** (default) | `LEGENDS_USE_IPC=OFF` | `project_legends` (single binary) | Entire binary is GPL-2.0 |
+| **IPC-Isolated** | `LEGENDS_USE_IPC=ON` | `project_legends` + `legends_engine_host` | Shell is non-GPL; engine host is GPL-2.0 |
+
+### Two-Process Architecture (IPC Mode)
+
+```
+┌──────────────────────────────────────────┐     ┌──────────────────────────────┐
+│         APPLICATION SHELL                │     │      ENGINE HOST             │
+│         (non-GPL)                        │     │      (GPL-2.0)               │
+│                                          │     │                              │
+│  ┌──────────────┐  ┌─────────────────┐   │     │  ┌──────────────────────┐    │
+│  │  src/app/    │  │ legends_proxy   │   │     │  │   legends_core       │    │
+│  │  main.cpp    │  │ (MIT)           │   │     │  │   + aibox_core       │    │
+│  │  PAL layer   │  │ legends_embed.h │   │     │  │   (GPL-2.0)          │    │
+│  └──────┬───────┘  └────────┬────────┘   │     │  └──────────┬───────────┘    │
+│         │                   │            │     │             │                │
+│         │    ┌──────────────┘            │     │             │                │
+│         │    │                           │     │             │                │
+│         │    ▼                           │     │             ▼                │
+│  ┌──────────────────────┐               │     │  ┌──────────────────────┐    │
+│  │    legends_ipc       │◄──── Named ───────────►│    legends_ipc       │    │
+│  │    (MIT)             │      Pipe     │     │  │    (MIT)             │    │
+│  └──────────┬───────────┘               │     │  └──────────┬───────────┘    │
+│             │                           │     │             │                │
+│             ▼                           │     │             ▼                │
+│  ┌──────────────────────┐               │     │  ┌──────────────────────┐    │
+│  │  Shared Memory       │◄──── SHM ────────────►│  Shared Memory       │    │
+│  │  (framebuffer+audio) │               │     │  │  (framebuffer+audio) │    │
+│  └──────────────────────┘               │     │  └──────────────────────┘    │
+└──────────────────────────────────────────┘     └──────────────────────────────┘
+          Process A                                       Process B
+```
+
+### IPC Channels
+
+| Channel | Transport | Data | Direction | Latency Target |
+|---------|-----------|------|-----------|---------------|
+| **Control** | Named pipe | Lifecycle, input, config, status | Bidirectional | < 0.5 ms |
+| **Framebuffer** | Shared memory | Video frames (double-buffered) | Engine → Shell | < 1.0 ms |
+| **Audio** | Shared memory | PCM samples (lock-free ring buffer) | Engine → Shell | < 0.3 ms |
+
+### Module DAG (IPC Mode)
+
+```
+project_legends ──→ legends_proxy (MIT) ──→ legends_ipc (MIT)
+                ──→ legends_pal
+
+legends_engine_host ──→ legends_core (GPL) ──→ aibox_core (GPL)
+                    ──→ legends_ipc (MIT)
+```
+
+In IPC mode, the `project_legends` binary has no link-time dependency on any
+GPL-licensed code. The `legends_proxy` library implements the `legends_embed.h`
+API by forwarding calls over IPC to `legends_engine_host`. CI verifies this
+isolation by scanning the linker map (REQ-ISO-016).
+
+---
+
+## Wasm Sandbox Architecture
+
+> **Requirements document:** `wasm.md`
+
+The project supports an optional Wasm/WASI build target for running the emulator
+in a Wasmtime-based sandbox. This enables headless emulation in capability-scoped
+environments (CI runners, cloud workers, embedding hosts) without GUI dependencies.
+
+### Build Modes
+
+| Mode | CMake Option | Output Artifact | Runtime |
+|------|-------------|-----------------|---------|
+| **Native** (default) | `LEGENDS_BUILD_WASM=OFF` | Platform binary | Direct OS execution |
+| **Wasm Sandbox** | `LEGENDS_BUILD_WASM=ON` | `.wasm` component | Wasmtime host runner |
+
+Both modes share the same core emulation logic. The Wasm build replaces PAL
+backends with WASI interfaces and exposes the API through a WIT component
+interface rather than the C ABI.
+
+### Component Architecture
+
+```
+┌──────────────────────────────────────────┐
+│            WASMTIME HOST RUNNER           │
+│                                          │
+│  ┌────────────────────────────────────┐  │
+│  │       Capability Policy            │  │
+│  │  - Default-deny                    │  │
+│  │  - Preopened dirs only             │  │
+│  │  - No network (default)            │  │
+│  │  - No env vars (default)           │  │
+│  │  - Explicit clock control          │  │
+│  └────────────────┬───────────────────┘  │
+│                   │                      │
+│  ┌────────────────▼───────────────────┐  │
+│  │     Resource Governance            │  │
+│  │  - Memory limits (per-instance)    │  │
+│  │  - Execution budget (fuel/epoch)   │  │
+│  │  - Bounded queues and buffers      │  │
+│  └────────────────┬───────────────────┘  │
+│                   │                      │
+│                   │ WIT Interface         │
+│                   │ (legends-emulator)    │
+│                   ▼                      │
+│  ┌────────────────────────────────────┐  │
+│  │         WASM GUEST COMPONENT       │  │
+│  │                                    │  │
+│  │  legends_core + aibox_core         │  │
+│  │  (compiled to wasm32-wasi)         │  │
+│  │                                    │  │
+│  │  Lifecycle: create/destroy/reset   │  │
+│  │  Stepping:  step-ms/step-cycles    │  │
+│  │  Capture:   text/rgb/frame-dirty   │  │
+│  │  Input:     key/mouse/text         │  │
+│  │  State:     save/load/hash         │  │
+│  └────────────────┬───────────────────┘  │
+│                   │                      │
+│                   │ WASI Preview 2        │
+│                   ▼                      │
+│  ┌────────────────────────────────────┐  │
+│  │         WASI CAPABILITIES          │  │
+│  │                                    │  │
+│  │  wasi:filesystem (preopened dirs)  │  │
+│  │  wasi:clocks (host-controlled)     │  │
+│  │  wasi:random (if needed)           │  │
+│  └────────────────────────────────────┘  │
+└──────────────────────────────────────────┘
+```
+
+### Capability Model
+
+The Wasm sandbox follows a **default-deny** capability model:
+
+| Capability | Default | Override |
+|-----------|---------|---------|
+| Filesystem | Denied (except preopened dirs) | Policy file |
+| Network | Denied | Policy file (testing only) |
+| Environment variables | Denied | Allowlist in policy |
+| Wall clock | Denied in deterministic mode | Host-controlled |
+| Random | Allowed (seeded for determinism) | Policy file |
+
+Preopened directories map to ProjectLegends platform directories:
+
+| Guest Path | Host Mapping | Default Mode |
+|-----------|-------------|-------------|
+| `/config` | Platform config dir | Read-only |
+| `/data` | Platform data dir (saves, captures) | Read-write |
+| `/logs` | Platform state dir | Read-write |
+| `/cache` | Platform cache dir | Read-write |
+
+### WIT Interface
+
+The component interface is defined in `wit/legends-emulator.wit` and mirrors
+the `legends_embed.h` C API. All functions return `result<T, legends-error>`
+for deterministic error handling. Variable-size outputs use bounded `list<u8>`.
+
+### Determinism Guarantee
+
+The Wasm build maintains the same determinism guarantee as native headless:
+
+```
+f(config, input_trace, step_schedule) → state_hash
+```
+
+CI enforces parity: native and Wasm headless must produce identical state hashes
+for identical inputs (REQ-WASM-026, REQ-WASM-040).
 
 ---
 

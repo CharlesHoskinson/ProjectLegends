@@ -32,6 +32,8 @@ include(cmake/ModuleDAG.cmake)
 option(LEGENDS_BUILD_TESTS "Build unit tests" OFF)
 option(LEGENDS_HEADLESS "Build in headless mode (no GUI)" OFF)
 option(LEGENDS_LIBRARY_MODE "Build as static library" OFF)
+option(LEGENDS_USE_IPC "Build with GPL v2 process isolation (IPC mode). Produces legends_engine_host + legends_proxy instead of monolithic linking." OFF)
+option(LEGENDS_BUILD_WASM "Build Wasm/WASI target for Wasmtime sandbox (requires wasi-sdk or equivalent toolchain)" OFF)
 
 # Fuzzing Options (requires Clang)
 option(ENABLE_FUZZING "Build fuzz targets with libFuzzer" OFF)
@@ -308,6 +310,141 @@ endif()
 if(PAL_BACKEND_SDL3)
     target_link_libraries(legends_pal PRIVATE SDL3::SDL3-shared)
     target_include_directories(legends_pal PRIVATE ${SDL3_INCLUDE_DIRS})
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IPC Library (MIT-licensed — no GPL dependencies)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# The legends_ipc library provides message serialization and IPC transport
+# for the process isolation architecture. It is MIT-licensed and MUST NOT
+# link any GPL code (aibox_core, legends_core).
+#
+# See docs/design/GPL2_PROCESS_ISOLATION_DESIGN.md (TDD-LIC-001)
+
+add_library(legends_ipc STATIC
+    src/legends_ipc/protocol.cpp
+)
+
+legends_set_strict_cxx_standard(legends_ipc)
+
+target_include_directories(legends_ipc
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+# IMPORTANT: legends_ipc must NOT link any GPL-licensed targets.
+# This is verified by REQ-ISO-003 and REQ-ISO-016.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Engine Host Executable (GPL-2.0 — links engine + IPC)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# The engine host runs the DOSBox-X engine in a separate process and
+# communicates with the application shell via IPC. It is GPL-2.0 licensed
+# because it links legends_core and aibox_core.
+
+if(LEGENDS_USE_IPC)
+    add_executable(legends_engine_host
+        src/engine_host/main.cpp
+    )
+
+    legends_set_strict_cxx_standard(legends_engine_host)
+
+    target_link_libraries(legends_engine_host PRIVATE
+        legends_core
+        legends_ipc
+    )
+
+    target_compile_definitions(legends_engine_host PRIVATE
+        LEGENDS_ENGINE_HOST=1
+    )
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Proxy Library (MIT-licensed — IPC frontend for legends_embed.h)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# The legends_proxy library implements the legends_embed.h C API by forwarding
+# calls over IPC to the engine host process. It links only legends_ipc (MIT).
+# This enables the application shell to remain non-GPL.
+
+if(LEGENDS_USE_IPC)
+    add_library(legends_proxy STATIC
+        src/legends_proxy/proxy_api.cpp
+    )
+
+    legends_set_strict_cxx_standard(legends_proxy)
+
+    target_include_directories(legends_proxy
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
+
+    # IMPORTANT: legends_proxy must NOT link any GPL-licensed targets.
+    # It links only legends_ipc (MIT).
+    target_link_libraries(legends_proxy
+        PUBLIC
+            legends_ipc
+    )
+
+    target_compile_definitions(legends_proxy
+        PUBLIC
+            LEGENDS_USE_IPC=1
+    )
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Wasm/WASI Target (Wasmtime Sandbox)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# When LEGENDS_BUILD_WASM is ON, configure the build for a wasm32-wasi target.
+# This requires a WASI SDK or compatible toolchain (e.g., wasi-sdk, Rust wasm32-wasi).
+# The Wasm build produces a .wasm component artifact for execution under Wasmtime.
+#
+# See wasm.md for full requirements and wit/ for the WIT interface definition.
+
+if(LEGENDS_BUILD_WASM)
+    message(STATUS "Wasm/WASI build enabled")
+
+    # Verify toolchain is targeting wasm32
+    if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "wasm" AND NOT DEFINED WASI_SDK_PREFIX)
+        message(WARNING
+            "LEGENDS_BUILD_WASM is ON but no WASI toolchain detected. "
+            "Set WASI_SDK_PREFIX or use a wasm32-wasi CMake toolchain file."
+        )
+    endif()
+
+    # Wasm-specific compile definitions for the core libraries
+    target_compile_definitions(legends_core PRIVATE LEGENDS_BUILD_WASM=1)
+
+    # WIT generation target (requires wit-bindgen or wasm-tools)
+    find_program(WIT_BINDGEN_EXECUTABLE wit-bindgen)
+    if(WIT_BINDGEN_EXECUTABLE)
+        add_custom_target(legends_wit_generate
+            COMMAND ${WIT_BINDGEN_EXECUTABLE} c
+                --world legends-emulator
+                "${CMAKE_CURRENT_SOURCE_DIR}/wit/legends-emulator.wit"
+                --out-dir "${CMAKE_CURRENT_BINARY_DIR}/wit-generated"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "Generating WIT bindings for legends-emulator"
+            SOURCES wit/legends-emulator.wit
+        )
+    else()
+        message(STATUS "wit-bindgen not found; WIT generation target disabled")
+    endif()
+
+    # Wasm component validation target (requires wasm-tools)
+    find_program(WASM_TOOLS_EXECUTABLE wasm-tools)
+    if(WASM_TOOLS_EXECUTABLE)
+        add_custom_target(legends_wasm_validate
+            COMMAND ${WASM_TOOLS_EXECUTABLE} component validate
+                "$<TARGET_FILE:legends_core>"
+            COMMENT "Validating Wasm component"
+        )
+    endif()
 endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -631,13 +768,28 @@ if(PAL_BACKEND_SDL2)
         ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/lib
     )
 
-    target_link_libraries(project_legends PRIVATE
-        legends_core
-        legends_pal
-        mingw32
-        SDL2main
-        SDL2
-    )
+    # In IPC mode, link the proxy (MIT) instead of legends_core (GPL).
+    # In monolithic mode (default), link legends_core directly.
+    if(LEGENDS_USE_IPC)
+        target_link_libraries(project_legends PRIVATE
+            legends_proxy
+            legends_pal
+            mingw32
+            SDL2main
+            SDL2
+        )
+        target_compile_definitions(project_legends PRIVATE
+            LEGENDS_USE_IPC=1
+        )
+    else()
+        target_link_libraries(project_legends PRIVATE
+            legends_core
+            legends_pal
+            mingw32
+            SDL2main
+            SDL2
+        )
+    endif()
 
     # Copy SDL2.dll to output directory
     add_custom_command(TARGET project_legends POST_BUILD
@@ -663,6 +815,14 @@ install(TARGETS legends_core legends_pal aibox_core
 
 install(DIRECTORY include/legends include/pal
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+# License files (COPYING, LICENSE, NOTICE) — required by GPL v2 Section 1
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/COPYING"
+    "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+    "${CMAKE_CURRENT_SOURCE_DIR}/NOTICE"
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
