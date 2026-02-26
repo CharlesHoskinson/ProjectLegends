@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2024-2025 Charles Hoskinson and Contributors
+//
+// MenuSystem — overlay menu rendered directly into the RGB framebuffer.
+// Uses an embedded CP437 8x16 bitmap font for text rendering.
+// Keyboard and mouse navigation, pause-on-open.
+
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace legends {
+
+class ActionBus;
+
+struct MenuItem {
+    std::string label;
+    int action_id;     // Cast to Action enum
+    int param;         // Action parameter (e.g., save slot)
+    bool separator;    // True = horizontal rule, label ignored
+
+    MenuItem() : action_id(-1), param(0), separator(true) {}
+    MenuItem(std::string lbl, int act, int p = 0)
+        : label(std::move(lbl)), action_id(act), param(p), separator(false) {}
+
+    static MenuItem Separator() { return MenuItem{}; }
+};
+
+struct Menu {
+    std::string title;
+    std::vector<MenuItem> items;
+};
+
+class MenuSystem {
+public:
+    void initialize(ActionBus* bus);
+
+    void open();
+    void close();
+    bool isOpen() const { return open_; }
+
+    /// Handle a key press. Returns true if consumed.
+    bool handleKey(uint16_t scancode, bool down);
+
+    /// Handle a mouse click. Returns true if consumed.
+    bool handleMouseClick(int32_t x, int32_t y);
+
+    /// Render the menu overlay into an RGB24 buffer.
+    void render(uint8_t* rgb_buffer, uint16_t width, uint16_t height);
+
+private:
+    void buildMenus();
+    void activateItem();
+
+    // Text rendering helpers
+    void drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
+                  int x, int y, uint8_t ch,
+                  uint8_t fr, uint8_t fg, uint8_t fb,
+                  uint8_t br, uint8_t bg, uint8_t bb) const;
+    void drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
+                    int x, int y, const std::string& text,
+                    uint8_t fr, uint8_t fg, uint8_t fb,
+                    uint8_t br, uint8_t bg, uint8_t bb) const;
+    void darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
+                    int x, int y, int w, int h) const;
+
+    ActionBus* bus_ = nullptr;
+    bool open_ = false;
+    int selected_menu_ = 0;
+    int selected_item_ = -1;
+    std::vector<Menu> menus_;
+
+    // Layout computed on render
+    static constexpr int kCharW = 8;
+    static constexpr int kCharH = 16;
+    static constexpr int kMenuBarH = kCharH + 4;  // pixels
+    static constexpr int kItemPadX = 2;            // chars of padding
+};
+
+} // namespace legends

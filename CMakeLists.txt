@@ -526,6 +526,14 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_config_parser.cpp
         tests/unit/test_platform_dirs.cpp
         tests/unit/test_scancode_mapping.cpp
+        # Phase 2: Core Experience
+        tests/unit/test_action_bus.cpp
+        tests/unit/test_pause_reset.cpp
+        tests/unit/test_capture.cpp
+        tests/unit/test_input_mapper.cpp
+        tests/unit/test_save_manager.cpp
+        tests/unit/test_clipboard_paste.cpp
+        tests/unit/test_menu_system.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
@@ -544,11 +552,17 @@ if(LEGENDS_BUILD_TESTS)
         src/app/config_parser.cpp
         src/app/platform_dirs.cpp
         src/app/scancode_map.cpp
+        src/app/action_bus.cpp
+        src/app/capture.cpp
+        src/app/input_mapper.cpp
+        src/app/save_manager.cpp
+        src/app/menu_system.cpp
     )
 
     target_include_directories(legends_unit_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/legends  # F6: internal FFI headers
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/external
         ${CMAKE_BINARY_DIR}/include
     )
 
@@ -804,6 +818,11 @@ if(PAL_BACKEND_SDL3)
     add_executable(project_legends
         src/main.cpp
         src/app/application.cpp
+        src/app/action_bus.cpp
+        src/app/capture.cpp
+        src/app/input_mapper.cpp
+        src/app/save_manager.cpp
+        src/app/menu_system.cpp
         src/app/cli_parser.cpp
         src/app/config_parser.cpp
         src/app/platform_dirs.cpp
@@ -815,6 +834,7 @@ if(PAL_BACKEND_SDL3)
     target_include_directories(project_legends PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/external
         ${CMAKE_BINARY_DIR}/include
     )
 

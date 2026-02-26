@@ -1,17 +1,27 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2024-2025 Charles Hoskinson and Contributors
 //
-// Application — full engine wiring: render, audio, input.
+// Application — full engine wiring: render, audio, input, Phase 2 actions.
 
 #include "app/application.h"
 #include "app/cli_parser.h"
 #include "app/config_parser.h"
 #include "app/platform_dirs.h"
 #include "app/scancode_map.h"
+#include "app/capture.h"
+#include "app/input_mapper.h"
+#include "app/save_manager.h"
+#include "app/menu_system.h"
 
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+
+// SDL3 clipboard — only needed for ClipboardPaste
+#if __has_include(<SDL3/SDL_clipboard.h>)
+#include <SDL3/SDL_clipboard.h>
+#endif
 
 namespace legends {
 
@@ -197,11 +207,23 @@ ExitCode Application::init(int argc, char** argv) {
             nullptr);
     }
 
+    // ── Action handlers ──────────────────────────────────────────────────
+    registerActionHandlers();
+
+    // ── Input mapper ─────────────────────────────────────────────────────
+    {
+        std::string mapper_path = getConfigDir() + "/mapper.txt";
+        input_mapper_.loadFromFile(mapper_path); // non-fatal if missing
+    }
+
+    // ── Menu system ──────────────────────────────────────────────────────
+    menu_system_.initialize(&action_bus_);
+
     return ExitCode::Success;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Run loop with frame pacing (Step 6)
+// Run loop with frame pacing and pause support
 // ─────────────────────────────────────────────────────────────────────────────
 
 ExitCode Application::run() {
@@ -216,9 +238,11 @@ ExitCode Application::run() {
             break;
         }
 
-        // Step engine ~16 ms of emulated time per frame
-        legends_step_result_t step_result{};
-        legends_step_ms(engine_, 16, &step_result);
+        // Step engine ~16 ms of emulated time per frame (skip when paused)
+        if (!paused_ && !menu_system_.isOpen()) {
+            legends_step_result_t step_result{};
+            legends_step_ms(engine_, 16, &step_result);
+        }
 
         // Render framebuffer to window
         renderFrame();
@@ -247,13 +271,8 @@ ExitCode Application::run() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Events → engine input (Steps 4, 5, 9)
+// Events → engine input (Phase 1 + Phase 2 hotkeys via ActionBus)
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Modifier bitmask constants
-static constexpr uint8_t kModLCtrl  = 0x01;
-static constexpr uint8_t kModRCtrl  = 0x02;
-static constexpr uint8_t kModCtrl   = kModLCtrl | kModRCtrl;
 
 bool Application::processEvents() {
     if (!input_source_) return false;
@@ -274,7 +293,7 @@ bool Application::processEvents() {
             case pal::InputEventType::KeyUp: {
                 bool down = (ev.type == pal::InputEventType::KeyDown);
 
-                // Track modifier state
+                // Track all modifier state
                 if (ev.key.scancode == 0xE0) { // Left Ctrl
                     if (down) modifiers_ |= kModLCtrl;
                     else      modifiers_ &= static_cast<uint8_t>(~kModLCtrl);
@@ -283,48 +302,117 @@ bool Application::processEvents() {
                     if (down) modifiers_ |= kModRCtrl;
                     else      modifiers_ &= static_cast<uint8_t>(~kModRCtrl);
                 }
+                if (ev.key.scancode == 0xE1) { // Left Shift
+                    if (down) modifiers_ |= kModLShift;
+                    else      modifiers_ &= static_cast<uint8_t>(~kModLShift);
+                }
+                if (ev.key.scancode == 0xE5) { // Right Shift
+                    if (down) modifiers_ |= kModRShift;
+                    else      modifiers_ &= static_cast<uint8_t>(~kModRShift);
+                }
+                if (ev.key.scancode == 0xE2) { // Left Alt
+                    if (down) modifiers_ |= kModLAlt;
+                    else      modifiers_ &= static_cast<uint8_t>(~kModLAlt);
+                }
+                if (ev.key.scancode == 0xE6) { // Right Alt
+                    if (down) modifiers_ |= kModRAlt;
+                    else      modifiers_ &= static_cast<uint8_t>(~kModRAlt);
+                }
 
-                // ── Hotkey interception ──────────────────────────────
+                // ── Menu input routing (when menu is open) ──────────
+                if (menu_system_.isOpen()) {
+                    if (down) {
+                        menu_system_.handleKey(ev.key.scancode, true);
+                    }
+                    break; // Don't forward to engine while menu is open
+                }
+
+                // ── Hotkey interception (key-down only) ─────────────
 
                 if (down) {
-                    // Ctrl+F10 — release mouse capture (Step 5)
-                    if (ev.key.scancode == 0x43 && (modifiers_ & kModCtrl) && mouse_captured_) {
-                        setMouseCaptured(false);
+                    bool ctrl  = (modifiers_ & kModCtrl) != 0;
+                    bool shift = (modifiers_ & kModShift) != 0;
+                    bool alt   = (modifiers_ & kModAlt) != 0;
+
+                    // F12 — toggle overlay menu
+                    if (ev.key.scancode == 0x45) { // F12
+                        action_bus_.dispatch(Action::OpenMenu);
                         break;
                     }
 
-                    // Volume hotkeys (Step 9) — Ctrl+Up / Ctrl+Down / Ctrl+M
-                    if (modifiers_ & kModCtrl) {
+                    // Alt+Pause — toggle pause (SDL Pause = 0x48)
+                    if (alt && !ctrl && ev.key.scancode == 0x48) {
+                        action_bus_.dispatch(Action::TogglePause);
+                        break;
+                    }
+
+                    // Ctrl+Alt+Delete — reset (SDL Delete = 0x4C)
+                    if (ctrl && alt && ev.key.scancode == 0x4C) {
+                        action_bus_.dispatch(Action::Reset);
+                        break;
+                    }
+
+                    // Ctrl+F5 — screenshot (SDL F5 = 0x3E)
+                    if (ctrl && !shift && !alt && ev.key.scancode == 0x3E) {
+                        action_bus_.dispatch(Action::Screenshot);
+                        break;
+                    }
+
+                    // Ctrl+F1 — open mapper (SDL F1 = 0x3A)
+                    if (ctrl && !shift && !alt && ev.key.scancode == 0x3A) {
+                        action_bus_.dispatch(Action::OpenMapper);
+                        break;
+                    }
+
+                    // Ctrl+Shift+V — clipboard paste (SDL V = 0x19)
+                    if (ctrl && shift && !alt && ev.key.scancode == 0x19) {
+                        action_bus_.dispatch(Action::ClipboardPaste);
+                        break;
+                    }
+
+                    // Ctrl+Shift+F1..F9 — save state (slots 1-9)
+                    // SDL F1=0x3A .. F9=0x42
+                    if (ctrl && shift && !alt &&
+                        ev.key.scancode >= 0x3A && ev.key.scancode <= 0x42) {
+                        int slot = static_cast<int>(ev.key.scancode - 0x3A + 1);
+                        action_bus_.dispatch(Action::SaveState, slot);
+                        break;
+                    }
+
+                    // Ctrl+Alt+F1..F9 — load state (slots 1-9)
+                    if (ctrl && alt && !shift &&
+                        ev.key.scancode >= 0x3A && ev.key.scancode <= 0x42) {
+                        int slot = static_cast<int>(ev.key.scancode - 0x3A + 1);
+                        action_bus_.dispatch(Action::LoadState, slot);
+                        break;
+                    }
+
+                    // Ctrl+F10 — release mouse capture
+                    if (ctrl && !shift && !alt && ev.key.scancode == 0x43 && mouse_captured_) {
+                        action_bus_.dispatch(Action::ReleaseMouseCapture);
+                        break;
+                    }
+
+                    // Volume: Ctrl+Up / Ctrl+Down / Ctrl+M
+                    if (ctrl && !shift && !alt) {
                         if (ev.key.scancode == 0x52) { // Up arrow
-                            volume_ = std::min(1.0f, volume_ + 0.1f);
-                            muted_ = false;
-                            if (audio_sink_) audio_sink_->setVolume(volume_);
+                            action_bus_.dispatch(Action::VolumeUp);
                             break;
                         }
                         if (ev.key.scancode == 0x51) { // Down arrow
-                            volume_ = std::max(0.0f, volume_ - 0.1f);
-                            muted_ = false;
-                            if (audio_sink_) audio_sink_->setVolume(volume_);
+                            action_bus_.dispatch(Action::VolumeDown);
                             break;
                         }
-                        if (ev.key.scancode == 0x10) { // M key (SDL scancode 0x10)
-                            if (muted_) {
-                                muted_ = false;
-                                volume_ = pre_mute_vol_;
-                            } else {
-                                muted_ = true;
-                                pre_mute_vol_ = volume_;
-                                volume_ = 0.0f;
-                            }
-                            if (audio_sink_) audio_sink_->setVolume(volume_);
+                        if (ev.key.scancode == 0x10) { // M key
+                            action_bus_.dispatch(Action::ToggleMute);
                             break;
                         }
                     }
                 }
 
-                // ── Forward to engine (Step 4: E0-prefix) ───────────
+                // ── Forward to engine via InputMapper ────────────────
                 if (!engine_) break;
-                auto at = sdlScancodeToAT(ev.key.scancode);
+                auto at = input_mapper_.translate(ev.key.scancode);
                 if (at.code != 0) {
                     if (at.extended) {
                         legends_key_event_ext(engine_, at.code, down ? 1 : 0);
@@ -336,7 +424,7 @@ bool Application::processEvents() {
             }
 
             case pal::InputEventType::MouseMotion:
-                if (engine_ && mouse_captured_) {
+                if (engine_ && mouse_captured_ && !menu_system_.isOpen()) {
                     legends_mouse_event(engine_,
                         static_cast<int16_t>(ev.mouse_motion.dx),
                         static_cast<int16_t>(ev.mouse_motion.dy),
@@ -346,11 +434,17 @@ bool Application::processEvents() {
 
             case pal::InputEventType::MouseButtonDown:
             case pal::InputEventType::MouseButtonUp: {
-                // Click to capture (Step 5)
+                // Menu click routing
+                if (menu_system_.isOpen() && ev.type == pal::InputEventType::MouseButtonDown) {
+                    menu_system_.handleMouseClick(ev.mouse_button.x, ev.mouse_button.y);
+                    break;
+                }
+
+                // Click to capture
                 if (ev.type == pal::InputEventType::MouseButtonDown) {
                     if (!mouse_captured_ && ev.mouse_button.button == 1) {
                         setMouseCaptured(true);
-                        break; // Don't forward this click
+                        break;
                     }
                     // Middle-click to release
                     if (mouse_captured_ && ev.mouse_button.button == 2) {
@@ -362,9 +456,9 @@ bool Application::processEvents() {
                 // Only forward mouse button events when captured
                 if (!engine_ || !mouse_captured_) break;
                 uint8_t buttons = 0;
-                if (ev.mouse_button.button == 1) buttons |= 0x01; // left
-                if (ev.mouse_button.button == 3) buttons |= 0x02; // right
-                if (ev.mouse_button.button == 2) buttons |= 0x04; // middle
+                if (ev.mouse_button.button == 1) buttons |= 0x01;
+                if (ev.mouse_button.button == 3) buttons |= 0x02;
+                if (ev.mouse_button.button == 2) buttons |= 0x04;
                 if (ev.type == pal::InputEventType::MouseButtonUp) buttons = 0;
                 legends_mouse_event(engine_, 0, 0, buttons);
                 break;
@@ -379,7 +473,158 @@ bool Application::processEvents() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mouse capture helpers (Step 5)
+// ActionBus handler registration (Phase 2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+void Application::registerActionHandlers() {
+    // Quit
+    action_bus_.registerHandler(Action::Quit, [this](int) {
+        running_ = false;
+    });
+
+    // Pause / Resume / Toggle
+    action_bus_.registerHandler(Action::Pause, [this](int) {
+        paused_ = true;
+        updateWindowTitle();
+    });
+    action_bus_.registerHandler(Action::Resume, [this](int) {
+        paused_ = false;
+        updateWindowTitle();
+    });
+    action_bus_.registerHandler(Action::TogglePause, [this](int) {
+        paused_ = !paused_;
+        updateWindowTitle();
+    });
+
+    // Reset
+    action_bus_.registerHandler(Action::Reset, [this](int) {
+        if (engine_) {
+            legends_reset(engine_);
+            paused_ = false;
+            updateWindowTitle();
+        }
+    });
+
+    // Screenshot
+    action_bus_.registerHandler(Action::Screenshot, [this](int) {
+        if (!engine_) return;
+        // Query framebuffer size
+        size_t size_needed = 0;
+        uint16_t w = 0, h = 0;
+        legends_capture_rgb(engine_, nullptr, 0, &size_needed, &w, &h);
+        if (size_needed == 0 || w == 0 || h == 0) return;
+        std::vector<uint8_t> buf(size_needed);
+        legends_capture_rgb(engine_, buf.data(), buf.size(), &size_needed, &w, &h);
+
+        std::string dir = getCaptureDir();
+        std::filesystem::create_directories(dir);
+        std::string path = dir + "/" + generateCaptureFilename();
+        if (writeScreenshotPNG(path, buf.data(), w, h)) {
+            std::fprintf(stderr, "Screenshot saved: %s\n", path.c_str());
+        } else {
+            std::fprintf(stderr, "Screenshot failed: %s\n", path.c_str());
+        }
+    });
+
+    // Save state
+    action_bus_.registerHandler(Action::SaveState, [this](int slot) {
+        if (!engine_ || slot < 1 || slot > SaveManager::kMaxSlots) return;
+        // Get thumbnail for the save
+        size_t size_needed = 0;
+        uint16_t w = 0, h = 0;
+        legends_capture_rgb(engine_, nullptr, 0, &size_needed, &w, &h);
+        std::vector<uint8_t> thumb;
+        if (size_needed > 0 && w > 0 && h > 0) {
+            thumb.resize(size_needed);
+            legends_capture_rgb(engine_, thumb.data(), thumb.size(), &size_needed, &w, &h);
+        }
+        if (save_manager_.saveToSlot(engine_, slot,
+                                     thumb.empty() ? nullptr : thumb.data(), w, h)) {
+            std::fprintf(stderr, "State saved to slot %d\n", slot);
+        } else {
+            std::fprintf(stderr, "Save failed (slot %d): %s\n", slot,
+                         save_manager_.lastError().c_str());
+        }
+    });
+
+    // Load state
+    action_bus_.registerHandler(Action::LoadState, [this](int slot) {
+        if (!engine_ || slot < 1 || slot > SaveManager::kMaxSlots) return;
+        if (save_manager_.loadFromSlot(engine_, slot)) {
+            std::fprintf(stderr, "State loaded from slot %d\n", slot);
+        } else {
+            std::fprintf(stderr, "Load failed (slot %d): %s\n", slot,
+                         save_manager_.lastError().c_str());
+        }
+    });
+
+    // Clipboard paste
+    action_bus_.registerHandler(Action::ClipboardPaste, [this](int) {
+#if __has_include(<SDL3/SDL_clipboard.h>)
+        char* text = SDL_GetClipboardText();
+        if (text && text[0] != '\0' && engine_) {
+            legends_text_input(engine_, text);
+        }
+        if (text) SDL_free(text);
+#endif
+    });
+
+    // Volume up
+    action_bus_.registerHandler(Action::VolumeUp, [this](int) {
+        volume_ = std::min(1.0f, volume_ + 0.1f);
+        muted_ = false;
+        if (audio_sink_) audio_sink_->setVolume(volume_);
+    });
+
+    // Volume down
+    action_bus_.registerHandler(Action::VolumeDown, [this](int) {
+        volume_ = std::max(0.0f, volume_ - 0.1f);
+        muted_ = false;
+        if (audio_sink_) audio_sink_->setVolume(volume_);
+    });
+
+    // Toggle mute
+    action_bus_.registerHandler(Action::ToggleMute, [this](int) {
+        if (muted_) {
+            muted_ = false;
+            volume_ = pre_mute_vol_;
+        } else {
+            muted_ = true;
+            pre_mute_vol_ = volume_;
+            volume_ = 0.0f;
+        }
+        if (audio_sink_) audio_sink_->setVolume(volume_);
+    });
+
+    // Release mouse capture
+    action_bus_.registerHandler(Action::ReleaseMouseCapture, [this](int) {
+        setMouseCaptured(false);
+    });
+
+    // Open mapper (placeholder)
+    action_bus_.registerHandler(Action::OpenMapper, [](int) {
+        std::fprintf(stderr, "Key mapper: visual UI not yet implemented\n");
+    });
+
+    // Open menu
+    action_bus_.registerHandler(Action::OpenMenu, [this](int) {
+        if (menu_system_.isOpen()) {
+            menu_system_.close();
+        } else {
+            menu_system_.open();
+        }
+    });
+}
+
+void Application::updateWindowTitle() {
+    if (!window_) return;
+    std::string title = base_title_;
+    if (paused_) title += " - PAUSED";
+    window_->setTitle(title.c_str());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mouse capture helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 void Application::setMouseCaptured(bool captured) {
@@ -465,6 +710,13 @@ void Application::renderFrame() {
                 dp[2] = sp[2];
             }
         }
+    }
+
+    // Composite menu overlay if open
+    if (menu_system_.isOpen()) {
+        menu_system_.render(static_cast<uint8_t*>(sctx.pixels),
+                            static_cast<uint16_t>(sw),
+                            static_cast<uint16_t>(sh));
     }
 
     // unlockSurface() presents to screen

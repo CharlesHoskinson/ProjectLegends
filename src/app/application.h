@@ -7,10 +7,16 @@
 
 #pragma once
 
+#include "app/action_bus.h"
+#include "app/input_mapper.h"
+#include "app/save_manager.h"
+#include "app/menu_system.h"
+
 #include <pal/platform.h>
 #include <legends/legends_embed.h>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace legends {
@@ -67,7 +73,18 @@ private:
 
     // Mouse capture (Step 5)
     bool     mouse_captured_ = false;
-    uint8_t  modifiers_      = 0;       // Bitmask: bit 0 = LCtrl
+    uint8_t  modifiers_      = 0;       // Bitmask: see kMod* constants
+
+    // Modifier bitmask constants
+    static constexpr uint8_t kModLCtrl  = 0x01;
+    static constexpr uint8_t kModRCtrl  = 0x02;
+    static constexpr uint8_t kModCtrl   = kModLCtrl | kModRCtrl;
+    static constexpr uint8_t kModLShift = 0x04;
+    static constexpr uint8_t kModRShift = 0x08;
+    static constexpr uint8_t kModShift  = kModLShift | kModRShift;
+    static constexpr uint8_t kModLAlt   = 0x10;
+    static constexpr uint8_t kModRAlt   = 0x20;
+    static constexpr uint8_t kModAlt    = kModLAlt | kModRAlt;
 
     // Volume control (Step 9)
     float    volume_         = 1.0f;
@@ -77,6 +94,18 @@ private:
     // Dynamic resolution (Step 7)
     uint16_t ctx_width_      = 640;
     uint16_t ctx_height_     = 480;
+
+    // ── Phase 2 state ────────────────────────────────────────────────────
+
+    ActionBus    action_bus_;
+    InputMapper  input_mapper_;
+    SaveManager  save_manager_;
+    MenuSystem   menu_system_;
+    bool         paused_        = false;
+    std::string  base_title_    = "Project Legends";
+
+    void registerActionHandlers();
+    void updateWindowTitle();
 };
 
 } // namespace legends
