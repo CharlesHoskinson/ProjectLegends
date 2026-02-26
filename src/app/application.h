@@ -2,7 +2,8 @@
 // Copyright (C) 2024-2025 Charles Hoskinson and Contributors
 //
 // Application — top-level lifecycle for the interactive emulator.
-// Creates PAL services, opens a window, and runs the event loop.
+// Creates PAL services, initializes the DOSBox-X engine, and drives
+// the render / audio / input loop.
 
 #pragma once
 
@@ -10,10 +11,10 @@
 #include <legends/legends_embed.h>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace legends {
 
-/// Exit codes returned by Application::init() and Application::run()
 enum class ExitCode : int {
     Success = 0,
     PlatformInitFailed = 1,
@@ -22,12 +23,10 @@ enum class ExitCode : int {
     ClockInitFailed = 4,
     InputInitFailed = 5,
     AudioInitFailed = 6,
+    EngineCreateFailed = 7,
+    CLIParseFailed = 8,
 };
 
-/// Top-level application class for the interactive SDL3 emulator.
-///
-/// Owns all PAL services and drives the main event loop.
-/// Phase 0 goal: open a window and exit cleanly on close.
 class Application {
 public:
     Application();
@@ -36,29 +35,48 @@ public:
     Application(const Application&) = delete;
     Application& operator=(const Application&) = delete;
 
-    /// Initialize PAL, create window and services.
-    /// @return ExitCode::Success or a specific failure code
-    ExitCode init();
-
-    /// Run the main event loop until the window is closed.
-    /// @return ExitCode::Success on clean exit
+    ExitCode init(int argc, char** argv);
     ExitCode run();
 
 private:
-    /// Shut down all PAL services and destroy the window.
     void shutdown();
-
-    /// Poll input events, handle WindowClose.
-    /// @return true if the application should keep running
     bool processEvents();
+    void renderFrame();
+    void pumpAudio();
+
+    // ── Input helpers ────────────────────────────────────────────────────
+
+    void setMouseCaptured(bool captured);
+
+    // ── PAL services ─────────────────────────────────────────────────────
 
     std::unique_ptr<pal::IWindow>      window_;
-    std::unique_ptr<pal::IContext>     context_;
-    std::unique_ptr<pal::IAudioSink>   audio_sink_;
-    std::unique_ptr<pal::IHostClock>   host_clock_;
-    std::unique_ptr<pal::IInputSource> input_source_;
+    std::unique_ptr<pal::IContext>      context_;
+    std::unique_ptr<pal::IAudioSink>    audio_sink_;
+    std::unique_ptr<pal::IHostClock>    host_clock_;
+    std::unique_ptr<pal::IInputSource>  input_source_;
 
+    legends_handle engine_ = nullptr;
     bool running_ = false;
+
+    // Reusable capture buffers (avoid per-frame allocation)
+    std::vector<uint8_t>  rgb_buffer_;
+    std::vector<int16_t>  audio_buffer_;
+
+    // ── Phase 1 state ────────────────────────────────────────────────────
+
+    // Mouse capture (Step 5)
+    bool     mouse_captured_ = false;
+    uint8_t  modifiers_      = 0;       // Bitmask: bit 0 = LCtrl
+
+    // Volume control (Step 9)
+    float    volume_         = 1.0f;
+    float    pre_mute_vol_   = 1.0f;    // Volume before mute
+    bool     muted_          = false;
+
+    // Dynamic resolution (Step 7)
+    uint16_t ctx_width_      = 640;
+    uint16_t ctx_height_     = 480;
 };
 
 } // namespace legends

@@ -196,6 +196,18 @@ public:
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    // Logical Presentation (Step 8: aspect ratio)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    void setLogicalSize(uint32_t w, uint32_t h) override {
+        if (renderer_ && w > 0 && h > 0) {
+            SDL_SetRenderLogicalPresentation(renderer_,
+                static_cast<int>(w), static_cast<int>(h),
+                SDL_LOGICAL_PRESENTATION_LETTERBOX);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // Query
     // ═══════════════════════════════════════════════════════════════════════
 

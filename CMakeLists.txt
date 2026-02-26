@@ -521,6 +521,11 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_context_unification.cpp
         # Phase E: Determinism at Scale
         tests/unit/test_determinism_at_scale.cpp
+        # Phase 1: QA
+        tests/unit/test_cli_parser.cpp
+        tests/unit/test_config_parser.cpp
+        tests/unit/test_platform_dirs.cpp
+        tests/unit/test_scancode_mapping.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
@@ -534,8 +539,17 @@ if(LEGENDS_BUILD_TESTS)
         gsl::gsl-lite-v1  # Tests may use gsl-lite directly for testing
     )
 
+    target_sources(legends_unit_tests PRIVATE
+        src/app/cli_parser.cpp
+        src/app/config_parser.cpp
+        src/app/platform_dirs.cpp
+        src/app/scancode_map.cpp
+    )
+
     target_include_directories(legends_unit_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/legends  # F6: internal FFI headers
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_BINARY_DIR}/include
     )
 
     target_compile_definitions(legends_unit_tests PRIVATE
@@ -651,6 +665,9 @@ if(LEGENDS_BUILD_TESTS)
         tests/integration/test_framebuffer_plumbing.cpp
         tests/integration/test_audio_plumbing.cpp
         tests/integration/test_presentation_contract.cpp
+        # Phase 1: QA
+        tests/integration/test_volume_control.cpp
+        tests/integration/test_dynamic_resolution.cpp
     )
 
     legends_set_strict_cxx_standard(legends_integration_tests)
@@ -787,6 +804,10 @@ if(PAL_BACKEND_SDL3)
     add_executable(project_legends
         src/main.cpp
         src/app/application.cpp
+        src/app/cli_parser.cpp
+        src/app/config_parser.cpp
+        src/app/platform_dirs.cpp
+        src/app/scancode_map.cpp
     )
 
     legends_set_strict_cxx_standard(project_legends)
@@ -816,6 +837,16 @@ if(PAL_BACKEND_SDL3)
         )
     endif()
 
+    # Copy SDL3.dll next to the executable so it can be found at runtime
+    if(WIN32 AND TARGET SDL3-shared)
+        add_custom_command(TARGET project_legends POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:SDL3::SDL3-shared>"
+                "$<TARGET_FILE_DIR:project_legends>"
+            COMMENT "Copying SDL3.dll to output directory"
+        )
+    endif()
+
     message(STATUS "Building project_legends executable with SDL3")
 endif()
 
@@ -832,11 +863,26 @@ endif()
 
 include(GNUInstallDirs)
 
-install(TARGETS legends_core legends_pal aibox_core
-    EXPORT LegendsTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
+# When SDL3 is built from FetchContent, legends_pal cannot be in the export
+# set because SDL3-shared is not an installed/imported target.  Install it
+# without EXPORT in that case.
+if(PAL_BACKEND_SDL3 AND NOT SDL3_FOUND)
+    install(TARGETS legends_core aibox_core
+        EXPORT LegendsTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+    install(TARGETS legends_pal
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+else()
+    install(TARGETS legends_core legends_pal aibox_core
+        EXPORT LegendsTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+endif()
 
 install(DIRECTORY include/legends include/pal
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}

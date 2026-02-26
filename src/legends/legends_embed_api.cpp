@@ -929,8 +929,15 @@ legends_error_t legends_create(
         inst->time_state.reset();
         inst->time_state.cycles_per_ms = mc.cpu_cycles;
 
-        // Initialize frame state (real data synced from engine after stepping)
+        // Initialize frame state with test pattern and embedded font.
+        // The test pattern provides visible content ("C:\>") immediately.
+        // The embedded CP437 font ensures proper text rendering even when
+        // engine VGA hardware is unavailable (headless mode).
+        // Once the engine boots and provides real VGA data, sync_state_from_engine()
+        // will overwrite these with actual engine state.
         inst->frame_state.reset();
+        inst->frame_state.init_test_pattern();
+        inst->frame_state.load_embedded_font();
 
         // Initialize input state
         inst->input_state.reset();
@@ -1645,29 +1652,46 @@ void sync_state_from_engine(legends_instance* inst) {
     }
 
     // Framebuffer data sync (Phase -1)
+    // Only overwrite legends-layer state when the engine provides valid data.
+    // In headless mode, VGA functions return NOT_SUPPORTED, and the engine
+    // text memory at 0xB8000 may be all zeros (no BIOS booted yet).
+    // In those cases, keep the current frame_state (test pattern + embedded font).
     if (inst->frame_state.is_text_mode) {
-        // Text buffer
+        // Text buffer — only overwrite if engine has non-zero content
         size_t count = 0;
-        dosbox_lib_get_text_buffer(inst->engine_handle, nullptr, 0, &count);
-        if (count > 0 && count <= FrameState::MAX_TEXT_CELLS) {
-            dosbox_lib_get_text_buffer(inst->engine_handle,
-                inst->frame_state.text_buffer.data(), count, &count);
+        if (dosbox_lib_get_text_buffer(inst->engine_handle, nullptr, 0, &count) == DOSBOX_LIB_OK
+            && count > 0 && count <= FrameState::MAX_TEXT_CELLS) {
+            std::array<uint16_t, FrameState::MAX_TEXT_CELLS> temp{};
+            if (dosbox_lib_get_text_buffer(inst->engine_handle,
+                    temp.data(), count, &count) == DOSBOX_LIB_OK) {
+                // Check if engine text buffer has any non-zero content
+                bool has_content = false;
+                for (size_t i = 0; i < count; ++i) {
+                    if (temp[i] != 0) { has_content = true; break; }
+                }
+                if (has_content) {
+                    std::copy(temp.begin(), temp.begin() + count,
+                              inst->frame_state.text_buffer.begin());
+                }
+            }
         }
-        // Font data
+        // Font data — only overwrite if engine returns valid font (not NOT_SUPPORTED)
         size_t font_size = 0;
         uint8_t ch_height = 0;
-        dosbox_lib_get_font_data(inst->engine_handle, nullptr, 0, &font_size, &ch_height);
-        if (font_size > 0) {
+        auto font_err = dosbox_lib_get_font_data(
+            inst->engine_handle, nullptr, 0, &font_size, &ch_height);
+        if (font_err == DOSBOX_LIB_OK && font_size > 0) {
             inst->frame_state.font_data.resize(font_size);
             inst->frame_state.char_height = ch_height;
             dosbox_lib_get_font_data(inst->engine_handle,
                 inst->frame_state.font_data.data(), font_size, &font_size, &ch_height);
         }
     } else {
-        // Indexed pixels for graphics modes
+        // Indexed pixels for graphics modes — only if supported
         size_t px_count = 0;
-        dosbox_lib_get_indexed_pixels(inst->engine_handle, nullptr, 0, &px_count);
-        if (px_count > 0) {
+        auto px_err = dosbox_lib_get_indexed_pixels(
+            inst->engine_handle, nullptr, 0, &px_count);
+        if (px_err == DOSBOX_LIB_OK && px_count > 0) {
             inst->frame_state.indexed_pixels.resize(px_count);
             dosbox_lib_get_indexed_pixels(inst->engine_handle,
                 inst->frame_state.indexed_pixels.data(), px_count, &px_count);
@@ -1675,14 +1699,21 @@ void sync_state_from_engine(legends_instance* inst) {
     }
 
     // Cursor sync (Phase -1, REQ-PLUMB-002)
+    // Only overwrite cursor state if the BDA appears initialized (non-zero cursor shape).
+    // When engine memory is uninitialized, BDA is all zeros which gives start=0, end=0.
     dosbox_lib_cursor_info_t cursor;
     if (dosbox_lib_get_cursor_info(inst->engine_handle, &cursor) == DOSBOX_LIB_OK) {
-        inst->frame_state.cursor_x = cursor.col;
-        inst->frame_state.cursor_y = cursor.row;
-        inst->frame_state.cursor_visible = (cursor.visible != 0);
-        inst->frame_state.cursor_start = cursor.start_line;
-        inst->frame_state.cursor_end = cursor.end_line;
-        inst->frame_state.active_page = cursor.active_page;
+        // A cursor_end of 0 with cursor_start of 0 usually means BDA is uninitialized
+        bool bda_initialized = (cursor.end_line > 0 || cursor.start_line > 0
+                                || cursor.col > 0 || cursor.row > 0);
+        if (bda_initialized) {
+            inst->frame_state.cursor_x = cursor.col;
+            inst->frame_state.cursor_y = cursor.row;
+            inst->frame_state.cursor_visible = (cursor.visible != 0);
+            inst->frame_state.cursor_start = cursor.start_line;
+            inst->frame_state.cursor_end = cursor.end_line;
+            inst->frame_state.active_page = cursor.active_page;
+        }
     }
 }
 

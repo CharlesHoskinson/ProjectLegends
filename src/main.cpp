@@ -5,10 +5,10 @@
 
 #include "app/application.h"
 
-int main(int /*argc*/, char* /*argv*/[]) {
+int main(int argc, char* argv[]) {
     legends::Application app;
 
-    auto code = app.init();
+    auto code = app.init(argc, argv);
     if (code != legends::ExitCode::Success) {
         return static_cast<int>(code);
     }

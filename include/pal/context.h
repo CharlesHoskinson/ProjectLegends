@@ -88,6 +88,15 @@ public:
     virtual void* getProcAddress(const char* name) = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
+    // Logical Presentation
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// Set logical rendering size for aspect-ratio-correct scaling.
+    /// The backend scales the logical surface to the window with letterboxing.
+    /// Default implementation is a no-op (headless, OpenGL-only contexts).
+    virtual void setLogicalSize(uint32_t /*w*/, uint32_t /*h*/) {}
+
+    // ═══════════════════════════════════════════════════════════════════════
     // Query
     // ═══════════════════════════════════════════════════════════════════════
 

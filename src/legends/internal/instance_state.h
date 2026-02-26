@@ -21,6 +21,7 @@
 
 #include "legends/legends_embed.h"
 #include "legends/vision_framebuffer.h"
+#include "cp437_font_8x16.h"
 
 namespace legends::internal {
 
@@ -153,6 +154,13 @@ struct FrameState {
         cursor_x = 4;
         cursor_y = 0;
         dirty = true;
+    }
+
+    /// Load embedded CP437 8x16 font into font_data.
+    /// Used as fallback when engine VGA font is not available.
+    void load_embedded_font() {
+        char_height = 16;
+        font_data.assign(CP437_FONT_8x16.begin(), CP437_FONT_8x16.end());
     }
 
     [[nodiscard]] size_t text_cell_count() const noexcept {
