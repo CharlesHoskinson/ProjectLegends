@@ -21,6 +21,10 @@ set(LEGENDS_DEP_SDL3_TAG        "release-3.2.8" CACHE STRING "SDL3 version tag")
 set(LEGENDS_DEP_GOOGLETEST_TAG  "v1.14.0"  CACHE STRING "GoogleTest version tag")
 set(LEGENDS_DEP_BENCHMARK_TAG   "v1.8.3"   CACHE STRING "Google Benchmark version tag")
 
+# Phase 3: Enhanced Features
+set(LEGENDS_DEP_FLUIDSYNTH_TAG  "v2.3.5"   CACHE STRING "FluidSynth version tag")
+set(LEGENDS_DEP_MT32EMU_TAG     "v2.7.0"   CACHE STRING "MUNT/mt32emu version tag")
+
 # ─────────────────────────────────────────────────────────────────────────────
 # gsl-lite (Contracts Library)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,5 +70,60 @@ if(PAL_BACKEND_SDL3)
         set(SDL_STATIC OFF CACHE BOOL "" FORCE)
         set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(SDL3)
+    endif()
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# libcurl (AI Assistant HTTP client) — Phase 3, Sprint 3
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# libcurl is used for async HTTP requests to AI API endpoints.
+# Optional: AI features gracefully degrade without it.
+
+if(LEGENDS_ENABLE_AI)
+    find_package(CURL QUIET)
+    if(NOT CURL_FOUND)
+        message(STATUS "libcurl not found — AI HTTP client will use stub implementation")
+    else()
+        message(STATUS "Found libcurl: ${CURL_VERSION_STRING}")
+    endif()
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FluidSynth (MIDI Synthesis) — Phase 3, Sprint 4
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# FluidSynth provides SoundFont-based MIDI synthesis.
+# Optional: gated by LEGENDS_ENABLE_FLUIDSYNTH
+
+if(LEGENDS_ENABLE_FLUIDSYNTH)
+    find_package(FluidSynth QUIET)
+    if(NOT FluidSynth_FOUND)
+        message(STATUS "FluidSynth not found — FluidSynth MIDI device unavailable")
+    else()
+        message(STATUS "Found FluidSynth: ${FluidSynth_VERSION}")
+    endif()
+endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MUNT/mt32emu (MT-32 Emulation) — Phase 3, Sprint 4
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# MUNT provides Roland MT-32 hardware emulation for authentic MIDI playback.
+# Optional: gated by LEGENDS_ENABLE_MT32
+
+if(LEGENDS_ENABLE_MT32)
+    find_package(mt32emu QUIET)
+    if(NOT mt32emu_FOUND)
+        message(STATUS "mt32emu not found — attempting FetchContent...")
+        FetchContent_Declare(mt32emu
+            GIT_REPOSITORY https://github.com/munt/munt.git
+            GIT_TAG        ${LEGENDS_DEP_MT32EMU_TAG}
+            GIT_SHALLOW    TRUE
+            SOURCE_SUBDIR  mt32emu
+        )
+        FetchContent_MakeAvailable(mt32emu)
+    else()
+        message(STATUS "Found mt32emu: ${mt32emu_VERSION}")
     endif()
 endif()

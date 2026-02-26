@@ -2733,4 +2733,244 @@ legends_error_t legends_set_log_callback(
     return LEGENDS_OK;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 3: Enhanced Features — Engine API bridges
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Sprint 1: Joystick
+legends_error_t legends_joystick_event(
+    legends_handle handle,
+    uint8_t joystick_id,
+    uint8_t axis_x,
+    uint8_t axis_y,
+    uint8_t buttons
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Bridge to engine joystick port 0x201 once engine context is wired.
+    (void)joystick_id; (void)axis_x; (void)axis_y; (void)buttons;
+
+    return LEGENDS_OK;
+}
+
+// Sprint 4: MIDI
+legends_error_t legends_midi_set_device(
+    legends_handle handle,
+    const char* device_type
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(device_type != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine MIDI subsystem once wired.
+    (void)device_type;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_midi_set_soundfont(
+    legends_handle handle,
+    const char* sf2_path
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(sf2_path != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine FluidSynth subsystem once wired.
+    (void)sf2_path;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_midi_set_romdir(
+    legends_handle handle,
+    const char* rom_dir
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(rom_dir != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine MT-32 subsystem once wired.
+    (void)rom_dir;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_capture_midi_audio(
+    legends_handle handle,
+    int16_t* buf,
+    size_t count,
+    size_t* out
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(out != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Capture from engine MIDI audio ring buffer once wired.
+    (void)buf; (void)count;
+    *out = 0;
+    return LEGENDS_OK;
+}
+
+// Sprint 5: Printer
+legends_error_t legends_printer_set_output(
+    legends_handle handle,
+    const char* output_path
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(output_path != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine printer subsystem once wired.
+    (void)output_path;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_printer_is_active(
+    legends_handle handle,
+    int* active_out
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(active_out != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Query engine printer state once wired.
+    *active_out = 0;
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_printer_flush(legends_handle handle) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Flush engine printer buffer once wired.
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_set_ttf_font(
+    legends_handle handle,
+    const char* ttf_path,
+    uint32_t point_size
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(ttf_path != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine TTF renderer once wired.
+    (void)ttf_path; (void)point_size;
+
+    return LEGENDS_OK;
+}
+
+// Sprint 6: IPX Networking
+legends_error_t legends_ipx_enable(legends_handle handle, int enable) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine IPX subsystem once wired.
+    (void)enable;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_ipx_connect(
+    legends_handle handle,
+    const char* server,
+    uint16_t port
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(server != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine IPX networking once wired.
+    (void)server; (void)port;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_ipx_disconnect(legends_handle handle) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Disconnect engine IPX session once wired.
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_ipx_is_connected(legends_handle handle, int* out) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(out != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Query engine IPX connection state once wired.
+    *out = 0;
+    return LEGENDS_OK;
+}
+
+// Sprint 6: 3dfx Glide
+legends_error_t legends_glide_enable(legends_handle handle, int enable) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine Glide subsystem once wired.
+    (void)enable;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_glide_set_resolution(
+    legends_handle handle,
+    uint16_t w,
+    uint16_t h
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine Glide resolution once wired.
+    (void)w; (void)h;
+
+    return LEGENDS_OK;
+}
+
+// Sprint 7: PC-98
+legends_error_t legends_set_machine_pc98(legends_handle handle, int enable) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Forward to engine machine type once wired.
+    (void)enable;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_is_pc98_mode(legends_handle handle, int* out) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(out != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Query engine machine type once wired.
+    *out = 0;
+    return LEGENDS_OK;
+}
+
 } // extern "C"

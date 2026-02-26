@@ -35,11 +35,11 @@ void MenuSystem::buildMenus() {
         menus_.push_back(std::move(m));
     }
 
-    // CPU (placeholder)
+    // CPU
     {
         Menu m;
         m.title = "CPU";
-        m.items.emplace_back("(no options)", -1);
+        m.items.emplace_back("PC-98 Mode", static_cast<int>(Action::SetMachinePC98));
         menus_.push_back(std::move(m));
     }
 
@@ -47,7 +47,16 @@ void MenuSystem::buildMenus() {
     {
         Menu m;
         m.title = "Video";
-        m.items.emplace_back("(fullscreen N/A)", -1);
+        m.items.emplace_back("Toggle Fullscreen", static_cast<int>(Action::ToggleFullscreen));
+        m.items.push_back(MenuItem::Separator());
+        m.items.emplace_back("Toggle Shaders", static_cast<int>(Action::ToggleShaders));
+        m.items.emplace_back("Next Shader", static_cast<int>(Action::NextShader));
+        m.items.emplace_back("Previous Shader", static_cast<int>(Action::PrevShader));
+        m.items.emplace_back("Load Custom .glsl", static_cast<int>(Action::LoadCustomShader));
+        m.items.push_back(MenuItem::Separator());
+        m.items.emplace_back("TTF Font Mode", static_cast<int>(Action::ToggleTTFMode));
+        m.items.push_back(MenuItem::Separator());
+        m.items.emplace_back("3dfx Glide Emulation", static_cast<int>(Action::ToggleGlide));
         menus_.push_back(std::move(m));
     }
 
@@ -58,6 +67,8 @@ void MenuSystem::buildMenus() {
         m.items.emplace_back("Volume Up", static_cast<int>(Action::VolumeUp));
         m.items.emplace_back("Volume Down", static_cast<int>(Action::VolumeDown));
         m.items.emplace_back("Mute/Unmute", static_cast<int>(Action::ToggleMute));
+        m.items.push_back(MenuItem::Separator());
+        m.items.emplace_back("MIDI Device", static_cast<int>(Action::SetMIDIDevice));
         menus_.push_back(std::move(m));
     }
 
@@ -66,6 +77,15 @@ void MenuSystem::buildMenus() {
         Menu m;
         m.title = "DOS";
         m.items.emplace_back("(no options)", -1);
+        menus_.push_back(std::move(m));
+    }
+
+    // Network
+    {
+        Menu m;
+        m.title = "Network";
+        m.items.emplace_back("IPX Connect", static_cast<int>(Action::IPXConnect));
+        m.items.emplace_back("IPX Disconnect", static_cast<int>(Action::IPXDisconnect));
         menus_.push_back(std::move(m));
     }
 
@@ -90,6 +110,16 @@ void MenuSystem::buildMenus() {
         Menu m;
         m.title = "Capture";
         m.items.emplace_back("Screenshot", static_cast<int>(Action::Screenshot));
+        m.items.push_back(MenuItem::Separator());
+        m.items.emplace_back("Printer Output", static_cast<int>(Action::TogglePrinter));
+        menus_.push_back(std::move(m));
+    }
+
+    // Tools
+    {
+        Menu m;
+        m.title = "Tools";
+        m.items.emplace_back("AI Assistant", static_cast<int>(Action::ToggleAIPanel));
         menus_.push_back(std::move(m));
     }
 
@@ -150,22 +180,23 @@ bool MenuSystem::handleKey(uint16_t scancode, bool down) {
     switch (scancode) {
         case kUp:
             if (item_count > 0) {
-                // Move up, skip separators
+                int start = selected_item_;
                 do {
                     selected_item_--;
                     if (selected_item_ < 0) selected_item_ = item_count - 1;
                 } while (menu.items[static_cast<size_t>(selected_item_)].separator &&
-                         item_count > 1);
+                         selected_item_ != start);
             }
             return true;
 
         case kDown:
             if (item_count > 0) {
+                int start = selected_item_;
                 do {
                     selected_item_++;
                     if (selected_item_ >= item_count) selected_item_ = 0;
                 } while (menu.items[static_cast<size_t>(selected_item_)].separator &&
-                         item_count > 1);
+                         selected_item_ != start);
             }
             return true;
 
@@ -267,12 +298,13 @@ void MenuSystem::activateItem() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void MenuSystem::darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
+                            uint32_t pitch,
                             int x, int y, int w, int h) const {
     for (int py = y; py < y + h && py < buf_h; ++py) {
         if (py < 0) continue;
         for (int px = x; px < x + w && px < buf_w; ++px) {
             if (px < 0) continue;
-            int idx = (py * buf_w + px) * 3;
+            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
             rgb[idx]     = static_cast<uint8_t>(rgb[idx] / 3);
             rgb[idx + 1] = static_cast<uint8_t>(rgb[idx + 1] / 3);
             rgb[idx + 2] = static_cast<uint8_t>(rgb[idx + 2] / 3);
@@ -281,6 +313,7 @@ void MenuSystem::darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
 }
 
 void MenuSystem::drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
+                          uint32_t pitch,
                           int x, int y, uint8_t ch,
                           uint8_t fr, uint8_t fg, uint8_t fb,
                           uint8_t br, uint8_t bg, uint8_t bb) const {
@@ -296,7 +329,7 @@ void MenuSystem::drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
             int px = x + col;
             if (px < 0 || px >= buf_w) continue;
 
-            int idx = (py * buf_w + px) * 3;
+            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
             bool set = (bits & (0x80 >> col)) != 0;
             rgb[idx]     = set ? fr : br;
             rgb[idx + 1] = set ? fg : bg;
@@ -306,28 +339,33 @@ void MenuSystem::drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
 }
 
 void MenuSystem::drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
+                            uint32_t pitch,
                             int x, int y, const std::string& text,
                             uint8_t fr, uint8_t fg, uint8_t fb,
                             uint8_t br, uint8_t bg, uint8_t bb) const {
     for (size_t i = 0; i < text.size(); ++i) {
-        drawChar(rgb, buf_w, buf_h,
+        drawChar(rgb, buf_w, buf_h, pitch,
                  x + static_cast<int>(i) * kCharW, y,
                  static_cast<uint8_t>(text[i]),
                  fr, fg, fb, br, bg, bb);
     }
 }
 
-void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height) {
+void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
+                        uint32_t pitch) {
     if (!open_ || menus_.empty()) return;
 
+    // Default pitch = tightly packed RGB24
+    if (pitch == 0) pitch = static_cast<uint32_t>(width) * 3;
+
     // Semi-transparent darkened background
-    darkenRect(rgb_buffer, width, height, 0, 0, width, height);
+    darkenRect(rgb_buffer, width, height, pitch, 0, 0, width, height);
 
     // ── Menu bar ────────────────────────────────────────────────────────
     // Fill menu bar background
     for (int py = 0; py < kMenuBarH && py < height; ++py) {
         for (int px = 0; px < width; ++px) {
-            int idx = (py * width + px) * 3;
+            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
             rgb_buffer[idx]     = 0;
             rgb_buffer[idx + 1] = 0;
             rgb_buffer[idx + 2] = 170; // dark blue
@@ -340,12 +378,12 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height) {
         bool selected = (static_cast<int>(i) == selected_menu_);
         std::string label = " " + menus_[i].title + " ";
         if (selected) {
-            drawString(rgb_buffer, width, height,
+            drawString(rgb_buffer, width, height, pitch,
                        title_x, 2, label,
                        0, 0, 170,        // fg: dark blue
                        255, 255, 255);   // bg: white (inverted)
         } else {
-            drawString(rgb_buffer, width, height,
+            drawString(rgb_buffer, width, height, pitch,
                        title_x, 2, label,
                        255, 255, 255,    // fg: white
                        0, 0, 170);       // bg: dark blue
@@ -390,7 +428,7 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height) {
     // Fill dropdown background (black)
     for (int py = drop_y; py < drop_y + drop_h && py < height; ++py) {
         for (int px = drop_x; px < drop_x + drop_w && px < width; ++px) {
-            int idx = (py * width + px) * 3;
+            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
             rgb_buffer[idx]     = 0;
             rgb_buffer[idx + 1] = 0;
             rgb_buffer[idx + 2] = 0;
@@ -408,7 +446,7 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height) {
             if (line_y >= 0 && line_y < height) {
                 for (int px = drop_x + 4; px < drop_x + drop_w - 4 && px < width; ++px) {
                     if (px < 0) continue;
-                    int idx = (line_y * width + px) * 3;
+                    size_t idx = static_cast<size_t>(line_y) * pitch + static_cast<size_t>(px) * 3;
                     rgb_buffer[idx]     = 128;
                     rgb_buffer[idx + 1] = 128;
                     rgb_buffer[idx + 2] = 128;
@@ -426,13 +464,13 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height) {
         }
 
         if (highlighted) {
-            drawString(rgb_buffer, width, height,
+            drawString(rgb_buffer, width, height, pitch,
                        drop_x, item_y, padded,
                        0, 0, 0,              // fg: black
                        200, 200, 200);       // bg: light gray
         } else {
             bool disabled = (item.action_id < 0);
-            drawString(rgb_buffer, width, height,
+            drawString(rgb_buffer, width, height, pitch,
                        drop_x, item_y, padded,
                        disabled ? static_cast<uint8_t>(128) : static_cast<uint8_t>(255),
                        disabled ? static_cast<uint8_t>(128) : static_cast<uint8_t>(255),

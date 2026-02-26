@@ -101,7 +101,7 @@ bool SaveManager::loadFromSlot(legends_handle engine, int slot) {
     }
 
     auto file_size = file.tellg();
-    if (file_size <= 0) {
+    if (file_size == std::streampos(-1) || file_size == std::streampos(0)) {
         last_error_ = "Save file is empty: " + path;
         return false;
     }

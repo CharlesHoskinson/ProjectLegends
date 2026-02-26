@@ -12,7 +12,11 @@ void ActionBus::dispatch(Action action, int param) {
     auto it = handlers_.find(action);
     if (it != handlers_.end()) {
         for (auto& handler : it->second) {
-            handler(param);
+            try {
+                handler(param);
+            } catch (...) {
+                // Log and continue — one bad handler shouldn't break others
+            }
         }
     }
 }

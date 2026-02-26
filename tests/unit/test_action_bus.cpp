@@ -6,6 +6,9 @@
 #include <gtest/gtest.h>
 #include "app/action_bus.h"
 
+#include <stdexcept>
+#include <vector>
+
 namespace legends {
 namespace {
 
@@ -129,6 +132,44 @@ TEST(ActionBusTest, DispatchCountIncrementsEvenWithNoHandler) {
     bus.dispatch(Action::OpenMenu);
     bus.dispatch(Action::OpenMenu);
     EXPECT_EQ(bus.dispatchCount(), 2u);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2 QA: exception safety
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(ActionBusTest, ThrowingHandlerDoesNotPreventSubsequentHandlers) {
+    ActionBus bus;
+    int before = 0, after = 0;
+    bus.registerHandler(Action::Reset, [&](int) { ++before; });
+    bus.registerHandler(Action::Reset, [](int) { throw std::runtime_error("boom"); });
+    bus.registerHandler(Action::Reset, [&](int) { ++after; });
+    EXPECT_NO_THROW(bus.dispatch(Action::Reset));
+    EXPECT_EQ(before, 1);
+    EXPECT_EQ(after, 1);
+}
+
+TEST(ActionBusTest, DispatchCountIncrementsEvenWhenHandlerThrows) {
+    ActionBus bus;
+    bus.registerHandler(Action::Quit, [](int) { throw std::runtime_error("fail"); });
+    EXPECT_NO_THROW(bus.dispatch(Action::Quit));
+    EXPECT_EQ(bus.dispatchCount(), 1u);
+}
+
+TEST(ActionBusTest, AllHandlersCalledDespiteIntermediateThrow) {
+    ActionBus bus;
+    std::vector<int> call_order;
+    bus.registerHandler(Action::Screenshot, [&](int) { call_order.push_back(1); });
+    bus.registerHandler(Action::Screenshot, [&](int) {
+        call_order.push_back(2);
+        throw std::logic_error("test");
+    });
+    bus.registerHandler(Action::Screenshot, [&](int) { call_order.push_back(3); });
+    EXPECT_NO_THROW(bus.dispatch(Action::Screenshot));
+    ASSERT_EQ(call_order.size(), 3u);
+    EXPECT_EQ(call_order[0], 1);
+    EXPECT_EQ(call_order[1], 2);
+    EXPECT_EQ(call_order[2], 3);
 }
 
 } // namespace

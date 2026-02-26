@@ -44,5 +44,29 @@ TEST(ClipboardPasteTest, ClipboardPasteIsDistinctFromOtherActions) {
     EXPECT_EQ(quit_count, 0);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2 QA: edge cases
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(ClipboardPasteTest, DispatchWithNoHandlersDoesNotCrash) {
+    ActionBus bus;
+    // No handlers registered — should be a no-op
+    EXPECT_NO_THROW(bus.dispatch(Action::ClipboardPaste));
+}
+
+TEST(ClipboardPasteTest, ReRegisterHandlerAfterClearHandlersWorks) {
+    ActionBus bus;
+    int count = 0;
+    bus.registerHandler(Action::ClipboardPaste, [&](int) { ++count; });
+    bus.clearHandlers(Action::ClipboardPaste);
+    bus.dispatch(Action::ClipboardPaste);
+    EXPECT_EQ(count, 0);
+
+    // Re-register
+    bus.registerHandler(Action::ClipboardPaste, [&](int) { ++count; });
+    bus.dispatch(Action::ClipboardPaste);
+    EXPECT_EQ(count, 1);
+}
+
 } // namespace
 } // namespace legends

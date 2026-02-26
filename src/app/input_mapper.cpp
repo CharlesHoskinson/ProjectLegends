@@ -51,7 +51,7 @@ bool InputMapper::saveToFile(const std::string& path) const {
 
     for (const auto& [from, to] : remaps_) {
         char buf[32];
-        std::snprintf(buf, sizeof(buf), "0x%02X 0x%02X", from, to);
+        std::snprintf(buf, sizeof(buf), "0x%04X 0x%04X", from, to);
         file << buf << "\n";
     }
 

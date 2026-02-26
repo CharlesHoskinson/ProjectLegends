@@ -11,6 +11,18 @@
 #include "app/input_mapper.h"
 #include "app/save_manager.h"
 #include "app/menu_system.h"
+#include "app/joystick_mapper.h"
+#include "app/shader_renderer.h"
+#include "app/ai_config.h"
+#include "app/ai_http_client.h"
+#include "app/ai_panel.h"
+#include "app/audio_mixer.h"
+#include "app/midi_config.h"
+#include "app/printer_manager.h"
+#include "app/ttf_renderer.h"
+#include "app/ipx_config.h"
+#include "app/glide_config.h"
+#include "app/pc98_config.h"
 
 #include <pal/platform.h>
 #include <legends/legends_embed.h>
@@ -103,6 +115,35 @@ private:
     MenuSystem   menu_system_;
     bool         paused_        = false;
     std::string  base_title_    = "Project Legends";
+
+    // ── Phase 3 state ────────────────────────────────────────────────────
+
+    // Sprint 1: Fullscreen + Joystick
+    bool            fullscreen_     = false;
+    JoystickMapper  joystick_mapper_;
+
+    // Sprint 2: Shaders
+    ShaderRenderer  shader_renderer_;
+    bool            use_opengl_     = false;
+
+    // Sprint 3: AI Assistant
+    AIConfig        ai_config_;
+    AIHttpClient    ai_http_client_;
+    AIPanel         ai_panel_;
+
+    // Sprint 4: MIDI
+    MIDIConfig      midi_config_;
+
+    // Sprint 5: Printer + TTF
+    PrinterManager  printer_manager_;
+    TTFRenderer     ttf_renderer_;
+
+    // Sprint 6: IPX + 3dfx
+    IPXConfig       ipx_config_;
+    GlideConfig     glide_config_;
+
+    // Sprint 7: PC-98
+    PC98Config      pc98_config_;
 
     void registerActionHandlers();
     void updateWindowTitle();

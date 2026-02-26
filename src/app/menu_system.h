@@ -48,22 +48,24 @@ public:
     bool handleMouseClick(int32_t x, int32_t y);
 
     /// Render the menu overlay into an RGB24 buffer.
-    void render(uint8_t* rgb_buffer, uint16_t width, uint16_t height);
+    /// pitch = row stride in bytes. 0 means width * 3 (tightly packed RGB24).
+    void render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
+                uint32_t pitch = 0);
 
 private:
     void buildMenus();
     void activateItem();
 
-    // Text rendering helpers
-    void drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
+    // Text rendering helpers (pitch = row stride in bytes)
+    void drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
                   int x, int y, uint8_t ch,
                   uint8_t fr, uint8_t fg, uint8_t fb,
                   uint8_t br, uint8_t bg, uint8_t bb) const;
-    void drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
+    void drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
                     int x, int y, const std::string& text,
                     uint8_t fr, uint8_t fg, uint8_t fb,
                     uint8_t br, uint8_t bg, uint8_t bb) const;
-    void darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
+    void darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
                     int x, int y, int w, int h) const;
 
     ActionBus* bus_ = nullptr;

@@ -131,5 +131,62 @@ TEST(CaptureTest, WriteScreenshotPNG_InvalidPath) {
     EXPECT_FALSE(ok);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2 QA: PNG IHDR validation and minimum image
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(CaptureTest, WriteScreenshotPNG_IHDRWidthHeightMatch) {
+    // 16x8 green image
+    constexpr uint16_t w = 16, h = 8;
+    std::vector<uint8_t> rgb(w * h * 3, 0);
+    for (size_t i = 0; i < rgb.size(); i += 3) {
+        rgb[i + 1] = 255; // G
+    }
+
+    auto tmp_dir = std::filesystem::temp_directory_path() / "legends_test_ihdr";
+    std::filesystem::create_directories(tmp_dir);
+    std::string path = (tmp_dir / "ihdr_test.png").string();
+
+    ASSERT_TRUE(writeScreenshotPNG(path, rgb.data(), w, h));
+
+    uint32_t png_w = 0, png_h = 0;
+    {
+        // Read IHDR chunk: bytes 16-19 = width (big-endian), 20-23 = height
+        std::ifstream file(path, std::ios::binary);
+        ASSERT_TRUE(file.is_open());
+        uint8_t header[24];
+        file.read(reinterpret_cast<char*>(header), 24);
+        ASSERT_TRUE(file);
+
+        png_w = (static_cast<uint32_t>(header[16]) << 24) |
+                (static_cast<uint32_t>(header[17]) << 16) |
+                (static_cast<uint32_t>(header[18]) <<  8) |
+                (static_cast<uint32_t>(header[19]));
+        png_h = (static_cast<uint32_t>(header[20]) << 24) |
+                (static_cast<uint32_t>(header[21]) << 16) |
+                (static_cast<uint32_t>(header[22]) <<  8) |
+                (static_cast<uint32_t>(header[23]));
+    } // file closed here before assertions and cleanup
+
+    EXPECT_EQ(png_w, w);
+    EXPECT_EQ(png_h, h);
+
+    std::filesystem::remove_all(tmp_dir);
+}
+
+TEST(CaptureTest, WriteScreenshotPNG_1x1MinimumImage) {
+    uint8_t rgb[3] = {255, 128, 0}; // single orange pixel
+    auto tmp_dir = std::filesystem::temp_directory_path() / "legends_test_1x1";
+    std::filesystem::create_directories(tmp_dir);
+    std::string path = (tmp_dir / "one_pixel.png").string();
+
+    bool ok = writeScreenshotPNG(path, rgb, 1, 1);
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(std::filesystem::exists(path));
+    EXPECT_GT(std::filesystem::file_size(path), 0u);
+
+    std::filesystem::remove_all(tmp_dir);
+}
+
 } // namespace
 } // namespace legends

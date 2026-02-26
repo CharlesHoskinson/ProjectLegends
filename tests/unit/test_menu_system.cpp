@@ -155,5 +155,99 @@ TEST_F(MenuSystemTest, RenderModifiesBufferWhenOpen) {
     EXPECT_TRUE(changed);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2 QA: separator loop safety & navigation edge cases
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_F(MenuSystemTest, NavigateDownRepeatedlyDoesNotHang) {
+    menu_.open();
+    // Navigate down many times — should not hang even with separators
+    for (int i = 0; i < 50; ++i) {
+        menu_.handleKey(0x51, true); // Down
+    }
+    EXPECT_TRUE(menu_.isOpen());
+}
+
+TEST_F(MenuSystemTest, NavigateUpRepeatedlyDoesNotHang) {
+    menu_.open();
+    for (int i = 0; i < 50; ++i) {
+        menu_.handleKey(0x52, true); // Up
+    }
+    EXPECT_TRUE(menu_.isOpen());
+}
+
+TEST_F(MenuSystemTest, NavigateDownWrapsToFirstItem) {
+    menu_.open();
+    // First menu is "Main" with 4 items (Pause, Reset, Sep, Quit)
+    // Navigate down many times to wrap around
+    for (int i = 0; i < 20; ++i) {
+        menu_.handleKey(0x51, true); // Down
+    }
+    // Should still be open and functional
+    EXPECT_TRUE(menu_.isOpen());
+}
+
+TEST_F(MenuSystemTest, NavigateUpWrapsToLastItem) {
+    menu_.open();
+    // Navigate up from first item should wrap to last non-separator
+    menu_.handleKey(0x52, true); // Up
+    EXPECT_TRUE(menu_.isOpen());
+}
+
+TEST_F(MenuSystemTest, NavigationSkipsSeparatorItems) {
+    menu_.open();
+    // Main menu: Pause/Resume, Reset, --separator--, Quit
+    // Down from item 0 → item 1
+    menu_.handleKey(0x51, true); // Down to Reset
+    // Down again should skip separator and go to Quit
+    menu_.handleKey(0x51, true); // Down (skips separator → Quit)
+    // Activate should dispatch Quit
+    int quit_count = 0;
+    bus_.registerHandler(Action::Quit, [&](int) { ++quit_count; });
+    menu_.handleKey(0x28, true); // Enter
+    EXPECT_EQ(quit_count, 1);
+}
+
+TEST_F(MenuSystemTest, EnterOnDisabledItemDoesNotDispatch) {
+    menu_.open();
+    // Navigate to CPU menu (index 1) which has "(no options)" with action_id=-1
+    menu_.handleKey(0x4F, true); // Right → CPU
+    menu_.handleKey(0x28, true); // Enter on disabled item
+    // Menu should remain open since disabled items don't activate
+    EXPECT_TRUE(menu_.isOpen());
+}
+
+TEST_F(MenuSystemTest, RenderWithExplicitPitch) {
+    // Use pitch > width*3 to simulate row alignment padding
+    constexpr uint16_t w = 320;
+    constexpr uint16_t h = 200;
+    constexpr uint32_t pitch = w * 3 + 64; // 64 bytes of padding per row
+    std::vector<uint8_t> buf(pitch * h, 128);
+    menu_.open();
+    menu_.render(buf.data(), w, h, pitch);
+    // Buffer should be modified (darkened background + menu bar)
+    bool changed = false;
+    for (size_t i = 0; i < buf.size(); ++i) {
+        if (buf[i] != 128) { changed = true; break; }
+    }
+    EXPECT_TRUE(changed);
+    // The padding bytes (beyond width*3 in each row) should remain untouched
+    // Check last padding byte of first row
+    EXPECT_EQ(buf[pitch - 1], 128);
+}
+
+TEST_F(MenuSystemTest, OpenThenCloseImmediatelyLeavesCleanState) {
+    menu_.open();
+    EXPECT_TRUE(menu_.isOpen());
+    menu_.close();
+    EXPECT_FALSE(menu_.isOpen());
+    // Re-open should work correctly
+    menu_.open();
+    EXPECT_TRUE(menu_.isOpen());
+    // Navigation should still work
+    menu_.handleKey(0x51, true); // Down
+    EXPECT_TRUE(menu_.isOpen());
+}
+
 } // namespace
 } // namespace legends

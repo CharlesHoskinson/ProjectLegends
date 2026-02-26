@@ -31,6 +31,36 @@ enum class Action : uint16_t {
     ToggleMute,
     ReleaseMouseCapture,
     OpenMenu,
+
+    // ── Phase 3: Enhanced Features ──────────────────────────────────────
+
+    // Sprint 1: Fullscreen + Joystick
+    ToggleFullscreen,
+
+    // Sprint 2: Shaders
+    ToggleShaders,
+    NextShader,
+    PrevShader,
+    LoadCustomShader,
+
+    // Sprint 3: AI Assistant
+    ToggleAIPanel,
+    AISubmitQuery,
+
+    // Sprint 4: MIDI
+    SetMIDIDevice,          // param = device index
+
+    // Sprint 5: Printer + TTF
+    TogglePrinter,
+    ToggleTTFMode,
+
+    // Sprint 6: IPX + 3dfx
+    IPXConnect,
+    IPXDisconnect,
+    ToggleGlide,
+
+    // Sprint 7: PC-98
+    SetMachinePC98,
 };
 
 class ActionBus {

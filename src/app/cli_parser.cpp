@@ -142,7 +142,7 @@ void CLIOptions::printUsage(const char* program_name) {
         "  --conf <path>      Path to .conf configuration file\n"
         "  --fullscreen       Start in fullscreen mode\n"
         "  --cycles <n>       CPU cycles per millisecond (0 = auto)\n"
-        "  --machine <type>   Machine type: vga, ega, cga, hercules, tandy\n"
+        "  --machine <type>   Machine type: vga, ega, cga, hercules, tandy, pc98\n"
         "  --memsize <kb>     Conventional memory size in KB (default: 640)\n"
         "  --profile <name>   Execution profile: interactive, deterministic\n"
         "  --log              Enable engine log output\n"

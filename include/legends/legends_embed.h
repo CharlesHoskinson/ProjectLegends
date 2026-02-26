@@ -624,6 +624,247 @@ LEGENDS_API legends_error_t legends_get_last_error(
     size_t* length_out
 );
 
+/* =========================================================================
+ * JOYSTICK INPUT API (Phase 3, Sprint 1)
+ * ========================================================================= */
+
+/**
+ * @brief Inject joystick axis + button event.
+ *
+ * @param handle Valid handle
+ * @param joystick_id Joystick index (0 or 1)
+ * @param axis_x X axis value (0..255, 128 = center)
+ * @param axis_y Y axis value (0..255, 128 = center)
+ * @param buttons Button bitmask (bit 0 = button 1, bit 1 = button 2)
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_joystick_event(
+    legends_handle handle,
+    uint8_t joystick_id,
+    uint8_t axis_x,
+    uint8_t axis_y,
+    uint8_t buttons
+);
+
+/* =========================================================================
+ * MIDI SYNTHESIS API (Phase 3, Sprint 4)
+ * ========================================================================= */
+
+/**
+ * @brief Set MIDI output device type.
+ *
+ * @param handle Valid handle
+ * @param device_type Device name: "none", "fluidsynth", "mt32", "synth"
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_midi_set_device(
+    legends_handle handle,
+    const char* device_type
+);
+
+/**
+ * @brief Set SoundFont path for FluidSynth.
+ *
+ * @param handle Valid handle
+ * @param sf2_path Path to .sf2 file
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_midi_set_soundfont(
+    legends_handle handle,
+    const char* sf2_path
+);
+
+/**
+ * @brief Set ROM directory for MT-32 emulation.
+ *
+ * @param handle Valid handle
+ * @param rom_dir Path to directory containing MT-32 ROMs
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_midi_set_romdir(
+    legends_handle handle,
+    const char* rom_dir
+);
+
+/**
+ * @brief Capture MIDI synthesizer audio.
+ *
+ * Two-call pattern: call with buf=NULL to query available count.
+ *
+ * @param handle Valid handle
+ * @param[out] buf Output buffer (NULL to query)
+ * @param count Buffer capacity in int16_t elements
+ * @param[out] out Actual/available count
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_capture_midi_audio(
+    legends_handle handle,
+    int16_t* buf,
+    size_t count,
+    size_t* out
+);
+
+/* =========================================================================
+ * PRINTER API (Phase 3, Sprint 5)
+ * ========================================================================= */
+
+/**
+ * @brief Set printer output file path.
+ *
+ * @param handle Valid handle
+ * @param output_path Directory for printer output files
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_printer_set_output(
+    legends_handle handle,
+    const char* output_path
+);
+
+/**
+ * @brief Check if printer is active (has pending data).
+ *
+ * @param handle Valid handle
+ * @param[out] active_out 1 if active, 0 otherwise
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_printer_is_active(
+    legends_handle handle,
+    int* active_out
+);
+
+/**
+ * @brief Flush printer buffer to output file.
+ *
+ * @param handle Valid handle
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_printer_flush(legends_handle handle);
+
+/**
+ * @brief Set TrueType font for text mode rendering.
+ *
+ * @param handle Valid handle
+ * @param ttf_path Path to .ttf font file
+ * @param point_size Font size in points
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_set_ttf_font(
+    legends_handle handle,
+    const char* ttf_path,
+    uint32_t point_size
+);
+
+/* =========================================================================
+ * IPX NETWORKING API (Phase 3, Sprint 6)
+ * ========================================================================= */
+
+/**
+ * @brief Enable or disable IPX networking.
+ *
+ * @param handle Valid handle
+ * @param enable 1 to enable, 0 to disable
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_ipx_enable(
+    legends_handle handle,
+    int enable
+);
+
+/**
+ * @brief Connect to an IPX server.
+ *
+ * @param handle Valid handle
+ * @param server Server hostname or IP
+ * @param port Server port
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_ipx_connect(
+    legends_handle handle,
+    const char* server,
+    uint16_t port
+);
+
+/**
+ * @brief Disconnect from IPX server.
+ *
+ * @param handle Valid handle
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_ipx_disconnect(legends_handle handle);
+
+/**
+ * @brief Check if connected to IPX server.
+ *
+ * @param handle Valid handle
+ * @param[out] out 1 if connected, 0 otherwise
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_ipx_is_connected(
+    legends_handle handle,
+    int* out
+);
+
+/* =========================================================================
+ * 3DFX GLIDE API (Phase 3, Sprint 6)
+ * ========================================================================= */
+
+/**
+ * @brief Enable or disable 3dfx Glide emulation.
+ *
+ * @param handle Valid handle
+ * @param enable 1 to enable, 0 to disable
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_glide_enable(
+    legends_handle handle,
+    int enable
+);
+
+/**
+ * @brief Set Glide rendering resolution.
+ *
+ * @param handle Valid handle
+ * @param w Width in pixels
+ * @param h Height in pixels
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_glide_set_resolution(
+    legends_handle handle,
+    uint16_t w,
+    uint16_t h
+);
+
+/* =========================================================================
+ * PC-98 API (Phase 3, Sprint 7)
+ * ========================================================================= */
+
+/**
+ * @brief Enable or disable NEC PC-98 machine mode.
+ *
+ * Must be called before legends_create() or after legends_reset().
+ * When enabled, machine_type is set to 5 (PC-98).
+ *
+ * @param handle Valid handle
+ * @param enable 1 to enable, 0 to disable
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_set_machine_pc98(
+    legends_handle handle,
+    int enable
+);
+
+/**
+ * @brief Check if PC-98 mode is active.
+ *
+ * @param handle Valid handle
+ * @param[out] out 1 if PC-98 mode, 0 otherwise
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_is_pc98_mode(
+    legends_handle handle,
+    int* out
+);
+
 /**
  * @brief Log callback function type.
  *

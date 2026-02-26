@@ -159,5 +159,141 @@ TEST(InputMapperTest, RemapToExtendedKey) {
     EXPECT_TRUE(at.extended);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2 QA: format string and round-trip coverage
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(InputMapperTest, SaveLoadRoundTrip_ScancodeAbove0xFF) {
+    auto tmp_dir = std::filesystem::temp_directory_path() / "legends_mapper_qa1";
+    std::filesystem::create_directories(tmp_dir);
+    std::string path = (tmp_dir / "mapper.txt").string();
+
+    {
+        InputMapper mapper;
+        mapper.remap(0x01A0, 0x01B0);
+        EXPECT_TRUE(mapper.saveToFile(path));
+    }
+
+    {
+        InputMapper mapper;
+        EXPECT_TRUE(mapper.loadFromFile(path));
+        EXPECT_EQ(mapper.customCount(), 1u);
+        // Verify the remap survived the round trip
+        auto at_remapped = mapper.translate(0x01A0);
+        auto at_direct = sdlScancodeToAT(0x01B0);
+        EXPECT_EQ(at_remapped.code, at_direct.code);
+        EXPECT_EQ(at_remapped.extended, at_direct.extended);
+    }
+
+    std::filesystem::remove_all(tmp_dir);
+}
+
+TEST(InputMapperTest, SaveLoadRoundTrip_ScancodeExactly0xFF) {
+    auto tmp_dir = std::filesystem::temp_directory_path() / "legends_mapper_qa2";
+    std::filesystem::create_directories(tmp_dir);
+    std::string path = (tmp_dir / "mapper.txt").string();
+
+    {
+        InputMapper mapper;
+        mapper.remap(0xFF, 0x04);
+        EXPECT_TRUE(mapper.saveToFile(path));
+    }
+
+    {
+        InputMapper mapper;
+        EXPECT_TRUE(mapper.loadFromFile(path));
+        EXPECT_EQ(mapper.customCount(), 1u);
+        auto at = mapper.translate(0xFF);
+        EXPECT_EQ(at.code, sdlScancodeToAT(0x04).code);
+    }
+
+    std::filesystem::remove_all(tmp_dir);
+}
+
+TEST(InputMapperTest, SaveLoadRoundTrip_MultipleEntries) {
+    auto tmp_dir = std::filesystem::temp_directory_path() / "legends_mapper_qa3";
+    std::filesystem::create_directories(tmp_dir);
+    std::string path = (tmp_dir / "mapper.txt").string();
+
+    {
+        InputMapper mapper;
+        mapper.remap(0x04, 0x05);
+        mapper.remap(0x100, 0x200);
+        mapper.remap(0x0F, 0x10);
+        EXPECT_TRUE(mapper.saveToFile(path));
+    }
+
+    {
+        InputMapper mapper;
+        EXPECT_TRUE(mapper.loadFromFile(path));
+        EXPECT_EQ(mapper.customCount(), 3u);
+    }
+
+    std::filesystem::remove_all(tmp_dir);
+}
+
+TEST(InputMapperTest, LoadMixed2DigitAnd4DigitHex) {
+    auto tmp_dir = std::filesystem::temp_directory_path() / "legends_mapper_qa4";
+    std::filesystem::create_directories(tmp_dir);
+    std::string path = (tmp_dir / "mapper.txt").string();
+
+    {
+        std::ofstream file(path);
+        file << "0x04 0x05\n";       // 2-digit
+        file << "0x01A0 0x01B0\n";   // 4-digit
+        file << "0xFF 0x10\n";       // boundary
+    }
+
+    InputMapper mapper;
+    EXPECT_TRUE(mapper.loadFromFile(path));
+    EXPECT_EQ(mapper.customCount(), 3u);
+
+    std::filesystem::remove_all(tmp_dir);
+}
+
+TEST(InputMapperTest, SavedFileContentMatchesExpectedFormat) {
+    auto tmp_dir = std::filesystem::temp_directory_path() / "legends_mapper_qa5";
+    std::filesystem::create_directories(tmp_dir);
+    std::string path = (tmp_dir / "mapper.txt").string();
+
+    {
+        InputMapper mapper;
+        mapper.remap(0x01A0, 0x01B0);
+        EXPECT_TRUE(mapper.saveToFile(path));
+    }
+
+    std::string content;
+    {
+        // Read the file and verify the format uses 4-digit hex
+        std::ifstream file(path);
+        content.assign(std::istreambuf_iterator<char>(file),
+                       std::istreambuf_iterator<char>());
+    } // file closed before remove_all
+
+    EXPECT_NE(content.find("0x01A0 0x01B0"), std::string::npos)
+        << "File content: " << content;
+
+    std::filesystem::remove_all(tmp_dir);
+}
+
+TEST(InputMapperTest, SaveToReadOnlyPathReturnsFalse) {
+    bool ok = InputMapper{}.saveToFile("/nonexistent/dir/mapper.txt");
+    EXPECT_FALSE(ok);
+}
+
+TEST(InputMapperTest, LoadFromEmptyFileReturnsTrue) {
+    auto tmp_dir = std::filesystem::temp_directory_path() / "legends_mapper_qa6";
+    std::filesystem::create_directories(tmp_dir);
+    std::string path = (tmp_dir / "mapper.txt").string();
+
+    { std::ofstream file(path); } // create empty file
+
+    InputMapper mapper;
+    EXPECT_TRUE(mapper.loadFromFile(path));
+    EXPECT_EQ(mapper.customCount(), 0u);
+
+    std::filesystem::remove_all(tmp_dir);
+}
+
 } // namespace
 } // namespace legends

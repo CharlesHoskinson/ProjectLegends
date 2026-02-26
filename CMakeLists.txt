@@ -49,6 +49,11 @@ option(PAL_BACKEND_SDL2 "Build SDL2 PAL backend" OFF)
 option(PAL_BACKEND_SDL3 "Build SDL3 PAL backend" OFF)
 set(PAL_DEFAULT_BACKEND "Headless" CACHE STRING "Default PAL backend (SDL2, SDL3, Headless)")
 
+# Phase 3: Enhanced Feature Flags
+option(LEGENDS_ENABLE_AI "Enable AI Assistant (requires libcurl)" OFF)
+option(LEGENDS_ENABLE_FLUIDSYNTH "Enable FluidSynth MIDI synthesis" OFF)
+option(LEGENDS_ENABLE_MT32 "Enable MUNT MT-32 emulation" OFF)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # C++ Standard (per-target, not global - see target_compile_features below)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -534,6 +539,22 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_save_manager.cpp
         tests/unit/test_clipboard_paste.cpp
         tests/unit/test_menu_system.cpp
+        tests/unit/test_hotkey_dispatcher.cpp
+        # Phase 3: Enhanced Features
+        tests/unit/test_fullscreen_toggle.cpp
+        tests/unit/test_joystick_mapper.cpp
+        tests/unit/test_shader_presets.cpp
+        tests/unit/test_ai_config.cpp
+        tests/unit/test_ai_screen_context.cpp
+        tests/unit/test_ai_http_client.cpp
+        tests/unit/test_ai_panel.cpp
+        tests/unit/test_audio_mixer.cpp
+        tests/unit/test_midi_config.cpp
+        tests/unit/test_printer_manager.cpp
+        tests/unit/test_ttf_renderer.cpp
+        tests/unit/test_ipx_config.cpp
+        tests/unit/test_glide_config.cpp
+        tests/unit/test_pc98_config.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
@@ -557,12 +578,33 @@ if(LEGENDS_BUILD_TESTS)
         src/app/input_mapper.cpp
         src/app/save_manager.cpp
         src/app/menu_system.cpp
+        src/app/hotkey_dispatcher.cpp
+        # Phase 3: Enhanced Features
+        src/app/joystick_mapper.cpp
+        src/app/shader_renderer.cpp
+        src/app/shader_presets.cpp
+        src/app/ai_config.cpp
+        src/app/ai_http_client.cpp
+        src/app/ai_screen_context.cpp
+        src/app/ai_panel.cpp
+        src/app/audio_mixer.cpp
+        src/app/midi_config.cpp
+        src/app/printer_manager.cpp
+        src/app/ttf_renderer.cpp
+        src/app/ipx_config.cpp
+        src/app/glide_config.cpp
+        src/app/pc98_config.cpp
+    )
+
+    target_sources(legends_unit_tests PRIVATE
+        external/glad/glad.c
     )
 
     target_include_directories(legends_unit_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/legends  # F6: internal FFI headers
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/external
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/glad  # glad GL loader
         ${CMAKE_BINARY_DIR}/include
     )
 
@@ -823,10 +865,27 @@ if(PAL_BACKEND_SDL3)
         src/app/input_mapper.cpp
         src/app/save_manager.cpp
         src/app/menu_system.cpp
+        src/app/hotkey_dispatcher.cpp
         src/app/cli_parser.cpp
         src/app/config_parser.cpp
         src/app/platform_dirs.cpp
         src/app/scancode_map.cpp
+        # Phase 3: Enhanced Features
+        src/app/joystick_mapper.cpp
+        src/app/shader_renderer.cpp
+        src/app/shader_presets.cpp
+        src/app/ai_config.cpp
+        src/app/ai_http_client.cpp
+        src/app/ai_screen_context.cpp
+        src/app/ai_panel.cpp
+        src/app/audio_mixer.cpp
+        src/app/midi_config.cpp
+        src/app/printer_manager.cpp
+        src/app/ttf_renderer.cpp
+        src/app/ipx_config.cpp
+        src/app/glide_config.cpp
+        src/app/pc98_config.cpp
+        external/glad/glad.c
     )
 
     legends_set_strict_cxx_standard(project_legends)
@@ -835,6 +894,7 @@ if(PAL_BACKEND_SDL3)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/external
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/glad
         ${CMAKE_BINARY_DIR}/include
     )
 
@@ -855,6 +915,20 @@ if(PAL_BACKEND_SDL3)
             legends_pal
             SDL3::SDL3-shared
         )
+    endif()
+
+    # Phase 3: Optional feature-gated library linking
+    if(LEGENDS_ENABLE_AI AND CURL_FOUND)
+        target_link_libraries(project_legends PRIVATE CURL::libcurl)
+        target_compile_definitions(project_legends PRIVATE LEGENDS_HAS_CURL=1)
+    endif()
+    if(LEGENDS_ENABLE_FLUIDSYNTH AND FluidSynth_FOUND)
+        target_link_libraries(project_legends PRIVATE FluidSynth::FluidSynth)
+        target_compile_definitions(project_legends PRIVATE LEGENDS_HAS_FLUIDSYNTH=1)
+    endif()
+    if(LEGENDS_ENABLE_MT32 AND TARGET mt32emu)
+        target_link_libraries(project_legends PRIVATE mt32emu)
+        target_compile_definitions(project_legends PRIVATE LEGENDS_HAS_MT32=1)
     endif()
 
     # Copy SDL3.dll next to the executable so it can be found at runtime

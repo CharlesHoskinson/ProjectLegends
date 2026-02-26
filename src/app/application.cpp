@@ -12,6 +12,9 @@
 #include "app/input_mapper.h"
 #include "app/save_manager.h"
 #include "app/menu_system.h"
+#include "app/hotkey_dispatcher.h"
+#include "app/ai_screen_context.h"
+#include "app/shader_presets.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -167,6 +170,7 @@ ExitCode Application::init(int argc, char** argv) {
         else if (mt == "cga")  ecfg.machine_type = 2;
         else if (mt == "hercules") ecfg.machine_type = 3;
         else if (mt == "tandy")    ecfg.machine_type = 4;
+        else if (mt == "pc98")     ecfg.machine_type = 5;
         else                       ecfg.machine_type = 0; // vga
     }
 
@@ -218,6 +222,62 @@ ExitCode Application::init(int argc, char** argv) {
 
     // ── Menu system ──────────────────────────────────────────────────────
     menu_system_.initialize(&action_bus_);
+
+    // ── Phase 3: Enhanced Features config ────────────────────────────────
+
+    // Sprint 2: Shader config
+    {
+        std::string renderer = config.get("render", "renderer", "software");
+        use_opengl_ = (renderer == "opengl");
+    }
+
+    // Sprint 3: AI config
+    ai_config_.loadFrom(config);
+    ai_panel_.initialize(&action_bus_);
+
+    // Sprint 4: MIDI config
+    midi_config_.loadFrom(config);
+    if (midi_config_.device != MIDIDevice::None && engine_) {
+        legends_midi_set_device(engine_, MIDIConfig::deviceName(midi_config_.device));
+        if (!midi_config_.soundfont_path.empty()) {
+            legends_midi_set_soundfont(engine_, midi_config_.soundfont_path.c_str());
+        }
+        if (!midi_config_.mt32_romdir.empty()) {
+            legends_midi_set_romdir(engine_, midi_config_.mt32_romdir.c_str());
+        }
+    }
+
+    // Sprint 5: Printer + TTF config
+    {
+        std::string printer_dir = config.get("printer", "output", "");
+        if (!printer_dir.empty()) {
+            printer_manager_.setOutputDirectory(printer_dir);
+            printer_manager_.setEnabled(config.getBool("printer", "enabled", false));
+            if (printer_manager_.isEnabled() && engine_) {
+                legends_printer_set_output(engine_, printer_dir.c_str());
+            }
+        }
+
+        std::string ttf_path = config.get("ttf", "font", "");
+        if (!ttf_path.empty()) {
+            uint32_t ttf_size = static_cast<uint32_t>(config.getInt("ttf", "size", 16));
+            ttf_renderer_.loadFont(ttf_path, ttf_size);
+            ttf_renderer_.setEnabled(config.getBool("ttf", "enabled", false));
+            if (ttf_renderer_.isEnabled() && engine_) {
+                legends_set_ttf_font(engine_, ttf_path.c_str(), ttf_size);
+            }
+        }
+    }
+
+    // Sprint 6: IPX + Glide config
+    ipx_config_.loadFrom(config);
+    glide_config_.loadFrom(config);
+    if (glide_config_.enabled) {
+        use_opengl_ = true; // Glide requires OpenGL
+    }
+
+    // Sprint 7: PC-98 config
+    pc98_config_.loadFrom(config);
 
     return ExitCode::Success;
 }
@@ -319,6 +379,14 @@ bool Application::processEvents() {
                     else      modifiers_ &= static_cast<uint8_t>(~kModRAlt);
                 }
 
+                // ── AI panel input routing (when panel is open) ─────
+                if (ai_panel_.isOpen() && !menu_system_.isOpen()) {
+                    if (down) {
+                        ai_panel_.handleKey(ev.key.scancode, true);
+                    }
+                    break; // Don't forward to engine while AI panel is open
+                }
+
                 // ── Menu input routing (when menu is open) ──────────
                 if (menu_system_.isOpen()) {
                     if (down) {
@@ -330,83 +398,10 @@ bool Application::processEvents() {
                 // ── Hotkey interception (key-down only) ─────────────
 
                 if (down) {
-                    bool ctrl  = (modifiers_ & kModCtrl) != 0;
-                    bool shift = (modifiers_ & kModShift) != 0;
-                    bool alt   = (modifiers_ & kModAlt) != 0;
-
-                    // F12 — toggle overlay menu
-                    if (ev.key.scancode == 0x45) { // F12
-                        action_bus_.dispatch(Action::OpenMenu);
+                    auto hk = matchHotkey(ev.key.scancode, modifiers_, mouse_captured_);
+                    if (hk.matched) {
+                        action_bus_.dispatch(hk.action, hk.param);
                         break;
-                    }
-
-                    // Alt+Pause — toggle pause (SDL Pause = 0x48)
-                    if (alt && !ctrl && ev.key.scancode == 0x48) {
-                        action_bus_.dispatch(Action::TogglePause);
-                        break;
-                    }
-
-                    // Ctrl+Alt+Delete — reset (SDL Delete = 0x4C)
-                    if (ctrl && alt && ev.key.scancode == 0x4C) {
-                        action_bus_.dispatch(Action::Reset);
-                        break;
-                    }
-
-                    // Ctrl+F5 — screenshot (SDL F5 = 0x3E)
-                    if (ctrl && !shift && !alt && ev.key.scancode == 0x3E) {
-                        action_bus_.dispatch(Action::Screenshot);
-                        break;
-                    }
-
-                    // Ctrl+F1 — open mapper (SDL F1 = 0x3A)
-                    if (ctrl && !shift && !alt && ev.key.scancode == 0x3A) {
-                        action_bus_.dispatch(Action::OpenMapper);
-                        break;
-                    }
-
-                    // Ctrl+Shift+V — clipboard paste (SDL V = 0x19)
-                    if (ctrl && shift && !alt && ev.key.scancode == 0x19) {
-                        action_bus_.dispatch(Action::ClipboardPaste);
-                        break;
-                    }
-
-                    // Ctrl+Shift+F1..F9 — save state (slots 1-9)
-                    // SDL F1=0x3A .. F9=0x42
-                    if (ctrl && shift && !alt &&
-                        ev.key.scancode >= 0x3A && ev.key.scancode <= 0x42) {
-                        int slot = static_cast<int>(ev.key.scancode - 0x3A + 1);
-                        action_bus_.dispatch(Action::SaveState, slot);
-                        break;
-                    }
-
-                    // Ctrl+Alt+F1..F9 — load state (slots 1-9)
-                    if (ctrl && alt && !shift &&
-                        ev.key.scancode >= 0x3A && ev.key.scancode <= 0x42) {
-                        int slot = static_cast<int>(ev.key.scancode - 0x3A + 1);
-                        action_bus_.dispatch(Action::LoadState, slot);
-                        break;
-                    }
-
-                    // Ctrl+F10 — release mouse capture
-                    if (ctrl && !shift && !alt && ev.key.scancode == 0x43 && mouse_captured_) {
-                        action_bus_.dispatch(Action::ReleaseMouseCapture);
-                        break;
-                    }
-
-                    // Volume: Ctrl+Up / Ctrl+Down / Ctrl+M
-                    if (ctrl && !shift && !alt) {
-                        if (ev.key.scancode == 0x52) { // Up arrow
-                            action_bus_.dispatch(Action::VolumeUp);
-                            break;
-                        }
-                        if (ev.key.scancode == 0x51) { // Down arrow
-                            action_bus_.dispatch(Action::VolumeDown);
-                            break;
-                        }
-                        if (ev.key.scancode == 0x10) { // M key
-                            action_bus_.dispatch(Action::ToggleMute);
-                            break;
-                        }
                     }
                 }
 
@@ -464,8 +459,59 @@ bool Application::processEvents() {
                 break;
             }
 
+            case pal::InputEventType::JoystickAxis: {
+                if (!engine_) break;
+                // PAL reports individual axis events; update mapper state
+                uint8_t joy_id = ev.joy_axis.id;
+                // Map axis index: 0=X, 1=Y
+                auto prev = joystick_mapper_.state(joy_id);
+                int16_t ax = (ev.joy_axis.axis == 0) ? ev.joy_axis.value
+                             : static_cast<int16_t>(prev.axis_x * 256 - 32768);
+                int16_t ay = (ev.joy_axis.axis == 1) ? ev.joy_axis.value
+                             : static_cast<int16_t>(prev.axis_y * 256 - 32768);
+                joystick_mapper_.update(joy_id, ax, ay, prev.buttons);
+                auto js = joystick_mapper_.state(joy_id);
+                legends_joystick_event(engine_, joy_id,
+                    js.axis_x, js.axis_y, js.buttons);
+                break;
+            }
+
+            case pal::InputEventType::JoystickButton: {
+                if (!engine_) break;
+                uint8_t joy_id = ev.joy_button.id;
+                auto prev = joystick_mapper_.state(joy_id);
+                uint8_t btns = prev.buttons;
+                uint8_t mask = static_cast<uint8_t>(1u << ev.joy_button.button);
+                if (ev.joy_button.pressed) {
+                    btns |= mask;
+                } else {
+                    btns = static_cast<uint8_t>(btns & ~mask);
+                }
+                // Reconstruct axis values from stored state (already in DOS range)
+                int16_t ax = static_cast<int16_t>(prev.axis_x * 256 - 32768);
+                int16_t ay = static_cast<int16_t>(prev.axis_y * 256 - 32768);
+                joystick_mapper_.update(joy_id, ax, ay, btns);
+                auto js = joystick_mapper_.state(joy_id);
+                legends_joystick_event(engine_, joy_id,
+                    js.axis_x, js.axis_y, js.buttons);
+                break;
+            }
+
             default:
                 break;
+        }
+    }
+
+    // Poll AI response if panel is open and waiting
+    if (ai_panel_.isOpen() && ai_panel_.isWaiting()) {
+        AIResponse response;
+        if (ai_http_client_.pollResponse(response)) {
+            ai_panel_.setWaiting(false);
+            if (response.success) {
+                ai_panel_.addResponse(response.body);
+            } else {
+                ai_panel_.addResponse("[Error] " + response.error);
+            }
         }
     }
 
@@ -614,6 +660,122 @@ void Application::registerActionHandlers() {
             menu_system_.open();
         }
     });
+
+    // ── Phase 3: Enhanced Feature handlers ────────────────────────────────
+
+    // Sprint 1: Toggle fullscreen
+    action_bus_.registerHandler(Action::ToggleFullscreen, [this](int) {
+        fullscreen_ = !fullscreen_;
+        if (window_) {
+            window_->setFullscreen(fullscreen_);
+        }
+    });
+
+    // Sprint 2: Shader handlers
+    action_bus_.registerHandler(Action::ToggleShaders, [this](int) {
+        shader_renderer_.setShadersEnabled(!shader_renderer_.shadersEnabled());
+    });
+    action_bus_.registerHandler(Action::NextShader, [this](int) {
+        shader_renderer_.nextPreset();
+    });
+    action_bus_.registerHandler(Action::PrevShader, [this](int) {
+        shader_renderer_.prevPreset();
+    });
+    action_bus_.registerHandler(Action::LoadCustomShader, [](int) {
+        std::fprintf(stderr, "Load custom shader: file dialog not yet implemented\n");
+    });
+
+    // Sprint 3: AI panel
+    action_bus_.registerHandler(Action::ToggleAIPanel, [this](int) {
+        if (ai_panel_.isOpen()) {
+            ai_panel_.close();
+        } else {
+            ai_panel_.open();
+        }
+    });
+    action_bus_.registerHandler(Action::AISubmitQuery, [this](int) {
+        if (!ai_config_.enabled) return;
+        if (ai_config_.privacy_mode) {
+            ai_panel_.addResponse("Privacy mode is active. AI queries are disabled.");
+            ai_panel_.setWaiting(false);
+            return;
+        }
+        std::string api_key = ai_config_.resolveApiKey();
+        if (api_key.empty()) {
+            ai_panel_.addResponse("[Error] API key not found in environment variable: "
+                                   + ai_config_.api_key_env);
+            ai_panel_.setWaiting(false);
+            return;
+        }
+        // Capture screen context
+        std::string screen = captureScreenContext(engine_, ai_config_.max_context_chars);
+        // Build request
+        AIRequest req;
+        req.endpoint = ai_config_.endpoint;
+        req.api_key = api_key;
+        req.model = ai_config_.model;
+        req.system_prompt = "You are an AI assistant embedded in a DOS emulator. "
+            "Help the user with their DOS programs and games.\n\nCurrent screen:\n" + screen;
+        const auto& history = ai_panel_.history();
+        if (!history.empty()) {
+            req.user_message = history.back().text;
+        }
+        req.max_tokens = ai_config_.max_tokens;
+        ai_http_client_.submitRequest(req, [this](const AIResponse& resp) {
+            // Response will be polled in processEvents
+            (void)resp;
+        });
+    });
+
+    // Sprint 4: MIDI device
+    action_bus_.registerHandler(Action::SetMIDIDevice, [this](int param) {
+        auto device = static_cast<MIDIDevice>(param);
+        midi_config_.device = device;
+        if (engine_) {
+            legends_midi_set_device(engine_, MIDIConfig::deviceName(device));
+        }
+    });
+
+    // Sprint 5: Printer + TTF
+    action_bus_.registerHandler(Action::TogglePrinter, [this](int) {
+        printer_manager_.setEnabled(!printer_manager_.isEnabled());
+        if (engine_ && printer_manager_.isEnabled() && printer_manager_.isConfigured()) {
+            legends_printer_set_output(engine_, printer_manager_.outputDirectory().c_str());
+        }
+    });
+    action_bus_.registerHandler(Action::ToggleTTFMode, [this](int) {
+        ttf_renderer_.setEnabled(!ttf_renderer_.isEnabled());
+    });
+
+    // Sprint 6: IPX + Glide
+    action_bus_.registerHandler(Action::IPXConnect, [this](int) {
+        if (engine_ && !ipx_config_.server.empty()) {
+            legends_ipx_enable(engine_, 1);
+            legends_ipx_connect(engine_, ipx_config_.server.c_str(), ipx_config_.port);
+        }
+    });
+    action_bus_.registerHandler(Action::IPXDisconnect, [this](int) {
+        if (engine_) {
+            legends_ipx_disconnect(engine_);
+        }
+    });
+    action_bus_.registerHandler(Action::ToggleGlide, [this](int) {
+        glide_config_.enabled = !glide_config_.enabled;
+        if (engine_) {
+            legends_glide_enable(engine_, glide_config_.enabled ? 1 : 0);
+            if (glide_config_.enabled) {
+                legends_glide_set_resolution(engine_, glide_config_.width, glide_config_.height);
+            }
+        }
+    });
+
+    // Sprint 7: PC-98
+    action_bus_.registerHandler(Action::SetMachinePC98, [this](int) {
+        pc98_config_.enabled = !pc98_config_.enabled;
+        if (engine_) {
+            legends_set_machine_pc98(engine_, pc98_config_.enabled ? 1 : 0);
+        }
+    });
 }
 
 void Application::updateWindowTitle() {
@@ -716,7 +878,16 @@ void Application::renderFrame() {
     if (menu_system_.isOpen()) {
         menu_system_.render(static_cast<uint8_t*>(sctx.pixels),
                             static_cast<uint16_t>(sw),
-                            static_cast<uint16_t>(sh));
+                            static_cast<uint16_t>(sh),
+                            sctx.pitch);
+    }
+
+    // Composite AI panel overlay if open (mutually exclusive with menu)
+    if (ai_panel_.isOpen() && !menu_system_.isOpen()) {
+        ai_panel_.render(static_cast<uint8_t*>(sctx.pixels),
+                         static_cast<uint16_t>(sw),
+                         static_cast<uint16_t>(sh),
+                         sctx.pitch);
     }
 
     // unlockSurface() presents to screen
@@ -741,6 +912,21 @@ void Application::pumpAudio() {
     size_t actual = 0;
     legends_capture_audio(engine_, audio_buffer_.data(), audio_buffer_.size(), &actual);
     if (actual == 0) return;
+
+    // Mix MIDI audio if active
+    if (midi_config_.device != MIDIDevice::None) {
+        size_t midi_avail = 0;
+        legends_capture_midi_audio(engine_, nullptr, 0, &midi_avail);
+        if (midi_avail > 0) {
+            std::vector<int16_t> midi_buf(midi_avail);
+            size_t midi_actual = 0;
+            legends_capture_midi_audio(engine_, midi_buf.data(), midi_buf.size(), &midi_actual);
+            if (midi_actual > 0) {
+                size_t mix_count = std::min(actual, midi_actual);
+                AudioMixer::mixAdditive(audio_buffer_.data(), midi_buf.data(), mix_count);
+            }
+        }
+    }
 
     // actual is int16_t element count; stereo frames = actual / 2
     uint32_t frames = static_cast<uint32_t>(actual) / 2;
