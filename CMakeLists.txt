@@ -24,6 +24,8 @@ project(ProjectLegends
 # See cmake/ModuleManifest.cmake for module boundaries.
 include(cmake/ModuleManifest.cmake)
 include(cmake/ModuleDAG.cmake)
+include(cmake/dependencies.cmake)
+include(cmake/version.cmake)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Build Options
@@ -120,37 +122,15 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Dependencies
+# Dependencies (loaded from cmake/dependencies.cmake above)
 # ─────────────────────────────────────────────────────────────────────────────
-
-# gsl-lite for contracts (v1.0.0 - stable v1 series)
-# See: https://github.com/gsl-lite/gsl-lite
 #
-# IMPORTANT: gsl-lite v1 uses namespace `gsl_lite` and header `<gsl-lite/gsl-lite.hpp>`
-# We create a bridge header (include/legends/gsl.hpp) with a scoped alias.
-# Do NOT expose gsl-lite types in public headers (legends_embed.h) - it affects ABI.
+# All dependency version pins and FetchContent declarations are centralized
+# in cmake/dependencies.cmake. See DEPENDENCIES.md for the full manifest.
 #
-# FORBIDDEN PATTERNS (CI gate enforced):
-#   - <gsl/gsl-lite.hpp> (legacy header, conflicts with Microsoft GSL)
-#   - gsl_FEATURE_GSL_COMPATIBILITY_MODE (affects API/ABI, consumer's choice)
-#   - Exporting gsl-lite config macros as PUBLIC compile definitions
-
-# Try system-installed gsl-lite first (preferred for reproducible builds)
-find_package(gsl-lite 1.0 QUIET)
-
-if(NOT gsl-lite_FOUND)
-    message(STATUS "gsl-lite not found, fetching from GitHub...")
-    include(FetchContent)
-    FetchContent_Declare(
-        gsl-lite
-        GIT_REPOSITORY https://github.com/gsl-lite/gsl-lite.git
-        GIT_TAG v1.0.0
-    )
-    FetchContent_MakeAvailable(gsl-lite)
-endif()
-
-# Note: For v1, link to gsl::gsl-lite-v1 for v1 defaults.
-# We keep it PRIVATE to avoid leaking to consumers.
+# gsl-lite: PRIVATE to legends_core — never exposed in public headers.
+# SDL3: try-find-then-FetchContent for hermetic builds.
+# GoogleTest/Benchmark: fetched in test/benchmark sections below using pinned tags.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOSBox-X Engine (AIBox Library)
@@ -206,6 +186,8 @@ target_link_libraries(legends_core
 )
 
 target_compile_definitions(legends_core
+    PUBLIC
+        LEGENDS_STATIC=1
     PRIVATE
         $<$<BOOL:${LEGENDS_HEADLESS}>:LEGENDS_HEADLESS=1>
         $<$<BOOL:${LEGENDS_LIBRARY_MODE}>:LEGENDS_LIBRARY_MODE=1>
@@ -266,13 +248,8 @@ if(PAL_BACKEND_SDL2)
     )
 endif()
 
-# SDL3 backend
+# SDL3 backend (find_package/FetchContent handled in cmake/dependencies.cmake)
 if(PAL_BACKEND_SDL3)
-    # Include SDL3's CPU detection before find_package
-    if(EXISTS "${SDL3_DIR}/sdlcpu.cmake")
-        include("${SDL3_DIR}/sdlcpu.cmake")
-    endif()
-    find_package(SDL3 REQUIRED)
     list(APPEND PAL_SOURCES
         src/pal/sdl3/window_sdl3.cpp
         src/pal/sdl3/context_sdl3.cpp
@@ -454,11 +431,11 @@ endif()
 if(LEGENDS_BUILD_TESTS)
     enable_testing()
 
-    # GoogleTest
+    # GoogleTest (version pinned in cmake/dependencies.cmake)
     FetchContent_Declare(
         googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG v1.14.0
+        GIT_TAG        ${LEGENDS_DEP_GOOGLETEST_TAG}
     )
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
@@ -729,7 +706,7 @@ if(LEGENDS_BUILD_BENCHMARKS)
     FetchContent_Declare(
         benchmark
         GIT_REPOSITORY https://github.com/google/benchmark.git
-        GIT_TAG v1.8.3
+        GIT_TAG        ${LEGENDS_DEP_BENCHMARK_TAG}
     )
     set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(benchmark)
@@ -805,6 +782,50 @@ if(PAL_BACKEND_SDL2)
     message(STATUS "Building project_legends executable with SDL2")
 endif()
 
+# Build the interactive emulator executable when SDL3 is available
+if(PAL_BACKEND_SDL3)
+    add_executable(project_legends
+        src/main.cpp
+        src/app/application.cpp
+    )
+
+    legends_set_strict_cxx_standard(project_legends)
+
+    target_include_directories(project_legends PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    # In IPC mode, link the proxy (MIT) instead of legends_core (GPL).
+    # In monolithic mode (default), link legends_core directly.
+    if(LEGENDS_USE_IPC)
+        target_link_libraries(project_legends PRIVATE
+            legends_proxy
+            legends_pal
+            SDL3::SDL3-shared
+        )
+        target_compile_definitions(project_legends PRIVATE
+            LEGENDS_USE_IPC=1
+        )
+    else()
+        target_link_libraries(project_legends PRIVATE
+            legends_core
+            legends_pal
+            SDL3::SDL3-shared
+        )
+    endif()
+
+    message(STATUS "Building project_legends executable with SDL3")
+endif()
+
+# Guard: SDL2 and SDL3 executables cannot coexist in a single build tree
+if(PAL_BACKEND_SDL2 AND PAL_BACKEND_SDL3)
+    message(FATAL_ERROR
+        "Cannot enable both PAL_BACKEND_SDL2 and PAL_BACKEND_SDL3 "
+        "for the project_legends executable. Pick one.")
+endif()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Installation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -877,3 +898,8 @@ legends_verify_all_dags()
 if(CMAKE_VERBOSE_MAKEFILE)
     legends_print_dag()
 endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Packaging (CPack — must come last)
+# ─────────────────────────────────────────────────────────────────────────────
+include(cmake/packaging.cmake)

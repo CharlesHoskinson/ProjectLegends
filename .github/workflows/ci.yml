@@ -5,6 +5,12 @@
 # Copyright (c) 2024-2025 Charles Hoskinson and Contributors
 # Licensed under GNU General Public License v2.0
 #
+# Tiered triggers (REQ-OPS-004):
+#   - PR / push to develop: build + unit tests (~15 min)
+#   - merge-to-main: + sanitizers
+#   - nightly (cron): soak tests, fuzz
+#   - tag push (vX.Y.Z): packaging job
+#
 # ═══════════════════════════════════════════════════════════════════════════════
 
 name: CI
@@ -12,8 +18,12 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    tags: ["v[0-9]*"]
   pull_request:
     branches: [main]
+  schedule:
+    # Nightly at 03:00 UTC (soak + fuzz)
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -21,7 +31,7 @@ permissions:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build and Test - Linux
+  # Build and Test - Linux (Headless)
   # ─────────────────────────────────────────────────────────────────────────────
   linux:
     name: Linux (${{ matrix.compiler }})
@@ -62,7 +72,57 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build and Test - Windows
+  # Build and Test - Linux SDL3
+  # ─────────────────────────────────────────────────────────────────────────────
+  linux-sdl3:
+    name: Linux SDL3 (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            cc: gcc-13
+            cxx: g++-13
+          - compiler: clang
+            cc: clang-16
+            cxx: clang++-16
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build ${{ matrix.cc }} ${{ matrix.cxx }} \
+            libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev \
+            libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
+            libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev
+
+      - uses: actions/cache@v4
+        with:
+          path: build/_deps/sdl3-*
+          key: sdl3-linux-${{ matrix.compiler }}-${{ hashFiles('cmake/dependencies.cmake') }}
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPAL_BACKEND_SDL3=ON \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Verify executable exists
+        run: test -f build/project_legends
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build and Test - Windows (Headless)
   # ─────────────────────────────────────────────────────────────────────────────
   windows:
     name: Windows (MSVC)
@@ -85,7 +145,40 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build and Test - macOS
+  # Build and Test - Windows SDL3
+  # ─────────────────────────────────────────────────────────────────────────────
+  windows-sdl3:
+    name: Windows SDL3 (MSVC)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: build/_deps/sdl3-*
+          key: sdl3-windows-${{ hashFiles('cmake/dependencies.cmake') }}
+
+      - name: Configure
+        run: |
+          cmake -B build `
+            -DPAL_BACKEND_SDL3=ON `
+            -DLEGENDS_BUILD_TESTS=ON `
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Verify executable exists
+        run: |
+          if (!(Test-Path build/Release/project_legends.exe)) {
+            Write-Error "project_legends.exe not found"
+            exit 1
+          }
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build and Test - macOS (Headless)
   # ─────────────────────────────────────────────────────────────────────────────
   macos:
     name: macOS (AppleClang)
@@ -109,12 +202,43 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Sanitizer Builds
+  # Build and Test - macOS SDL3
+  # ─────────────────────────────────────────────────────────────────────────────
+  macos-sdl3:
+    name: macOS SDL3 (AppleClang)
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: build/_deps/sdl3-*
+          key: sdl3-macos-${{ hashFiles('cmake/dependencies.cmake') }}
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPAL_BACKEND_SDL3=ON \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Verify executable exists
+        run: test -f build/project_legends
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Sanitizer Builds (merge-to-main + nightly)
   # ─────────────────────────────────────────────────────────────────────────────
   sanitizers:
     name: ${{ matrix.sanitizer }} Sanitizer
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
     strategy:
       matrix:
         sanitizer: [address, undefined, thread, memory]
@@ -232,12 +356,13 @@ jobs:
           echo "Static analysis passed (warnings only)."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Fuzz Testing (libFuzzer)
+  # Fuzz Testing (libFuzzer) — nightly only
   # ─────────────────────────────────────────────────────────────────────────────
   fuzz:
     name: Fuzz Testing
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
     needs: [linux]
 
     steps:
@@ -428,3 +553,76 @@ jobs:
         with:
           file: coverage.filtered.info
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Packaging (tag push only)
+  # ─────────────────────────────────────────────────────────────────────────────
+  packaging:
+    name: Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos, linux-sdl3, windows-sdl3, macos-sdl3]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            build_type: Release
+          - os: windows-latest
+            build_type: Release
+          - os: macos-latest
+            build_type: Release
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git describe
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build gcc-13 g++-13 \
+            libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev \
+            libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
+            libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev
+
+      - uses: actions/cache@v4
+        with:
+          path: build/_deps/sdl3-*
+          key: sdl3-${{ runner.os }}-packaging-${{ hashFiles('cmake/dependencies.cmake') }}
+
+      - name: Configure (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DPAL_BACKEND_SDL3=ON
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -B build `
+            -DPAL_BACKEND_SDL3=ON
+
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        run: cmake --build build
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: cmake --build build --config ${{ matrix.build_type }}
+
+      - name: Package
+        run: cd build && cpack -C ${{ matrix.build_type }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ runner.os }}
+          path: |
+            build/*.zip
+            build/*.tar.gz
+            build/*.dmg
+            build/*.exe

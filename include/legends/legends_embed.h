@@ -32,6 +32,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "legends_export.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -203,7 +204,7 @@ typedef struct {
  * @param[out] patch Patch version (bug fixes)
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_get_api_version(
+LEGENDS_API legends_error_t legends_get_api_version(
     uint32_t* major,
     uint32_t* minor,
     uint32_t* patch
@@ -219,7 +220,7 @@ legends_error_t legends_get_api_version(
  * @param[out] handle_out Receives the handle on success
  * @return LEGENDS_OK on success, error code on failure
  */
-legends_error_t legends_create(
+LEGENDS_API legends_error_t legends_create(
     const legends_config_t* config,
     legends_handle* handle_out
 );
@@ -232,7 +233,7 @@ legends_error_t legends_create(
  * @param handle Handle from legends_create()
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_destroy(legends_handle handle);
+LEGENDS_API legends_error_t legends_destroy(legends_handle handle);
 
 /**
  * @brief Force-destroy the active instance (test cleanup).
@@ -242,7 +243,7 @@ legends_error_t legends_destroy(legends_handle handle);
  *
  * @return LEGENDS_OK if an instance was destroyed, or no instance exists
  */
-legends_error_t legends_force_destroy(void);
+LEGENDS_API legends_error_t legends_force_destroy(void);
 
 /**
  * @brief Soft reset the emulator.
@@ -252,7 +253,7 @@ legends_error_t legends_force_destroy(void);
  * @param handle Valid handle
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_reset(legends_handle handle);
+LEGENDS_API legends_error_t legends_reset(legends_handle handle);
 
 /**
  * @brief Get current configuration.
@@ -261,7 +262,7 @@ legends_error_t legends_reset(legends_handle handle);
  * @param[out] config_out Receives current configuration
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_get_config(
+LEGENDS_API legends_error_t legends_get_config(
     legends_handle handle,
     legends_config_t* config_out
 );
@@ -281,7 +282,7 @@ legends_error_t legends_get_config(
  * @param[out] result_out Receives step result (may be NULL)
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_step_ms(
+LEGENDS_API legends_error_t legends_step_ms(
     legends_handle handle,
     uint32_t ms,
     legends_step_result_t* result_out
@@ -298,7 +299,7 @@ legends_error_t legends_step_ms(
  * @param[out] result_out Receives step result (may be NULL)
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_step_cycles(
+LEGENDS_API legends_error_t legends_step_cycles(
     legends_handle handle,
     uint64_t cycles,
     legends_step_result_t* result_out
@@ -311,7 +312,7 @@ legends_error_t legends_step_cycles(
  * @param[out] time_us_out Receives emulated time in microseconds
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_get_emu_time(
+LEGENDS_API legends_error_t legends_get_emu_time(
     legends_handle handle,
     uint64_t* time_us_out
 );
@@ -323,7 +324,7 @@ legends_error_t legends_get_emu_time(
  * @param[out] cycles_out Receives total cycles
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_get_total_cycles(
+LEGENDS_API legends_error_t legends_get_total_cycles(
     legends_handle handle,
     uint64_t* cycles_out
 );
@@ -346,7 +347,7 @@ legends_error_t legends_get_total_cycles(
  * @param[out] info_out Text mode info (may be NULL)
  * @return LEGENDS_OK on success, LEGENDS_ERR_BUFFER_TOO_SMALL if buffer too small
  */
-legends_error_t legends_capture_text(
+LEGENDS_API legends_error_t legends_capture_text(
     legends_handle handle,
     legends_text_cell_t* cells,
     size_t cells_count,
@@ -371,7 +372,7 @@ legends_error_t legends_capture_text(
  * @param[out] height_out Frame height in pixels
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_capture_rgb(
+LEGENDS_API legends_error_t legends_capture_rgb(
     legends_handle handle,
     uint8_t* buffer,
     size_t buffer_size,
@@ -387,7 +388,7 @@ legends_error_t legends_capture_rgb(
  * @param[out] dirty_out Receives 1 if dirty, 0 if unchanged
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_is_frame_dirty(
+LEGENDS_API legends_error_t legends_is_frame_dirty(
     legends_handle handle,
     int* dirty_out
 );
@@ -401,7 +402,7 @@ legends_error_t legends_is_frame_dirty(
  * @param[out] visible_out 1 if visible, 0 if hidden
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_get_cursor(
+LEGENDS_API legends_error_t legends_get_cursor(
     legends_handle handle,
     uint8_t* x_out,
     uint8_t* y_out,
@@ -422,7 +423,7 @@ legends_error_t legends_get_cursor(
  * @param is_down 1 for key press, 0 for key release
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_key_event(
+LEGENDS_API legends_error_t legends_key_event(
     legends_handle handle,
     uint8_t scancode,
     int is_down
@@ -438,7 +439,7 @@ legends_error_t legends_key_event(
  * @param is_down 1 for key press, 0 for key release
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_key_event_ext(
+LEGENDS_API legends_error_t legends_key_event_ext(
     legends_handle handle,
     uint8_t scancode,
     int is_down
@@ -454,7 +455,7 @@ legends_error_t legends_key_event_ext(
  * @param utf8_text Null-terminated UTF-8 string
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_text_input(
+LEGENDS_API legends_error_t legends_text_input(
     legends_handle handle,
     const char* utf8_text
 );
@@ -468,7 +469,7 @@ legends_error_t legends_text_input(
  * @param buttons Button bitmask (bit 0=left, 1=right, 2=middle)
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_mouse_event(
+LEGENDS_API legends_error_t legends_mouse_event(
     legends_handle handle,
     int16_t delta_x,
     int16_t delta_y,
@@ -494,7 +495,7 @@ legends_error_t legends_mouse_event(
  * @param[out] count_out Available/actual sample count
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_capture_audio(
+LEGENDS_API legends_error_t legends_capture_audio(
     legends_handle handle,
     int16_t* buffer,
     size_t buffer_count,
@@ -508,7 +509,7 @@ legends_error_t legends_capture_audio(
  * @param[out] active_out Receives 1 if audio is active, 0 otherwise
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_is_audio_active(
+LEGENDS_API legends_error_t legends_is_audio_active(
     legends_handle handle,
     int* active_out
 );
@@ -544,7 +545,7 @@ legends_error_t legends_is_audio_active(
  * @param[out] size_out Actual/required byte count
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_save_state(
+LEGENDS_API legends_error_t legends_save_state(
     legends_handle handle,
     void* buffer,
     size_t buffer_size,
@@ -562,7 +563,7 @@ legends_error_t legends_save_state(
  * @param buffer_size Size of state data
  * @return LEGENDS_OK on success, LEGENDS_ERR_VERSION_MISMATCH if incompatible
  */
-legends_error_t legends_load_state(
+LEGENDS_API legends_error_t legends_load_state(
     legends_handle handle,
     const void* buffer,
     size_t buffer_size
@@ -577,7 +578,7 @@ legends_error_t legends_load_state(
  * @param[out] hash_out 32-byte buffer for SHA-256 hash
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_get_state_hash(
+LEGENDS_API legends_error_t legends_get_state_hash(
     legends_handle handle,
     uint8_t hash_out[32]
 );
@@ -593,7 +594,7 @@ legends_error_t legends_get_state_hash(
  * @param[out] is_deterministic_out 1 if hashes match, 0 if not
  * @return LEGENDS_OK on success (check is_deterministic_out for result)
  */
-legends_error_t legends_verify_determinism(
+LEGENDS_API legends_error_t legends_verify_determinism(
     legends_handle handle,
     uint64_t test_cycles,
     int* is_deterministic_out
@@ -616,7 +617,7 @@ legends_error_t legends_verify_determinism(
  * @param[out] length_out Actual/required length including null terminator
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_get_last_error(
+LEGENDS_API legends_error_t legends_get_last_error(
     legends_handle handle,
     char* buffer,
     size_t buffer_size,
@@ -644,7 +645,7 @@ typedef void (*legends_log_callback_t)(
  * @param userdata Context passed to callback
  * @return LEGENDS_OK on success
  */
-legends_error_t legends_set_log_callback(
+LEGENDS_API legends_error_t legends_set_log_callback(
     legends_handle handle,
     legends_log_callback_t callback,
     void* userdata
