@@ -64,7 +64,7 @@ DMAChannelState == [enabled: BOOLEAN, masked: BOOLEAN, count: CountRange,
  * CRITICAL: Event queue (Q) is part of the observation because
  * pending events affect future behavior.
  *)
-ObsEvent(e) == <<e.deadline, e.kind, e.tieKey>>
+ObsEvent(e) == <<e.id, e.deadline, e.kind, e.payload, e.tieKey>>
 
 QDigest(Q) == {ObsEvent(e) : e \in Q}
 
@@ -166,10 +166,10 @@ SnapshotCRCValid(snap) ==
  * Deserialize(snap) - Reconstruct state from snapshot
  *
  * Restores state from serialized snapshot.
- * Event IDs are regenerated since they're internal handles.
+ * Event IDs are preserved via serialized slot values.
  *)
-DeserializeEvent(e, idx) ==
-    [id |-> (idx - 1), deadline |-> e.deadline, kind |-> e.kind,
+DeserializeEvent(e) ==
+    [id |-> e.slot, deadline |-> e.deadline, kind |-> e.kind,
      payload |-> e.payload, tieKey |-> e.tieKey]
 
 MinSlotEvent(events) ==
@@ -186,7 +186,7 @@ Deserialize(snap) ==
     LET
         normalized == NormalizeSnapshot(snap)
         eventSeq == SetToSeqBySlot(normalized.events)
-        Q_new == {DeserializeEvent(eventSeq[i], i) : i \in 1..Len(eventSeq)}
+        Q_new == {DeserializeEvent(eventSeq[i]) : i \in 1..Len(eventSeq)}
     IN [
         now |-> normalized.now,
         Q |-> Q_new,
@@ -277,9 +277,16 @@ IsValidSerializedEvent(e) ==
     /\ e.payload \in PayloadRange
     /\ e.tieKey \in TieKeyRange
 
+UniqueEventIds(events) ==
+    \A e1, e2 \in events : e1.id = e2.id => e1 = e2
+
+UniqueSerializedSlots(events) ==
+    \A e1, e2 \in events : e1.slot = e2.slot => e1 = e2
+
 IsValidState(s) ==
     /\ s.now \in Cycles
     /\ \A e \in s.Q : IsValidEvent(e)
+    /\ UniqueEventIds(s.Q)
     /\ Cardinality(s.Q) <= MaxEvents
     /\ IsValidCPU(s.CPU)
     /\ IsValidPIC(s.pics[0])
@@ -291,6 +298,7 @@ IsValidSnapshot(snap) ==
     IN /\ normalized.version \in SaveVersion
        /\ normalized.now \in Cycles
        /\ \A e \in normalized.events : IsValidSerializedEvent(e)
+       /\ UniqueSerializedSlots(normalized.events)
        /\ Cardinality(normalized.events) <= MaxEvents
        /\ IsValidCPU(normalized.cpu)
        /\ IsValidPIC(normalized.pic0)

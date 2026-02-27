@@ -64,10 +64,10 @@ SaveVersion == {2, 3}
 (* CRITICAL: event queue IS part of observation (bug fix).                *)
 (**************************************************************************)
 
-\* @type: {deadline: Int, kind: Str, tieKey: Int} -> <<Int, Str, Int>>;
-ObsEvent(e) == <<e.deadline, e.kind, e.tieKey>>
+\* @type: {id: Int, deadline: Int, kind: Str, payload: Int, tieKey: Int} -> <<Int, Int, Str, Int, Int>>;
+ObsEvent(e) == <<e.id, e.deadline, e.kind, e.payload, e.tieKey>>
 
-\* @type: Set({deadline: Int, kind: Str, tieKey: Int}) -> Set(<<Int, Str, Int>>);
+\* @type: Set({id: Int, deadline: Int, kind: Str, payload: Int, tieKey: Int}) -> Set(<<Int, Int, Str, Int, Int>>);
 QDigest(Q) == {ObsEvent(e) : e \in Q}
 
 \* @type: {now: Int, Q: Set(...), cpu_if: Bool, pic_irr: Int} -> {...};
@@ -105,17 +105,15 @@ CRC(snap) ==
 (* SERIALIZATION                                                          *)
 (**************************************************************************)
 
-\* Sort events by (deadline, tieKey) for deterministic serialization order
+\* Sort events by slot for deterministic serialization order
 RECURSIVE SetToSeqRec(_)
 SetToSeqRec(S) ==
     IF S = {} THEN <<>>
-    ELSE LET min == CHOOSE x \in S : \A y \in S :
-              (x.deadline < y.deadline) \/
-              (x.deadline = y.deadline /\ x.tieKey <= y.tieKey)
+    ELSE LET min == CHOOSE x \in S : \A y \in S : x.slot <= y.slot
          IN <<min>> \o SetToSeqRec(S \ {min})
 
 \* @type: {id: Int, deadline: Int, kind: Str, payload: Int, tieKey: Int} -> {...};
-SerializeEvent(e) == [deadline |-> e.deadline, kind |-> e.kind,
+SerializeEvent(e) == [slot |-> e.id, deadline |-> e.deadline, kind |-> e.kind,
                       payload |-> e.payload, tieKey |-> e.tieKey]
 
 \* @type: {now: Int, Q: Set(...), cpu_if: Bool, pic_irr: Int} -> {...};
@@ -135,16 +133,16 @@ Serialize(s) ==
         crc     |-> CRC(base)
     ]
 
-\* Deserialize with fresh IDs
+\* Deserialize while preserving serialized IDs
 DeserializeEvents(evts) ==
     LET evtSeq == SetToSeqRec(evts)
         n == Cardinality(evts)
     IN IF n = 0 THEN {}
-       ELSE {[id |-> i, deadline |-> evtSeq[i+1].deadline,
+       ELSE {[id |-> evtSeq[i+1].slot, deadline |-> evtSeq[i+1].deadline,
               kind |-> evtSeq[i+1].kind,
               payload |-> evtSeq[i+1].payload,
               tieKey |-> evtSeq[i+1].tieKey]
-             : i \in 0..(n-1)}
+             : i \in 0..(n - 1)}
 
 \* @type: {...} -> {now: Int, Q: Set(...), cpu_if: Bool, pic_irr: Int};
 Deserialize(snap) == [
@@ -199,9 +197,13 @@ IsValidEvent(e) ==
     /\ e.payload \in PayloadRange
     /\ e.tieKey \in TieKeyRange
 
+UniqueEventIds(events) ==
+    \A e1, e2 \in events : e1.id = e2.id => e1 = e2
+
 IsValidState(s) ==
     /\ s.now \in Cycles
     /\ \A e \in s.Q : IsValidEvent(e)
+    /\ UniqueEventIds(s.Q)
     /\ Cardinality(s.Q) <= MaxEvents
     /\ s.cpu_if \in BOOLEAN
     /\ s.pic_irr \in RegValue

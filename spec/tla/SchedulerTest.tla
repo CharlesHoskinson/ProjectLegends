@@ -134,6 +134,12 @@ CancelEventAction ==
         /\ Q' = Cancel(Q, e.id)
         /\ UNCHANGED <<now, processed, nextId>>
 
+\* Scenario helper: deterministically cancel event 0.
+CancelEvent0 ==
+    /\ 0 \in {e.id : e \in Q}
+    /\ Q' = Cancel(Q, 0)
+    /\ UNCHANGED <<now, processed, nextId>>
+
 (*
  * AdvanceTime - Move time forward
  *)
@@ -257,5 +263,39 @@ TimeJumpInit ==
 TimeJumpCorrect ==
     (Q # {} /\ DueEvents(Q, now) = {}) =>
         (TimeStep(Q, now) = 10)
+
+\* Scenario-specific next-state relations to exercise targeted properties.
+TieBreakNext ==
+    \/ ProcessEvent
+    \/ AdvanceTime
+    \/ Idle
+
+CancelNext ==
+    \/ /\ 0 \notin {e.id : e \in Q}
+       /\ ProcessEvent
+    \/ CancelEvent0
+    \/ AdvanceTime
+    \/ Idle
+
+TimeJumpNext ==
+    \/ ProcessEvent
+    \/ AdvanceTime
+    \/ Idle
+
+TieBreakSpec ==
+    TieBreakInit /\ [][TieBreakNext]_vars
+    /\ WF_vars(ProcessEvent)
+    /\ WF_vars(AdvanceTime)
+
+CancelSpec ==
+    CancelInit /\ [][CancelNext]_vars
+    /\ WF_vars(ProcessEvent)
+    /\ WF_vars(AdvanceTime)
+    /\ WF_vars(CancelEvent0)
+
+TimeJumpSpec ==
+    TimeJumpInit /\ [][TimeJumpNext]_vars
+    /\ WF_vars(ProcessEvent)
+    /\ WF_vars(AdvanceTime)
 
 =======================================================================

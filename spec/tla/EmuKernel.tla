@@ -21,13 +21,6 @@
  *)
 EXTENDS Types, Scheduler, Integers, Sequences, FiniteSets, TLC
 
-\* Import Scheduler operators (uses LOCAL INSTANCE to avoid variable conflicts)
-\* Note: Scheduler.tla provides Schedule, Cancel, PopNextEvent, TimeStep, etc.
-LOCAL SaveStateModel == INSTANCE SaveState
-    WITH MaxCycle <- MaxCycle,
-         MaxCount <- 32,
-         MaxEvents <- MaxEvents
-
 \* =====================================================================
 \* DEFAULT VALUES - Hardcoded for TLC compatibility
 \* =====================================================================
@@ -52,6 +45,14 @@ VARIABLES
 
 \* Tuple of all variables for UNCHANGED clauses
 vars == <<now, Q, CPU, pics, dma, IOMap, InputQ, Out>>
+
+\* Bound auxiliary queues to keep TLC state space finite.
+InputSymbol == {"KEY_A", "KEY_B", "NONE"}
+MaxInputQueue == MaxEvents
+MaxOutTrace == MaxCycle + MaxEvents
+SchedKinds == {"PIT_TICK", "KBD_SCAN", "TIMER_CB"}
+SchedPayloads == 0..3
+SchedTieKeys == {0, 20, 40}
 
 \* =====================================================================
 \* OBSERVATION FUNCTION
@@ -95,6 +96,10 @@ CurrentObs == Obs(CurrentState)
 
 \* Digest of event queue for comparison
 Q_digest(S) == {<<e.deadline, e.kind, e.tieKey>> : e \in S.Q}
+
+IsValidOutput(o) ==
+    /\ o.time \in Cycles
+    /\ o.event \in EventKind
 
 \* =====================================================================
 \* TYPE INVARIANTS
@@ -143,6 +148,10 @@ TypeOK ==
     /\ \A i \in {0, 1} : IsValidPIC(pics[i])
     /\ \A ch \in 0..7 : IsValidDMA(dma[ch])
     /\ \A p \in PortSet : IOMap[p] \in IOHandler
+    /\ InputQ \in Seq(InputSymbol)
+    /\ Len(InputQ) <= MaxInputQueue
+    /\ \A i \in 1..Len(Out) : IsValidOutput(Out[i])
+    /\ Len(Out) <= MaxOutTrace
 
 \* =====================================================================
 \* SAFETY INVARIANTS
@@ -208,6 +217,7 @@ Init ==
 
 DueEventsNow == DueEvents(Q, now)
 SelectNext == SelectNextEvent(Q, now)
+UnusedEventIds(Q_now) == EventIds \ {e.id : e \in Q_now}
 
 \* =====================================================================
 \* STATE TRANSITIONS
@@ -215,10 +225,12 @@ SelectNext == SelectNextEvent(Q, now)
 
 (*
  * Environment step: External input injection
- * The environment (host/agent) can inject inputs into InputQ.
+ * The host environment can inject inputs into InputQ.
  * This is the ONLY source of nondeterminism in the specification.
  *)
 EnvInjectInput(input) ==
+    /\ input \in InputSymbol
+    /\ Len(InputQ) < MaxInputQueue
     /\ InputQ' = Append(InputQ, input)
     /\ UNCHANGED <<now, Q, CPU, pics, dma, IOMap, Out>>
 
@@ -230,6 +242,7 @@ EnvInjectInput(input) ==
 KernelProcessEvent ==
     LET result == PopNextEvent(Q, now)
     IN /\ result.found
+       /\ Len(Out) < MaxOutTrace
        /\ Q' = result.Q_new
        /\ Out' = Append(Out, [time |-> now, event |-> result.event.kind])
        /\ UNCHANGED <<now, CPU, pics, dma, IOMap, InputQ>>
@@ -255,6 +268,12 @@ KernelIdle ==
     /\ now = MaxCycle
     /\ UNCHANGED vars
 
+\* Consume one host input item.
+KernelConsumeInput ==
+    /\ Len(InputQ) > 0
+    /\ InputQ' = Tail(InputQ)
+    /\ UNCHANGED <<now, Q, CPU, pics, dma, IOMap, Out>>
+
 (*
  * Schedule a new event (for testing/scenarios)
  * Creates an event with given parameters and adds to Q.
@@ -262,7 +281,12 @@ KernelIdle ==
 ScheduleNewEvent(id, deadline, kind, payload, tieKey) ==
     LET e == [id |-> id, deadline |-> deadline, kind |-> kind,
               payload |-> payload, tieKey |-> tieKey]
-    IN /\ e \in Event
+    IN /\ id \in EventIds
+       /\ deadline \in Cycles
+       /\ kind \in EventKind
+       /\ payload \in PayloadRange
+       /\ tieKey \in TieKeyRange
+       /\ id \in UnusedEventIds(Q)
        /\ deadline >= now       \* Cannot schedule in past
        /\ Cardinality(Q) < MaxEvents
        /\ Q' = Schedule(Q, e)
@@ -291,8 +315,13 @@ CancelEvent(id) ==
 Next ==
     \/ KernelProcessEvent   \* Process due events
     \/ KernelTimeStep       \* Advance time when no events due
+    \/ KernelConsumeInput   \* Consume pending external input
+    \/ \E id \in EventIds, d \in now..(IF now + 2 > MaxCycle THEN MaxCycle ELSE now + 2),
+         k \in SchedKinds, p \in SchedPayloads, tk \in SchedTieKeys :
+         ScheduleNewEvent(id, d, k, p, tk)
+    \/ \E id \in EventIds : CancelEvent(id)
     \/ KernelIdle           \* Idle at max time
-    \/ \E input \in {"KEY_A", "KEY_B", "NONE"} : EnvInjectInput(input)
+    \/ \E input \in InputSymbol : EnvInjectInput(input)
     \/ UNCHANGED vars       \* Stuttering step for completeness
 
 \* =====================================================================
@@ -325,6 +354,13 @@ TimeProgresses == <>(now > 0)
  * The EventLoss property should NEVER be satisfiable after fixing
  * the implementation to serialize the event queue.
  *)
+\* Instance SaveState with explicit substitutions for module variables.
+LOCAL SaveStateModel == INSTANCE SaveState
+    WITH MaxCycle <- MaxCycle,
+         MaxCount <- 32,
+         MaxEvents <- MaxEvents,
+         state <- CurrentState,
+         saved <- [type |-> "NONE"]
 
 Serialize(S) == SaveStateModel!Serialize(S)
 

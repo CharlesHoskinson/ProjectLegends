@@ -243,8 +243,8 @@ SwitchBackend(backend) ==
 
 Next ==
     \/ \E m \in VideoMode : SetVideoMode(m)
-    \/ \E x \in 0..79, y \in 0..24 : WriteCharacter(x, y)
-    \/ \E x \in 0..79, y \in 0..24 : MoveCursor(x, y)
+    \/ \E x \in 0..(textColumns - 1), y \in 0..(textRows - 1) : WriteCharacter(x, y)
+    \/ \E x \in 0..(textColumns - 1), y \in 0..(textRows - 1) : MoveCursor(x, y)
     \/ CaptureText
     \/ CaptureRGB
     \/ \E b \in {"Headless", "SDL2", "SDL3"} : SwitchBackend(b)
