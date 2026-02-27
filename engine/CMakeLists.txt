@@ -47,6 +47,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
             "GCC 13+ required for C++23 support. Found: ${CMAKE_CXX_COMPILER_VERSION}")
     endif()
     message(STATUS "Compiler: GCC ${CMAKE_CXX_COMPILER_VERSION}")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    # AppleClang uses Apple's version numbering (e.g. 15.x = LLVM 16 equivalent)
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "15.0")
+        message(FATAL_ERROR
+            "AppleClang 15+ required for C++23 support. Found: ${CMAKE_CXX_COMPILER_VERSION}")
+    endif()
+    message(STATUS "Compiler: AppleClang ${CMAKE_CXX_COMPILER_VERSION}")
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "16.0")
         message(FATAL_ERROR

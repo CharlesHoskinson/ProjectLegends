@@ -17,7 +17,7 @@ name: Module DAG
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, master, develop]
     paths:
       - 'include/**'
       - 'engine/include/**'
@@ -29,7 +29,7 @@ on:
       - 'scripts/check_includes.py'
       - '.github/workflows/module-dag.yml'
   pull_request:
-    branches: [main, develop]
+    branches: [main, master, develop]
     paths:
       - 'include/**'
       - 'engine/include/**'

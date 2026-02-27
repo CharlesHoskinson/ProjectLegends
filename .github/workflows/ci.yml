@@ -17,10 +17,10 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, master, develop]
     tags: ["v[0-9]*"]
   pull_request:
-    branches: [main]
+    branches: [main, master]
   schedule:
     # Nightly at 03:00 UTC (soak + fuzz)
     - cron: "0 3 * * *"
@@ -44,9 +44,11 @@ jobs:
           - compiler: gcc
             cc: gcc-13
             cxx: g++-13
+            pkg: gcc-13 g++-13
           - compiler: clang
             cc: clang-16
             cxx: clang++-16
+            pkg: clang-16
 
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +56,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build ${{ matrix.cc }} ${{ matrix.cxx }}
+          sudo apt-get install -y cmake ninja-build ${{ matrix.pkg }}
 
       - name: Configure
         run: |
@@ -85,9 +87,11 @@ jobs:
           - compiler: gcc
             cc: gcc-13
             cxx: g++-13
+            pkg: gcc-13 g++-13
           - compiler: clang
             cc: clang-16
             cxx: clang++-16
+            pkg: clang-16
 
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +99,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build ${{ matrix.cc }} ${{ matrix.cxx }} \
+          sudo apt-get install -y cmake ninja-build ${{ matrix.pkg }} \
             libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev \
             libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
             libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev
@@ -182,7 +186,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   macos:
     name: macOS (AppleClang)
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 15
 
     steps:
@@ -206,7 +210,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   macos-sdl3:
     name: macOS SDL3 (AppleClang)
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 20
 
     steps:
@@ -238,7 +242,7 @@ jobs:
     name: ${{ matrix.sanitizer }} Sanitizer
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'schedule'
     strategy:
       matrix:
         sanitizer: [address, undefined, thread, memory]
@@ -280,9 +284,9 @@ jobs:
         run: cmake --build build
 
       - name: Test
-        env:
-          ${{ matrix.env }}
-        run: ctest --test-dir build --output-on-failure
+        run: |
+          export ${{ matrix.env }}
+          ctest --test-dir build --output-on-failure
 
   # ─────────────────────────────────────────────────────────────────────────────
   # C ABI Verification
@@ -356,13 +360,13 @@ jobs:
           echo "Static analysis passed (warnings only)."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Fuzz Testing (libFuzzer) — nightly only
+  # Fuzz Testing (libFuzzer) — PR: quick 30s, merge-to-main: 60s
   # ─────────────────────────────────────────────────────────────────────────────
   fuzz:
     name: Fuzz Testing
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+    timeout-minutes: 15
+    if: github.event_name == 'schedule' || github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     needs: [linux]
 
     steps:
@@ -390,24 +394,49 @@ jobs:
       - name: Generate seed corpus
         run: ./build/tests/fuzz/generate_fuzz_corpus build/tests/fuzz/corpus
 
-      - name: Run engine load state fuzzer (60s)
+      # PR runs: quick 30s smoke test
+      - name: "PR: Quick fuzz (30s per target)"
+        if: github.event_name == 'pull_request'
+        run: |
+          ./build/tests/fuzz/fuzz_legends_load_state \
+            build/tests/fuzz/corpus \
+            -max_len=8192 \
+            -max_total_time=30
+          ./build/tests/fuzz/fuzz_config_parser \
+            build/tests/fuzz/corpus/config \
+            -max_len=8192 \
+            -max_total_time=30
+
+      # Merge-to-main / nightly: full 60s per target
+      - name: "Main: Run engine load state fuzzer (60s)"
+        if: github.event_name != 'pull_request'
         run: |
           ./build/tests/fuzz/fuzz_engine_load_state \
             build/tests/fuzz/corpus \
             -max_len=8192 \
             -max_total_time=60
 
-      - name: Run legends load state fuzzer (60s)
+      - name: "Main: Run legends load state fuzzer (60s)"
+        if: github.event_name != 'pull_request'
         run: |
           ./build/tests/fuzz/fuzz_legends_load_state \
             build/tests/fuzz/corpus \
             -max_len=8192 \
             -max_total_time=60
 
-      - name: Run input injection fuzzer (60s)
+      - name: "Main: Run input injection fuzzer (60s)"
+        if: github.event_name != 'pull_request'
         run: |
           ./build/tests/fuzz/fuzz_input_injection \
             -max_len=4096 \
+            -max_total_time=60
+
+      - name: "Main: Run config parser fuzzer (60s)"
+        if: github.event_name != 'pull_request'
+        run: |
+          ./build/tests/fuzz/fuzz_config_parser \
+            build/tests/fuzz/corpus/config \
+            -max_len=8192 \
             -max_total_time=60
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -416,7 +445,7 @@ jobs:
   tlaplus:
     name: TLA+ Model Checking
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -478,6 +507,42 @@ jobs:
           cd spec/tla
           java -cp /tmp/tla2tools.jar tlc2.TLC \
             -config ReentrancyMinimal.cfg ReentrancyMinimal.tla -workers auto
+
+      - name: Run BusMinimal
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config BusMinimal.cfg BusMinimal.tla -workers auto
+
+      - name: Run SchedulerMinimal
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config SchedulerMinimal.cfg SchedulerMinimal.tla -workers auto
+
+      - name: Run SchedulerTest
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config SchedulerTest.cfg SchedulerTest.tla -workers auto
+
+      - name: Run InterruptTest
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config InterruptTest.cfg InterruptTest.tla -workers auto
+
+      - name: Run DMATest
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config DMATest.cfg DMATest.tla -workers auto
+
+      - name: Run SaveState
+        run: |
+          cd spec/tla
+          java -cp /tmp/tla2tools.jar tlc2.TLC \
+            -config SaveState.cfg SaveState.tla -workers auto
 
       - name: Run ErrorModel
         run: |
@@ -565,13 +630,13 @@ jobs:
     needs: [linux, windows, macos, linux-sdl3, windows-sdl3, macos-sdl3]
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-15]
         include:
           - os: ubuntu-latest
             build_type: Release
           - os: windows-latest
             build_type: Release
-          - os: macos-latest
+          - os: macos-15
             build_type: Release
 
     steps:
@@ -617,6 +682,9 @@ jobs:
       - name: Package
         run: cd build && cpack -C ${{ matrix.build_type }}
 
+      - name: Generate checksums
+        run: python3 scripts/generate_checksums.py generate build/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -626,3 +694,61 @@ jobs:
             build/*.tar.gz
             build/*.dmg
             build/*.exe
+            build/SHA256SUMS.txt
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Release Validation (tag push only)
+  # ─────────────────────────────────────────────────────────────────────────────
+  release-validation:
+    name: Release Validation
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, packaging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++-13 ninja-build lcov
+
+      - name: Configure with coverage
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run all tests
+        run: |
+          cd build
+          ctest --label-exclude soak --output-on-failure
+
+      - name: Check coverage
+        run: |
+          cd build
+          lcov --capture --directory . --output-file coverage.info --quiet
+          lcov --extract coverage.info "*/src/app/*" --output-file coverage_app.info --quiet
+          COVERAGE=$(lcov --summary coverage_app.info 2>&1 | grep -oP "lines\.\.\.\.\.\.\:\s+\K[0-9.]+")
+          echo "Coverage: ${COVERAGE}%"
+          # Check >= 80%
+          if (( $(echo "$COVERAGE < 80.0" | bc -l) )); then
+            echo "FAILED: Coverage ${COVERAGE}% is below 80% threshold"
+            exit 1
+          fi
+          echo "PASSED: Coverage ${COVERAGE}% meets 80% threshold"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Verify artifacts exist
+        run: |
+          echo "Checking for platform artifacts..."
+          ls -la package-* || true
+          # Verify at least Linux package exists
+          test -d package-Linux && echo "Linux artifact: OK"
