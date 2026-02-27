@@ -84,8 +84,7 @@ TraceDeterminism ==
 
 \* Hash stability: pure function, no hidden state
 HashStability ==
-    ComputeHash(cfgId, inputTrace, stepAmounts, currentCycle) =
-    ComputeHash(cfgId, inputTrace, stepAmounts, currentCycle)
+    stateHash = ComputeHash(cfgId, inputTrace, stepAmounts, currentCycle)
 
 \* Config sensitivity: different cfgId at same state => different hash
 \* (checked by TLC exploring both cfgId=0 and cfgId=1)
@@ -143,3 +142,4 @@ Next ==
 Spec == Init /\ [][Next]_vars
 
 =======================================================================
+

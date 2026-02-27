@@ -141,7 +141,7 @@ DimensionsConsistent ==
 (* Pitch = width * 3.  Total size = width * height * 3.              *)
 (*--------------------------------------------------------------------*)
 FormatFixed ==
-    RGB24Size(rgbWidth, rgbHeight) = rgbWidth * rgbHeight * 3
+    /\ rgbBufferSize = 0 \/ rgbBufferSize = RGB24Size(rgbWidth, rgbHeight)
 
 (*--------------------------------------------------------------------*)
 (* BackendIndependent -- Gate 5c                                      *)
@@ -272,3 +272,5 @@ BackendTransparent ==
                    rgbBufferSize, frameDirty, cursorX, cursorY>>]_vars
 
 =======================================================================
+
+

@@ -19,10 +19,14 @@
  * - EventsNotInPast: No events scheduled before current time
  * - TypeOK: All state variables within their type bounds
  *)
-EXTENDS Types, Integers, Sequences, FiniteSets, TLC
+EXTENDS Types, Scheduler, Integers, Sequences, FiniteSets, TLC
 
 \* Import Scheduler operators (uses LOCAL INSTANCE to avoid variable conflicts)
 \* Note: Scheduler.tla provides Schedule, Cancel, PopNextEvent, TimeStep, etc.
+LOCAL SaveStateModel == INSTANCE SaveState
+    WITH MaxCycle <- MaxCycle,
+         MaxCount <- 32,
+         MaxEvents <- MaxEvents
 
 \* =====================================================================
 \* DEFAULT VALUES - Hardcoded for TLC compatibility
@@ -199,29 +203,11 @@ Init ==
     /\ Out = <<>>
 
 \* =====================================================================
-\* SCHEDULER HELPERS (inline from Scheduler.tla for self-containment)
+\* SCHEDULER HELPERS (delegated to Scheduler.tla operators)
 \* =====================================================================
 
-\* Events that are due for processing
-DueEvents == {e \in Q : e.deadline <= now}
-
-\* Minimum of a non-empty set
-MinSet(S) == CHOOSE x \in S : \A y \in S : x <= y
-
-\* Select next event deterministically (deadline then tieKey)
-SelectNext ==
-    IF DueEvents = {}
-    THEN [found |-> FALSE]
-    ELSE LET minD == MinSet({e.deadline : e \in DueEvents})
-             atMinD == {e \in DueEvents : e.deadline = minD}
-             minT == MinSet({e.tieKey : e \in atMinD})
-             winner == CHOOSE e \in atMinD : e.tieKey = minT
-         IN [found |-> TRUE, event |-> winner]
-
-\* Next event deadline (or MaxCycle+1 if empty)
-NextEventTime ==
-    IF Q = {} THEN MaxCycle + 1
-    ELSE MinSet({e.deadline : e \in Q})
+DueEventsNow == DueEvents(Q, now)
+SelectNext == SelectNextEvent(Q, now)
 
 \* =====================================================================
 \* STATE TRANSITIONS
@@ -242,10 +228,10 @@ EnvInjectInput(input) ==
  * In the full spec, this would also dispatch to the appropriate handler.
  *)
 KernelProcessEvent ==
-    LET sel == SelectNext
-    IN /\ sel.found
-       /\ Q' = Q \ {sel.event}
-       /\ Out' = Append(Out, [time |-> now, event |-> sel.event.kind])
+    LET result == PopNextEvent(Q, now)
+    IN /\ result.found
+       /\ Q' = result.Q_new
+       /\ Out' = Append(Out, [time |-> now, event |-> result.event.kind])
        /\ UNCHANGED <<now, CPU, pics, dma, IOMap, InputQ>>
 
 (*
@@ -255,11 +241,9 @@ KernelProcessEvent ==
  * - If no events, increment by 1
  *)
 KernelTimeStep ==
-    /\ DueEvents = {}           \* No events due now
-    /\ now < MaxCycle           \* Haven't reached max time
-    /\ IF Q = {}
-       THEN now' = now + 1                          \* No events: tick by 1
-       ELSE now' = MinSet({e.deadline : e \in Q})   \* Jump to next deadline
+    /\ DueEventsNow = {}         \* No events due now
+    /\ now < MaxCycle            \* Haven't reached max time
+    /\ now' = TimeStep(Q, now)   \* Scheduler-defined time progression
     /\ UNCHANGED <<Q, CPU, pics, dma, IOMap, InputQ, Out>>
 
 (*
@@ -278,16 +262,17 @@ KernelIdle ==
 ScheduleNewEvent(id, deadline, kind, payload, tieKey) ==
     LET e == [id |-> id, deadline |-> deadline, kind |-> kind,
               payload |-> payload, tieKey |-> tieKey]
-    IN /\ deadline >= now       \* Cannot schedule in past
+    IN /\ e \in Event
+       /\ deadline >= now       \* Cannot schedule in past
        /\ Cardinality(Q) < MaxEvents
-       /\ Q' = Q \cup {e}
+       /\ Q' = Schedule(Q, e)
        /\ UNCHANGED <<now, CPU, pics, dma, IOMap, InputQ, Out>>
 
 (*
  * Cancel an event by ID
  *)
 CancelEvent(id) ==
-    /\ Q' = {e \in Q : e.id # id}
+    /\ Q' = Cancel(Q, id)
     /\ UNCHANGED <<now, CPU, pics, dma, IOMap, InputQ, Out>>
 
 \* =====================================================================
@@ -339,14 +324,11 @@ TimeProgresses == <>(now > 0)
  * These properties verify save-state correctness.
  * The EventLoss property should NEVER be satisfiable after fixing
  * the implementation to serialize the event queue.
- *
- * Note: Serialize/Deserialize operators will be defined in
- * SaveState.tla (Milestone 6). For now, these are placeholders.
  *)
 
-\* Placeholder - will be defined in SaveState.tla
-Serialize(S) == S
-Deserialize(snap) == snap
+Serialize(S) == SaveStateModel!Serialize(S)
+
+Deserialize(snap) == SaveStateModel!Deserialize(snap)
 
 \* Event Loss property - should NEVER be TRUE in correct implementation
 \* This detects if serialization loses event queue information
@@ -360,11 +342,7 @@ EventLoss ==
 
 \* Selection is deterministic when events are due
 SelectionDeterministic ==
-    DueEvents # {} =>
-    LET minD == MinSet({e.deadline : e \in DueEvents})
-        atMinD == {e \in DueEvents : e.deadline = minD}
-        minT == MinSet({e.tieKey : e \in atMinD})
-    IN Cardinality({e \in atMinD : e.tieKey = minT}) = 1
+    DueEventsNow # {} => DeterministicSelection(Q, now)
 
 \* Events are processed in correct order (tieKey within deadline)
 \* This is implicitly enforced by SelectNext
@@ -374,21 +352,19 @@ SelectionDeterministic ==
 \* =====================================================================
 
 \* Get processing order for a set of events
-RECURSIVE ProcessingOrder(_)
 ProcessingOrder(events) ==
-    IF events = {} THEN <<>>
-    ELSE LET due == {e \in events : e.deadline <= now}
-         IN IF due = {}
-            THEN <<>>  \* No events due yet
-            ELSE LET minD == MinSet({e.deadline : e \in due})
-                     atMinD == {e \in due : e.deadline = minD}
-                     minT == MinSet({e.tieKey : e \in atMinD})
-                     winner == CHOOSE e \in atMinD : e.tieKey = minT
-                 IN <<winner.id>> \o ProcessingOrder(events \ {winner})
+    LET ordered == EventSequence(events, now)
+    IN [i \in 1..Len(ordered) |-> ordered[i].id]
 
 \* Verify that Out trace matches expected event order
-TraceMatchesExpected(expected_ids) ==
-    LET actual_ids == [i \in 1..Len(Out) |-> Out[i].event]
-    IN TRUE  \* Placeholder - full implementation in conformance oracle
+TraceMatchesExpected(expected_events) ==
+    LET actual_events == [i \in 1..Len(Out) |-> Out[i].event]
+    IN actual_events = expected_events
 
 =======================================================================
+
+
+
+
+
+

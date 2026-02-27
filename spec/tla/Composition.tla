@@ -239,13 +239,133 @@ EXTENDS Integers, Sequences, FiniteSets
 (* TOTAL (est.)           | ~5000       | 50+ substantive invariants      *)
 (**************************************************************************)
 
-\* This module has no variables or specification of its own.
-\* It serves as documentation for the compositional structure.
+\* Real composition constants.
+CONSTANTS
+    LifecycleMaxOperations,
+    ThreadingMaxOps,
+    PALMaxAudioFrames,
+    DeterminismMaxCycles,
+    DeterminismMaxInputs,
+    DeterminismMaxSteps,
+    SaveStateMaxCycle,
+    SaveStateMaxEvents,
+    InputMaxInputs,
+    InputMaxKeyboardBuffer,
+    ReentrancyMaxOps,
+    ErrorModelMaxOps,
+    ConfigValidationMaxOps,
+    APIMaxCycle,
+    APIMaxOperations,
+    APIMaxAudioFrames,
+    APIMaxInputs,
+    APIVersionMajor,
+    APIVersionMinor,
+    APIVersionPatch
 
-VARIABLES dummy__  \* Placeholder to make TLC happy
+\* Shared variables wired across module instances.
+VARIABLES
+    sharedInstance,
+    sharedInStep
 
-Init == dummy__ = 0
-Next == UNCHANGED dummy__
-Spec == Init /\ [][Next]_<<dummy__>>
+vars == <<sharedInstance, sharedInStep>>
+
+L == INSTANCE LifecycleMinimal
+    WITH MaxOperations <- LifecycleMaxOperations,
+         instance <- sharedInstance,
+         inStep <- sharedInStep
+
+T == INSTANCE ThreadingMinimal
+    WITH MaxOps <- ThreadingMaxOps,
+         inStep <- sharedInStep
+
+P == INSTANCE PALMinimal
+    WITH MaxAudioFrames <- PALMaxAudioFrames
+
+D == INSTANCE DeterminismMinimal
+    WITH MaxCycles <- DeterminismMaxCycles,
+         MaxInputs <- DeterminismMaxInputs,
+         MaxSteps <- DeterminismMaxSteps
+
+S == INSTANCE SaveStateTest
+    WITH MaxCycle <- SaveStateMaxCycle,
+         MaxEvents <- SaveStateMaxEvents
+
+C == INSTANCE CaptureMinimal
+
+I == INSTANCE InputMinimal
+    WITH MaxInputs <- InputMaxInputs,
+         MaxKeyboardBuffer <- InputMaxKeyboardBuffer
+
+R == INSTANCE ReentrancyMinimal
+    WITH MaxOps <- ReentrancyMaxOps,
+         hasInst <- (sharedInstance = "CREATED")
+
+E == INSTANCE ErrorModel
+    WITH MaxOps <- ErrorModelMaxOps
+
+V == INSTANCE ConfigValidation
+    WITH MaxOps <- ConfigValidationMaxOps
+
+A == INSTANCE APIContract
+    WITH MaxCycle <- APIMaxCycle,
+         MaxOperations <- APIMaxOperations,
+         MaxAudioFrames <- APIMaxAudioFrames,
+         MaxInputs <- APIMaxInputs,
+         API_VERSION_MAJOR <- APIVersionMajor,
+         API_VERSION_MINOR <- APIVersionMinor,
+         API_VERSION_PATCH <- APIVersionPatch,
+         instance <- sharedInstance,
+         inStep <- sharedInStep
+
+SharedTypeOK ==
+    /\ sharedInstance \in {"NONE", "CREATED"}
+    /\ sharedInStep \in BOOLEAN
+
+SystemConsistent ==
+    /\ SharedTypeOK
+    /\ L!TypeOK
+    /\ T!TypeOK
+    /\ P!TypeOK
+    /\ D!TypeOK
+    /\ S!TypeOK
+    /\ C!TypeOK
+    /\ I!TypeOK
+    /\ R!TypeOK
+    /\ E!TypeOK
+    /\ V!TypeOK
+    /\ A!TypeOK
+
+CrossModuleInvariant ==
+    /\ (sharedInStep => sharedInstance = "CREATED")
+    /\ (sharedInstance = "CREATED" => A!instance = "CREATED")
+    /\ (sharedInstance = "CREATED" => L!instance = "CREATED")
+    /\ (A!instance = "CREATED" => A!ownerThread = "MainThread")
+    /\ (L!instance = "CREATED" => L!handle = "VALID")
+
+GatesCovered == A!AllGatesHold
+
+NoTRUEStubs ==
+    /\ D!TraceDeterminism
+    /\ C!FormatFixed
+    /\ I!E0PrefixCorrect
+    /\ R!NoNestedStep
+    /\ T!WrongThreadBlocked
+    /\ L!HandleConsistency
+
+Spec ==
+    /\ L!Spec
+    /\ T!Spec
+    /\ P!Spec
+    /\ D!Spec
+    /\ S!Spec
+    /\ C!Spec
+    /\ I!Spec
+    /\ R!Spec
+    /\ E!Spec
+    /\ V!Spec
+    /\ A!Spec
+
+Invariant == SystemConsistent /\ CrossModuleInvariant /\ GatesCovered /\ NoTRUEStubs
 
 =======================================================================
+

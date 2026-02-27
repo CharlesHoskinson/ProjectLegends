@@ -107,17 +107,21 @@ ComputeHash(cfgId, inputs, steps, cycles) ==
 (* VARIABLES                                                              *)
 (**************************************************************************)
 VARIABLES
-    cfgId,          \* @type: Int;       Config identifier (0 or 1)
-    inputTrace,     \* @type: Seq(Str);  Sequence of input events
-    stepAmounts,    \* @type: Seq(Int);  Sequence of step amounts
-    currentCycle,   \* @type: Int;       Current cycle count
-    stateHash,      \* @type: Int;       Current state hash
-    hashHistory,    \* @type: Seq(Int);  History of hashes
-    isReplaying,    \* @type: Bool;      Whether in replay mode
-    replayHash      \* @type: Int;       Hash from original run (for replay check)
+    cfgId,            \* @type: Int;       Config identifier (0 or 1)
+    inputTrace,       \* @type: Seq(Str);  Sequence of input events
+    stepAmounts,      \* @type: Seq(Int);  Sequence of step amounts
+    currentCycle,     \* @type: Int;       Current cycle count
+    stateHash,        \* @type: Int;       Current state hash
+    hashHistory,      \* @type: Seq(Int);  History of hashes
+    isReplaying,      \* @type: Bool;      Whether in replay mode
+    replayHash,       \* @type: Int;       Hash from original run (for replay check)
+    replayIndex,      \* @type: Int;       How many recorded steps replayed
+    replayCycle,      \* @type: Int;       Replay cycle cursor
+    replayStateHash   \* @type: Int;       Hash computed by replay runner
 
 vars == <<cfgId, inputTrace, stepAmounts, currentCycle,
-          stateHash, hashHistory, isReplaying, replayHash>>
+          stateHash, hashHistory, isReplaying, replayHash,
+          replayIndex, replayCycle, replayStateHash>>
 
 (**************************************************************************)
 (* TYPE INVARIANT                                                         *)
@@ -134,6 +138,22 @@ TypeOK ==
     /\ hashHistory \in Seq(0..996)
     /\ isReplaying \in BOOLEAN
     /\ replayHash \in 0..996
+    /\ replayIndex \in 0..Len(stepAmounts)
+    /\ replayCycle \in 0..MaxCycles
+    /\ replayStateHash \in 0..996
+
+(**************************************************************************)
+(* REPLAY HELPERS                                                         *)
+(**************************************************************************)
+
+ReplayStepPrefix(steps, idx) ==
+    IF idx = 0 THEN <<>> ELSE SubSeq(steps, 1, idx)
+
+ReplayStateConsistent ==
+    ~isReplaying \/
+    replayStateHash = ComputeHash(cfgId, inputTrace,
+                                  ReplayStepPrefix(stepAmounts, replayIndex),
+                                  replayCycle)
 
 (**************************************************************************)
 (* SAFETY INVARIANTS                                                      *)
@@ -170,7 +190,7 @@ HashCollisionFree ==
 (* the original run.                                                  *)
 (*--------------------------------------------------------------------*)
 ReplayEquivalence ==
-    isReplaying => stateHash = replayHash
+    (isReplaying /\ replayIndex = Len(stepAmounts)) => replayStateHash = replayHash
 
 (*--------------------------------------------------------------------*)
 (* HashStability -- Gate 4a                                           *)
@@ -181,8 +201,8 @@ ReplayEquivalence ==
 (* function (no CHOOSE, no hidden state).                             *)
 (*--------------------------------------------------------------------*)
 HashStability ==
-    ComputeHash(cfgId, inputTrace, stepAmounts, currentCycle) =
-    ComputeHash(cfgId, inputTrace, stepAmounts, currentCycle)
+    /\ stateHash = hashHistory[Len(hashHistory)]
+    /\ ReplayStateConsistent
 
 (**************************************************************************)
 (* INITIALIZATION                                                         *)
@@ -197,6 +217,9 @@ Init ==
     /\ hashHistory = <<ComputeHash(cfgId, <<>>, <<>>, 0)>>
     /\ isReplaying = FALSE
     /\ replayHash = ComputeHash(cfgId, <<>>, <<>>, 0)
+    /\ replayIndex = 0
+    /\ replayCycle = 0
+    /\ replayStateHash = ComputeHash(cfgId, <<>>, <<>>, 0)
 
 (**************************************************************************)
 (* ACTIONS                                                                *)
@@ -213,7 +236,8 @@ InjectInput(event) ==
        IN /\ inputTrace' = newTrace
           /\ stateHash' = newHash
           /\ hashHistory' = Append(hashHistory, newHash)
-    /\ UNCHANGED <<cfgId, stepAmounts, currentCycle, isReplaying, replayHash>>
+    /\ UNCHANGED <<cfgId, stepAmounts, currentCycle, isReplaying, replayHash,
+                   replayIndex, replayCycle, replayStateHash>>
 
 (*--------------------------------------------------------------------*)
 (* StepCycles -- Step by exact cycle count                            *)
@@ -229,7 +253,8 @@ StepCycles(cycles) ==
           /\ currentCycle' = newCycle
           /\ stateHash' = newHash
           /\ hashHistory' = Append(hashHistory, newHash)
-    /\ UNCHANGED <<cfgId, inputTrace, isReplaying, replayHash>>
+    /\ UNCHANGED <<cfgId, inputTrace, isReplaying, replayHash,
+                   replayIndex, replayCycle, replayStateHash>>
 
 (*--------------------------------------------------------------------*)
 (* StartReplay -- Record current hash and begin replaying             *)
@@ -239,21 +264,43 @@ StartReplay ==
     /\ Len(inputTrace) > 0 \/ Len(stepAmounts) > 0
     /\ replayHash' = stateHash
     /\ isReplaying' = TRUE
-    \* Reset to initial state but keep the same trace
-    /\ currentCycle' = 0
-    /\ stateHash' = ComputeHash(cfgId, inputTrace, stepAmounts, 0)
-    /\ UNCHANGED <<cfgId, inputTrace, stepAmounts, hashHistory>>
+    /\ replayIndex' = 0
+    /\ replayCycle' = 0
+    /\ replayStateHash' = ComputeHash(cfgId, inputTrace, <<>>, 0)
+    /\ UNCHANGED <<cfgId, inputTrace, stepAmounts, currentCycle,
+                   stateHash, hashHistory>>
 
+
+(*--------------------------------------------------------------------*)
+(* ReplayStep -- Execute one recorded step in replay order            *)
+(*--------------------------------------------------------------------*)
+ReplayStep ==
+    /\ isReplaying
+    /\ replayIndex < Len(stepAmounts)
+    /\ LET idx == replayIndex + 1
+           step == stepAmounts[idx]
+           nextCycle == replayCycle + step
+           nextPrefix == ReplayStepPrefix(stepAmounts, idx)
+           nextHash == ComputeHash(cfgId, inputTrace, nextPrefix, nextCycle)
+       IN /\ nextCycle <= MaxCycles
+          /\ replayIndex' = idx
+          /\ replayCycle' = nextCycle
+          /\ replayStateHash' = nextHash
+          /\ UNCHANGED <<cfgId, inputTrace, stepAmounts, currentCycle,
+                         stateHash, hashHistory, isReplaying, replayHash>>
 (*--------------------------------------------------------------------*)
 (* CompleteReplay -- Advance replay to final state and verify         *)
 (*--------------------------------------------------------------------*)
 CompleteReplay ==
     /\ isReplaying
-    /\ LET finalHash == ComputeHash(cfgId, inputTrace, stepAmounts, currentCycle)
-       IN /\ stateHash' = finalHash
-          /\ isReplaying' = FALSE
-    /\ UNCHANGED <<cfgId, inputTrace, stepAmounts, currentCycle,
-                   hashHistory, replayHash>>
+    /\ replayIndex = Len(stepAmounts)
+    /\ replayStateHash = replayHash
+    /\ isReplaying' = FALSE
+    /\ currentCycle' = replayCycle
+    /\ stateHash' = replayStateHash
+    /\ hashHistory' = Append(hashHistory, replayStateHash)
+    /\ UNCHANGED <<cfgId, inputTrace, stepAmounts,
+                   replayHash, replayIndex, replayCycle, replayStateHash>>
 
 (**************************************************************************)
 (* NEXT STATE RELATION                                                    *)
@@ -263,6 +310,7 @@ Next ==
     \/ \E e \in InputEvent \ {"NONE"} : InjectInput(e)
     \/ \E c \in 1..10 : StepCycles(c)
     \/ StartReplay
+    \/ ReplayStep
     \/ CompleteReplay
     \/ UNCHANGED vars
 
@@ -285,3 +333,8 @@ DeterministicExecution ==
     [](TraceDeterminism)
 
 =======================================================================
+
+
+
+
+

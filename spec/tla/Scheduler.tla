@@ -8,7 +8,7 @@
  *
  * Key design decisions:
  * 1. Events are stored in a SET (not a sequence) for efficient lookup
- * 2. Tie-breaking uses explicit `tieKey` field, not arbitrary CHOOSE
+ * 2. Tie-breaking uses explicit `(tieKey, id)` ordering, not arbitrary CHOOSE
  * 3. Time advances to next event deadline (not fixed increments)
  * 4. All operations preserve the "no events in past" invariant
  *
@@ -19,13 +19,6 @@
  * - NoLostEvents: Scheduled events are eventually processed (under fairness)
  *)
 EXTENDS Types, Integers, Sequences, FiniteSets, TLC
-
-\* =====================================================================
-\* CONSTANTS
-\* =====================================================================
-CONSTANTS
-    MaxCycle,       \* Maximum virtual time
-    MaxEvents       \* Maximum events in queue
 
 \* =====================================================================
 \* VARIABLES (imported from EmuKernel, listed here for reference)
@@ -103,7 +96,8 @@ MinTieKey(events) == Min({e.tieKey : e \in events})
  * 1. Find all events due (deadline <= now)
  * 2. Among due events, find minimum deadline
  * 3. Among events at minimum deadline, find minimum tieKey
- * 4. Return the unique event matching both criteria
+ * 4. If tieKey collides, choose smallest event id
+ * 5. Return the unique event matching all criteria
  *
  * This ensures deterministic selection without relying on
  * arbitrary CHOOSE semantics.
@@ -119,7 +113,9 @@ SelectNextEvent(Q_now, now_val) ==
        ELSE LET minD == MinDeadline(due)
                 atMinD == EventsAtDeadline(due, minD)
                 minT == MinTieKey(atMinD)
-                winner == CHOOSE e \in atMinD : e.tieKey = minT
+                atMinT == {e \in atMinD : e.tieKey = minT}
+                minId == Min({e.id : e \in atMinT})
+                winner == CHOOSE e \in atMinT : e.id = minId
             IN [found |-> TRUE, event |-> winner]
 
 (*
@@ -245,15 +241,17 @@ UniqueEventIds(Q_now) ==
  * DeterministicSelection(Q, now) - Selection is deterministic
  *
  * For any non-empty due set, there is exactly one event that
- * would be selected (minimum deadline, then minimum tieKey).
- *)
+ * would be selected (minimum deadline, then tieKey, then id).
+*)
 DeterministicSelection(Q_now, now_val) ==
     LET due == DueEvents(Q_now, now_val)
     IN due # {} =>
        LET minD == MinDeadline(due)
            atMinD == EventsAtDeadline(due, minD)
            minT == MinTieKey(atMinD)
-       IN Cardinality({e \in atMinD : e.tieKey = minT}) = 1
+           atMinT == {e \in atMinD : e.tieKey = minT}
+           minId == Min({e.id : e \in atMinT})
+       IN Cardinality({e \in atMinT : e.id = minId}) = 1
 
 \* =====================================================================
 \* SCHEDULER PROPERTIES (for model checking)

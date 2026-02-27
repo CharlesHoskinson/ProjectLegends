@@ -37,7 +37,13 @@ vars == <<now, Q, processed, nextId>>
 
 TypeOK ==
     /\ now \in Cycles
-    /\ QueueWellFormed(Q)
+    /\ \A e \in Q :
+          /\ e.id \in EventIds
+          /\ e.deadline \in Cycles
+          /\ e.kind \in EventKind
+          /\ e.payload \in PayloadRange
+          /\ e.tieKey \in TieKeyRange
+    /\ Cardinality(Q) <= MaxEvents
     /\ processed \in Seq(EventIds)
     /\ nextId \in EventIds \cup {MaxEvents}
 
@@ -85,7 +91,7 @@ Init ==
 ScheduleEvent ==
     /\ nextId < MaxEvents
     /\ Cardinality(Q) < MaxEvents
-    /\ \E deadline \in now..(now + 5),
+    /\ \E deadline \in now..(IF now + 5 > MaxCycle THEN MaxCycle ELSE now + 5),
           kind \in EventKind,
           payload \in 0..3 :
         LET e == MakeEvent(nextId, deadline, kind, payload)
@@ -101,7 +107,7 @@ ScheduleEvent ==
 ScheduleMultipleSameDeadline ==
     /\ nextId + 2 < MaxEvents
     /\ Cardinality(Q) + 2 < MaxEvents
-    /\ \E deadline \in now..(now + 3) :
+    /\ \E deadline \in now..(IF now + 3 > MaxCycle THEN MaxCycle ELSE now + 3) :
         LET e1 == MakeEventWithTieKey(nextId, deadline, "TIMER_CB", 1, 40)
             e2 == MakeEventWithTieKey(nextId + 1, deadline, "PIT_TICK", 2, 0)
             e3 == MakeEventWithTieKey(nextId + 2, deadline, "KBD_SCAN", 3, 20)

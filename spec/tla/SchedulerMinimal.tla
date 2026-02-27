@@ -61,7 +61,9 @@ SelectNext ==
     ELSE LET minD == MinSet({e.deadline : e \in DueEvents})
              atMinD == {e \in DueEvents : e.deadline = minD}
              minT == MinSet({e.tieKey : e \in atMinD})
-             winner == CHOOSE e \in atMinD : e.tieKey = minT
+             atMinT == {e \in atMinD : e.tieKey = minT}
+             minId == MinSet({e.id : e \in atMinT})
+             winner == CHOOSE e \in atMinT : e.id = minId
          IN [found |-> TRUE, event |-> winner]
 
 \* Selection is deterministic
@@ -70,7 +72,9 @@ SelectionDeterministic ==
     LET minD == MinSet({e.deadline : e \in DueEvents})
         atMinD == {e \in DueEvents : e.deadline = minD}
         minT == MinSet({e.tieKey : e \in atMinD})
-    IN Cardinality({e \in atMinD : e.tieKey = minT}) = 1
+        atMinT == {e \in atMinD : e.tieKey = minT}
+        minId == MinSet({e.id : e \in atMinT})
+    IN Cardinality({e \in atMinT : e.id = minId}) = 1
 
 \* Events not in the past
 EventsNotInPast == \A e \in Q : e.deadline >= now
@@ -141,7 +145,9 @@ Next ==
 
 Spec == Init /\ [][Next]_vars /\ WF_vars(ProcessEvent) /\ WF_vars(AdvanceTime)
 
-TieBreakSpec == TieBreakInit /\ [][Next]_vars /\ WF_vars(ProcessEvent)
+TieBreakSpec == TieBreakInit /\ [][Next]_vars
+               /\ WF_vars(ProcessEvent)
+               /\ WF_vars(AdvanceTime)
 
 \* =====================================================================
 \* PROPERTIES

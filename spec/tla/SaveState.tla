@@ -96,13 +96,17 @@ Obs(state) == [
  * - DMA channel state
  * - Other device state...
  *)
-Serialize(state) == [
-    version |-> 1,
+SaveVersion == {2, 3}
+
+SerializeEvent(e) ==
+    [slot |-> e.id, deadline |-> e.deadline, kind |-> e.kind,
+     payload |-> e.payload, tieKey |-> e.tieKey]
+
+SnapshotCore(state) == [
+    version |-> 3,
     now |-> state.now,
-    \* CRITICAL: Event queue must be serialized
-    events |-> {[deadline |-> e.deadline, kind |-> e.kind,
-                 payload |-> e.payload, tieKey |-> e.tieKey]
-                : e \in state.Q},
+    \* Preserve event multiplicity via stable slot values.
+    events |-> {SerializeEvent(e) : e \in state.Q},
     cpu |-> [IF |-> state.CPU.IF, halted |-> state.CPU.halted,
              mode |-> state.CPU.mode],
     pic0 |-> state.pics[0],
@@ -110,29 +114,86 @@ Serialize(state) == [
     dma |-> state.dma
 ]
 
+SnapshotCRC(snapCore) ==
+    (snapCore.now * 7 +
+     Cardinality(snapCore.events) * 13 +
+     (IF snapCore.cpu.IF THEN 1 ELSE 0) * 19 +
+     snapCore.pic0.irr + snapCore.pic1.irr) % 251
+
+Serialize(state) ==
+    LET core == SnapshotCore(state)
+    IN [
+        version |-> core.version,
+        now |-> core.now,
+        events |-> core.events,
+        cpu |-> core.cpu,
+        pic0 |-> core.pic0,
+        pic1 |-> core.pic1,
+        dma |-> core.dma,
+        crc |-> SnapshotCRC(core)
+    ]
+
+NormalizeSnapshot(snap) ==
+    IF snap.version = 2
+    THEN LET upgraded == [
+                 version |-> 3,
+                 now |-> snap.now,
+                 events |-> snap.events,
+                 cpu |-> snap.cpu,
+                 pic0 |-> snap.pic0,
+                 pic1 |-> snap.pic1,
+                 dma |-> snap.dma
+             ]
+         IN [
+             version |-> upgraded.version,
+             now |-> upgraded.now,
+             events |-> upgraded.events,
+             cpu |-> upgraded.cpu,
+             pic0 |-> upgraded.pic0,
+             pic1 |-> upgraded.pic1,
+             dma |-> upgraded.dma,
+             crc |-> SnapshotCRC(upgraded)
+         ]
+    ELSE snap
+
+SnapshotCRCValid(snap) ==
+    LET normalized == NormalizeSnapshot(snap)
+    IN IF "crc" \in DOMAIN normalized
+       THEN normalized.crc = SnapshotCRC(normalized)
+       ELSE FALSE
+
 (*
  * Deserialize(snap) - Reconstruct state from snapshot
  *
  * Restores state from serialized snapshot.
  * Event IDs are regenerated since they're internal handles.
  *)
-DeserializeEvent(e, id) ==
-    [id |-> id, deadline |-> e.deadline, kind |-> e.kind,
+DeserializeEvent(e, idx) ==
+    [id |-> (idx - 1), deadline |-> e.deadline, kind |-> e.kind,
      payload |-> e.payload, tieKey |-> e.tieKey]
+
+MinSlotEvent(events) ==
+    CHOOSE e \in events : \A other \in events : e.slot <= other.slot
+
+RECURSIVE SetToSeqBySlot(_)
+SetToSeqBySlot(events) ==
+    IF events = {}
+    THEN <<>>
+    ELSE LET pick == MinSlotEvent(events)
+         IN <<pick>> \o SetToSeqBySlot(events \ {pick})
 
 Deserialize(snap) ==
     LET
-        \* Regenerate event IDs (they're just internal handles)
-        eventList == {e : e \in snap.events}
-        \* Reconstruct Q with new IDs
-        Q_new == {DeserializeEvent(e, CHOOSE i \in EventIds : TRUE) : e \in eventList}
+        normalized == NormalizeSnapshot(snap)
+        eventSeq == SetToSeqBySlot(normalized.events)
+        Q_new == {DeserializeEvent(eventSeq[i], i) : i \in 1..Len(eventSeq)}
     IN [
-        now |-> snap.now,
+        now |-> normalized.now,
         Q |-> Q_new,
-        CPU |-> [IF |-> snap.cpu.IF, halted |-> snap.cpu.halted,
-                 mode |-> snap.cpu.mode],
-        pics |-> <<snap.pic0, snap.pic1>>,
-        dma |-> snap.dma,
+        CPU |-> [IF |-> normalized.cpu.IF, halted |-> normalized.cpu.halted,
+                 mode |-> normalized.cpu.mode],
+        pics |-> [i \in 0..1 |-> IF i = 0 THEN normalized.pic0 ELSE normalized.pic1],
+        dma |-> normalized.dma,
         InputQ |-> <<>>,  \* Input queue cleared on load
         Out |-> <<>>      \* Output trace cleared on load
     ]
@@ -167,6 +228,9 @@ EventQueuePreserved(state) ==
 TimePreserved(state) ==
     LET snap == Serialize(state)
     IN snap.now = state.now
+
+SnapshotIntegrityPreserved(state) ==
+    SnapshotCRCValid(Serialize(state))
 
 \* =====================================================================
 \* VARIABLES (for testing)
@@ -206,6 +270,13 @@ IsValidDMA(ch) ==
     /\ ch.tc_reached \in BOOLEAN
     /\ ch.autoinit \in BOOLEAN
 
+IsValidSerializedEvent(e) ==
+    /\ e.slot \in EventIds
+    /\ e.deadline \in Cycles
+    /\ e.kind \in EventKind
+    /\ e.payload \in PayloadRange
+    /\ e.tieKey \in TieKeyRange
+
 IsValidState(s) ==
     /\ s.now \in Cycles
     /\ \A e \in s.Q : IsValidEvent(e)
@@ -215,10 +286,32 @@ IsValidState(s) ==
     /\ IsValidPIC(s.pics[1])
     /\ \A ch \in DOMAIN s.dma : IsValidDMA(s.dma[ch])
 
+IsValidSnapshot(snap) ==
+    LET normalized == NormalizeSnapshot(snap)
+    IN /\ normalized.version \in SaveVersion
+       /\ normalized.now \in Cycles
+       /\ \A e \in normalized.events : IsValidSerializedEvent(e)
+       /\ Cardinality(normalized.events) <= MaxEvents
+       /\ IsValidCPU(normalized.cpu)
+       /\ IsValidPIC(normalized.pic0)
+       /\ IsValidPIC(normalized.pic1)
+       /\ \A ch \in DOMAIN normalized.dma : IsValidDMA(normalized.dma[ch])
+       /\ normalized.crc \in 0..250
+       /\ SnapshotCRCValid(normalized)
+
+IsNoneSaved(s) ==
+    IF DOMAIN s = {"type"}
+    THEN s.type = "NONE"
+    ELSE FALSE
+
+IsSnapSaved(s) ==
+    IF DOMAIN s = {"type", "snap"} /\ s.type = "SNAP"
+    THEN IsValidSnapshot(s.snap)
+    ELSE FALSE
+
 TypeOK ==
     /\ IsValidState(state)
-    /\ saved \in {[type |-> "NONE"]} \cup
-       {[type |-> "SNAP", snap |-> s] : s \in DOMAIN Serialize}
+    /\ (IsNoneSaved(saved) \/ IsSnapSaved(saved))
 
 \* =====================================================================
 \* INITIALIZATION
@@ -238,7 +331,7 @@ InitWithEvents ==
               [id |-> 1, deadline |-> 15, kind |-> "KBD_SCAN",
                payload |-> 65, tieKey |-> 20]},
         CPU |-> [IF |-> TRUE, halted |-> FALSE, mode |-> "Real"],
-        pics |-> <<InitPIC, InitPIC>>,
+        pics |-> [i \in 0..1 |-> InitPIC],
         dma |-> InitDMA,
         InputQ |-> <<>>,
         Out |-> <<>>
@@ -251,7 +344,7 @@ InitEmpty ==
         now |-> 0,
         Q |-> {},
         CPU |-> [IF |-> FALSE, halted |-> FALSE, mode |-> "Real"],
-        pics |-> <<InitPIC, InitPIC>>,
+        pics |-> [i \in 0..1 |-> InitPIC],
         dma |-> InitDMA,
         InputQ |-> <<>>,
         Out |-> <<>>
@@ -273,7 +366,15 @@ SaveState ==
 \* Load saved state
 LoadState ==
     /\ saved.type = "SNAP"
+    /\ SnapshotCRCValid(saved.snap)
     /\ state' = Deserialize(saved.snap)
+    /\ saved' = [type |-> "NONE"]
+
+\* Corrupt/invalid snapshots are rejected with no state mutation.
+RejectCorruptSnapshot ==
+    /\ saved.type = "SNAP"
+    /\ ~SnapshotCRCValid(saved.snap)
+    /\ UNCHANGED state
     /\ saved' = [type |-> "NONE"]
 
 \* Idle
@@ -282,6 +383,7 @@ Idle == UNCHANGED vars
 Next ==
     \/ SaveState
     \/ LoadState
+    \/ RejectCorruptSnapshot
     \/ Idle
 
 \* =====================================================================
@@ -307,5 +409,8 @@ EventsPreservedOnLoad ==
 
 \* Round-trip preserves observation (test this as invariant)
 RoundTripInvariant == ObservationPreserved(state)
+
+\* Serialized snapshots always carry a valid checksum.
+SnapshotIntegrityInvariant == SnapshotIntegrityPreserved(state)
 
 =======================================================================

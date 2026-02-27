@@ -99,10 +99,21 @@ ModeColumns(mode) ==
       [] mode = "TEXT_80x25" -> 80
       [] mode = "MODE_13h"   -> 80
 
+ModeRows(mode) ==
+    CASE mode \in {"TEXT_80x25", "TEXT_40x25", "MODE_13h"} -> 25
+
 ModePixelWidth(mode) ==
     CASE mode = "TEXT_80x25" -> 640
       [] mode = "TEXT_40x25" -> 320
       [] mode = "MODE_13h"   -> 320
+
+CaptureSignature(mode, backend) ==
+    [columns |-> ModeColumns(mode),
+     rows |-> ModeRows(mode),
+     width |-> ModePixelWidth(mode),
+     pitch |-> ModePixelWidth(mode) * 3,
+     format |-> "RGB24",
+     backend |-> backend]
 
 (**************************************************************************)
 (* TYPE INVARIANT                                                         *)
@@ -142,11 +153,8 @@ Gate_VersionHandshake ==
 
 \* 2a) Create/destroy loop -- after destroy, can create again
 Gate_CreateDestroyWorks ==
-    \* Destroy always leaves state NONE, enabling next create
-    (instance = "NONE" /\ lastError \in {"OK", "NULL_HANDLE",
-     "ALREADY_CREATED", "INVALID_CONFIG", "VERSION_MISMATCH",
-     "WRONG_THREAD"}) =>
-        instance = "NONE"
+    (instance = "NONE" /\ ownerThread = "None") \/
+    (instance = "CREATED" /\ ownerThread = "MainThread")
 
 \* 2b) Misuse returns error, never crash
 Gate_MisuseSafe ==
@@ -207,16 +215,25 @@ Gate_RoundTrip ==
 
 \* 5a) Text capture dimensions consistent with video mode
 Gate_CaptureDimensions ==
-    ModeColumns(videoMode) > 0
+    /\ ModeColumns(videoMode) \in {40, 80}
+    /\ ModeRows(videoMode) = 25
+    /\ ModePixelWidth(videoMode) \in {320, 640}
 
 \* 5b) RGB24 format, no padding
 Gate_CaptureFormat ==
-    ModePixelWidth(videoMode) * 3 = ModePixelWidth(videoMode) * 3
+    LET sig == CaptureSignature(videoMode, activeBackend)
+    IN /\ sig.format = "RGB24"
+       /\ sig.pitch = sig.width * 3
+       /\ sig.width > 0
 
 \* 5c) Capture is backend-independent
 Gate_CaptureBackendIndependent ==
-    \* Mode columns don't depend on backend
-    ModeColumns(videoMode) = ModeColumns(videoMode)
+    \A b1, b2 \in Backend :
+        CaptureSignature(videoMode, b1).columns = CaptureSignature(videoMode, b2).columns /\
+        CaptureSignature(videoMode, b1).rows = CaptureSignature(videoMode, b2).rows /\
+        CaptureSignature(videoMode, b1).width = CaptureSignature(videoMode, b2).width /\
+        CaptureSignature(videoMode, b1).pitch = CaptureSignature(videoMode, b2).pitch /\
+        CaptureSignature(videoMode, b1).format = CaptureSignature(videoMode, b2).format
 
 \* ----- GATE 6: INPUT -----
 
@@ -269,7 +286,7 @@ Gate_PALIsolation ==
 Gate_WrongThread ==
     (currentThread # ownerThread /\ ownerThread # "None" /\
      instance = "CREATED")
-    => lastError \in {"WRONG_THREAD", "OK"}
+    => lastError = "WRONG_THREAD"
 
 (**************************************************************************)
 (* COMPOSITE INVARIANT -- All 23 gates                                    *)
@@ -282,6 +299,7 @@ AllGatesHold ==
     /\ Gate_SingleInstance         \* 2c
     /\ Gate_NoExitAbort            \* 3a
     /\ Gate_NoStdout               \* 3b
+    /\ Gate_NoEnvironmentChange    \* 3c
     /\ Gate_StateHashExists        \* 4a
     /\ Gate_Deterministic          \* 4b
     /\ Gate_RoundTrip              \* 4c
@@ -427,6 +445,17 @@ SwitchBackend(b) ==
                    droppedFrames, currentThread, ownerThread,
                    inStep, videoMode, opCount, lastError>>
 
+\* Explicit thread context switch to make wrong-thread properties non-vacuous
+SwitchThread(t) ==
+    /\ t \in ThreadContext
+    /\ currentThread' = t
+    /\ IF (instance = "CREATED" /\ ownerThread # "None" /\ t # ownerThread)
+       THEN lastError' = "WRONG_THREAD"
+       ELSE UNCHANGED lastError
+    /\ UNCHANGED <<instance, emuTime, stateHash, inputTrace, audioQueue,
+                   droppedFrames, activeBackend, ownerThread,
+                   inStep, videoMode, opCount>>
+
 (**************************************************************************)
 (* NEXT STATE RELATION                                                    *)
 (**************************************************************************)
@@ -439,6 +468,7 @@ Next ==
     \/ \E f \in 1..3 : PushAudio(f)
     \/ \E m \in VideoMode : SetVideoMode(m)
     \/ \E b \in Backend : SwitchBackend(b)
+    \/ \E t \in ThreadContext : SwitchThread(t)
     \/ UNCHANGED vars
 
 (**************************************************************************)
@@ -468,3 +498,5 @@ Liveness ==
     <>(opCount > 0)
 
 =======================================================================
+
+

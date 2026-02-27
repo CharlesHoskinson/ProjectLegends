@@ -83,6 +83,10 @@ ExtendedScancodes == {
 \* @type: Set(Int);
 AllScancodes == 1..127
 
+\* Encoded key domain: standard keys use 1..127; extended keys are stored as scancode+256
+\* @type: Set(Int);
+EncodedScancodes == AllScancodes \cup {sc + 256 : sc \in ExtendedScancodes}
+
 \* @type: Set(Int);
 MouseButton == {1, 2, 4}
 
@@ -129,13 +133,13 @@ vars == <<keyboardBuffer, keyState, mouseX, mouseY,
 TypeOK ==
     /\ keyboardBuffer \in Seq(1..255)
     /\ Len(keyboardBuffer) <= MaxKeyboardBuffer
-    /\ keyState \subseteq AllScancodes
+    /\ keyState \subseteq EncodedScancodes
     /\ mouseX \in MouseRange
     /\ mouseY \in MouseRange
     /\ mouseButtons \subseteq MouseButton
     /\ inputTrace \in Seq({"KEY", "MOUSE", "TEXT"})
     /\ Len(inputTrace) <= MaxInputs
-    /\ shadowKeyState \subseteq AllScancodes
+    /\ shadowKeyState \subseteq EncodedScancodes
     /\ shadowBuffer \in Seq(1..255)
     /\ Len(shadowBuffer) <= MaxKeyboardBuffer
 
@@ -159,7 +163,7 @@ ScancodeValid ==
 (* Key state only contains valid scancodes.                           *)
 (*--------------------------------------------------------------------*)
 KeyStateConsistent ==
-    keyState \subseteq AllScancodes
+    keyState \subseteq EncodedScancodes
 
 (*--------------------------------------------------------------------*)
 (* BufferNotCorrupted                                                 *)
@@ -336,3 +340,4 @@ NoBufferOverflow ==
     [](Len(keyboardBuffer) <= MaxKeyboardBuffer)
 
 =======================================================================
+

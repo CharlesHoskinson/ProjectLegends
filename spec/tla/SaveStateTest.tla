@@ -126,7 +126,14 @@ Serialize(s) ==
         cpu_if  |-> s.cpu_if,
         pic_irr |-> s.pic_irr,
         version |-> 3
-    ] IN [base EXCEPT !.crc = CRC(base)]
+    ] IN [
+        now     |-> base.now,
+        events  |-> base.events,
+        cpu_if  |-> base.cpu_if,
+        pic_irr |-> base.pic_irr,
+        version |-> base.version,
+        crc     |-> CRC(base)
+    ]
 
 \* Deserialize with fresh IDs
 DeserializeEvents(evts) ==
@@ -150,8 +157,21 @@ Deserialize(snap) == [
 \* V2 -> V3 migration: V2 snapshots lack CRC field, add it
 MigrateV2toV3(snap) ==
     IF snap.version = 2
-    THEN LET upgraded == [snap EXCEPT !.version = 3]
-         IN [upgraded EXCEPT !.crc = CRC(upgraded)]
+    THEN LET upgraded == [
+             now     |-> snap.now,
+             events  |-> snap.events,
+             cpu_if  |-> snap.cpu_if,
+             pic_irr |-> snap.pic_irr,
+             version |-> 3
+         ]
+         IN [
+             now     |-> upgraded.now,
+             events  |-> upgraded.events,
+             cpu_if  |-> upgraded.cpu_if,
+             pic_irr |-> upgraded.pic_irr,
+             version |-> upgraded.version,
+             crc     |-> CRC(upgraded)
+         ]
     ELSE snap
 
 (**************************************************************************)

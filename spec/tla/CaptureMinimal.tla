@@ -91,7 +91,7 @@ DimensionsConsistent ==
 
 \* Gate 5b: RGB24 format, pitch = width * 3
 FormatFixed ==
-    rgbWidth * rgbHeight * 3 = rgbWidth * rgbHeight * 3
+    rgbBufferSize = 0 \/ rgbBufferSize = rgbWidth * rgbHeight * 3
 
 \* Gate 5c: Backend independent -- dimensions from mode, not backend
 BackendIndependent ==
@@ -170,3 +170,4 @@ Next ==
 Spec == Init /\ [][Next]_vars
 
 =======================================================================
+
