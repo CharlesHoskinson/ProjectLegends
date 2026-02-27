@@ -151,6 +151,20 @@ TEST_F(SaveBrowserTest, HandleKey_KeyUp_Ignored) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Mouse Click
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_F(SaveBrowserTest, HandleMouseClick_ReturnsFalseWhenClosed) {
+    EXPECT_FALSE(browser_.handleMouseClick(100, 100));
+}
+
+TEST_F(SaveBrowserTest, HandleMouseClick_ClosesWhenOpen) {
+    browser_.openForSave();
+    EXPECT_TRUE(browser_.handleMouseClick(100, 100));
+    EXPECT_FALSE(browser_.isOpen());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Rendering
 // ═══════════════════════════════════════════════════════════════════════════
 

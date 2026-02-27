@@ -98,11 +98,12 @@ TEST(HotkeyDispatcherTest, CtrlShiftF1_SaveState_Slot1) {
     EXPECT_EQ(r.param, 1);
 }
 
-TEST(HotkeyDispatcherTest, CtrlShiftF5_SaveState_Slot5) {
+TEST(HotkeyDispatcherTest, CtrlShiftF5_IsVideoCapture_NotSaveState) {
+    // F5 (0x3E) is within the F1-F9 range but is reserved for ToggleVideoCapture
     auto r = matchHotkey(0x3E, kHkModLCtrl | kHkModLShift, false);
     EXPECT_TRUE(r.matched);
-    EXPECT_EQ(r.action, Action::SaveState);
-    EXPECT_EQ(r.param, 5);
+    EXPECT_EQ(r.action, Action::ToggleVideoCapture);
+    EXPECT_NE(r.action, Action::SaveState);
 }
 
 TEST(HotkeyDispatcherTest, CtrlShiftF9_SaveState_Slot9) {

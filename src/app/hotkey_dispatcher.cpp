@@ -27,6 +27,12 @@ HotkeyResult matchHotkey(uint16_t scancode, uint8_t modifiers, bool mouse_captur
         return {Action::Reset, 0, true};
     }
 
+    // Ctrl+Shift+F5 — toggle video capture (SDL F5 = 0x3E)
+    // Must be checked BEFORE the Ctrl+Shift+F1..F9 range to avoid being shadowed
+    if (ctrl && shift && !alt && scancode == 0x3E) {
+        return {Action::ToggleVideoCapture, 0, true};
+    }
+
     // Ctrl+Shift+F1..F9 — save state (slots 1-9)
     // Must be checked BEFORE Ctrl+F1 (OpenMapper) to ensure priority
     if (ctrl && shift && !alt &&
@@ -41,11 +47,6 @@ HotkeyResult matchHotkey(uint16_t scancode, uint8_t modifiers, bool mouse_captur
         scancode >= 0x3A && scancode <= 0x42) {
         int slot = static_cast<int>(scancode - 0x3A + 1);
         return {Action::LoadState, slot, true};
-    }
-
-    // Ctrl+Shift+F5 — toggle video capture (SDL F5 = 0x3E)
-    if (ctrl && shift && !alt && scancode == 0x3E) {
-        return {Action::ToggleVideoCapture, 0, true};
     }
 
     // Ctrl+F5 — screenshot (SDL F5 = 0x3E)

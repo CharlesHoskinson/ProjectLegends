@@ -143,6 +143,31 @@ TEST(ZMBVCodecTest, ZeroDataSize_DecodeThrowsFailFast) {
                  legends::gsl::fail_fast);
 }
 
+TEST(ZMBVCodecTest, NullData_DecodeThrowsFailFast) {
+    ZMBVCodec codec;
+    ASSERT_TRUE(codec.initDecompress(64, 64));
+    std::vector<uint8_t> output(64 * 64 * 3);
+    EXPECT_THROW(codec.decodeFrame(nullptr, 10, output.data(), output.size()),
+                 legends::gsl::fail_fast);
+}
+
+TEST(ZMBVCodecTest, NullOutput_DecodeThrowsFailFast) {
+    ZMBVCodec codec;
+    ASSERT_TRUE(codec.initDecompress(64, 64));
+    uint8_t dummy = 0;
+    EXPECT_THROW(codec.decodeFrame(&dummy, 1, nullptr, 64 * 64 * 3),
+                 legends::gsl::fail_fast);
+}
+
+TEST(ZMBVCodecTest, DecodeInCompressMode_ThrowsFailFast) {
+    ZMBVCodec codec;
+    ASSERT_TRUE(codec.initCompress(64, 64));
+    std::vector<uint8_t> output(64 * 64 * 3);
+    uint8_t dummy = 0;
+    EXPECT_THROW(codec.decodeFrame(&dummy, 1, output.data(), output.size()),
+                 legends::gsl::fail_fast);
+}
+
 TEST(ZMBVCodecTest, ZeroDimensions_InitReturnsFalse) {
     ZMBVCodec codec;
     EXPECT_FALSE(codec.initCompress(0, 0));
