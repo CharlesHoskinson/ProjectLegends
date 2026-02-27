@@ -561,6 +561,8 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_ipx_config.cpp
         tests/unit/test_glide_config.cpp
         tests/unit/test_pc98_config.cpp
+        # Phase 3: Bridge layer tests
+        tests/unit/test_phase3_bridge.cpp
         # Phase 4: Polish & Release
         tests/unit/test_file_logger.cpp
         tests/unit/test_error_reporter.cpp

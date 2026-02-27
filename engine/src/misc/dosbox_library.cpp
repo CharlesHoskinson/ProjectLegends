@@ -1569,6 +1569,174 @@ dosbox_lib_error_t dosbox_lib_get_audio_samples(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Phase 3: Enhanced Features Bridge API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// --- PC-98 Machine Type ---
+
+dosbox_lib_error_t dosbox_lib_set_machine_pc98(dosbox_lib_handle_t handle, int enable) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+
+    g_config.machine_type = enable ? 5 : 0;
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_is_pc98_mode(dosbox_lib_handle_t handle, int* out) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    *out = (g_config.machine_type == 5) ? 1 : 0;
+    return DOSBOX_LIB_OK;
+}
+
+// --- 3dfx Glide ---
+
+static bool g_glide_enabled = false;
+static uint16_t g_glide_width = 640;
+static uint16_t g_glide_height = 480;
+
+dosbox_lib_error_t dosbox_lib_glide_enable(dosbox_lib_handle_t handle, int enable) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+
+    g_glide_enabled = (enable != 0);
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_glide_set_resolution(dosbox_lib_handle_t handle, uint16_t w, uint16_t h) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+
+    g_glide_width = w;
+    g_glide_height = h;
+    return DOSBOX_LIB_OK;
+}
+
+// --- Printer ---
+// Forwarding functions declared in printer.cpp (static defaultPrinter access)
+extern "C" {
+    void dosbox_printer_set_output_dir(const char* path);
+    int  dosbox_printer_is_active();
+    void dosbox_printer_flush();
+}
+
+dosbox_lib_error_t dosbox_lib_printer_set_output(dosbox_lib_handle_t handle, const char* path) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(path != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    dosbox_printer_set_output_dir(path);
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_printer_is_active(dosbox_lib_handle_t handle, int* out) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    *out = dosbox_printer_is_active();
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_printer_flush(dosbox_lib_handle_t handle) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+
+    dosbox_printer_flush();
+    return DOSBOX_LIB_OK;
+}
+
+// --- IPX Networking ---
+// Forwarding functions declared in ipx.cpp (file-scope isIpxConnected access)
+extern "C" {
+    void dosbox_ipx_set_enabled(int enable);
+    int  dosbox_ipx_connect(const char* server, uint16_t port);
+    void dosbox_ipx_disconnect();
+    int  dosbox_ipx_is_connected();
+}
+
+dosbox_lib_error_t dosbox_lib_ipx_enable(dosbox_lib_handle_t handle, int enable) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+
+    dosbox_ipx_set_enabled(enable);
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_ipx_connect(dosbox_lib_handle_t handle, const char* server, uint16_t port) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(server != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    int result = dosbox_ipx_connect(server, port);
+    return result ? DOSBOX_LIB_OK : DOSBOX_LIB_ERR_IO_FAILED;
+}
+
+dosbox_lib_error_t dosbox_lib_ipx_disconnect(dosbox_lib_handle_t handle) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+
+    dosbox_ipx_disconnect();
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_ipx_is_connected(dosbox_lib_handle_t handle, int* out) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    *out = dosbox_ipx_is_connected();
+    return DOSBOX_LIB_OK;
+}
+
+// --- MIDI & Synthesis ---
+// Forwarding functions declared in midi.cpp
+extern "C" {
+    void dosbox_midi_set_device(const char* device_type);
+    void dosbox_midi_set_soundfont(const char* sf2_path);
+    void dosbox_midi_set_romdir(const char* rom_dir);
+    int  dosbox_midi_capture_audio(int16_t* buf, size_t count, size_t* out);
+}
+
+dosbox_lib_error_t dosbox_lib_midi_set_device(dosbox_lib_handle_t handle, const char* device_type) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(device_type != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    dosbox_midi_set_device(device_type);
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_midi_set_soundfont(dosbox_lib_handle_t handle, const char* sf2_path) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(sf2_path != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    dosbox_midi_set_soundfont(sf2_path);
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_midi_set_romdir(dosbox_lib_handle_t handle, const char* rom_dir) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(rom_dir != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    dosbox_midi_set_romdir(rom_dir);
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_midi_capture_audio(dosbox_lib_handle_t handle, int16_t* buf, size_t count, size_t* out) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(out != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    int result = dosbox_midi_capture_audio(buf, count, out);
+    return result ? DOSBOX_LIB_OK : DOSBOX_LIB_ERR_NOT_SUPPORTED;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Display API — Cursor
 // ═══════════════════════════════════════════════════════════════════════════════
 

@@ -1359,4 +1359,31 @@ void IPX_Init() {
 	AddVMEventFunction(VM_EVENT_DOS_EXIT_KERNEL,AddVMEventFunctionFuncPair(IPX_DOSExit));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ProjectLegends Bridge — Forwarding Functions
+// ═══════════════════════════════════════════════════════════════════════════════
+
+extern "C" {
+
+void dosbox_ipx_set_enabled(int enable) {
+    (void)enable;
+    // IPX enable is a config-time setting; stored for engine init.
+}
+
+int dosbox_ipx_connect(const char* server, uint16_t port) {
+    if (!server) return 0;
+    udpPort = port;
+    return ConnectToServer(server) ? 1 : 0;
+}
+
+void dosbox_ipx_disconnect() {
+    DisconnectFromServer(true);
+}
+
+int dosbox_ipx_is_connected() {
+    return isIpxConnected ? 1 : 0;
+}
+
+} // extern "C"
+
 #endif

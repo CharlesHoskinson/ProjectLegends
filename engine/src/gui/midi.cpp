@@ -834,3 +834,36 @@ private:
     }
 } dummy;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ProjectLegends Bridge — Forwarding Functions
+// ═══════════════════════════════════════════════════════════════════════════════
+
+static std::string g_midi_device_config;
+static std::string g_midi_soundfont_path;
+static std::string g_midi_romdir;
+
+extern "C" {
+
+void dosbox_midi_set_device(const char* device_type) {
+    if (device_type) g_midi_device_config = device_type;
+}
+
+void dosbox_midi_set_soundfont(const char* sf2_path) {
+    if (sf2_path) g_midi_soundfont_path = sf2_path;
+}
+
+void dosbox_midi_set_romdir(const char* rom_dir) {
+    if (rom_dir) g_midi_romdir = rom_dir;
+}
+
+int dosbox_midi_capture_audio(int16_t* buf, size_t count, size_t* out) {
+    if (!out) return 0;
+    // MIDI audio capture is not yet wired to an audio ring buffer;
+    // report zero samples available for now.
+    *out = 0;
+    (void)buf; (void)count;
+    return 1;
+}
+
+} // extern "C"

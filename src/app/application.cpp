@@ -349,6 +349,25 @@ ExitCode Application::init(int argc, char** argv) {
     // Sprint 7: PC-98 config
     pc98_config_.loadFrom(config);
 
+    // Sprint 6: IPX — wire config to engine
+    if (ipx_config_.enabled && engine_) {
+        legends_ipx_enable(engine_, 1);
+        if (!ipx_config_.server.empty()) {
+            legends_ipx_connect(engine_, ipx_config_.server.c_str(), ipx_config_.port);
+        }
+    }
+
+    // Sprint 6: Glide — wire config to engine
+    if (glide_config_.enabled && engine_) {
+        legends_glide_enable(engine_, 1);
+        legends_glide_set_resolution(engine_, glide_config_.width, glide_config_.height);
+    }
+
+    // Sprint 7: PC-98 — wire config to engine
+    if (pc98_config_.enabled && engine_) {
+        legends_set_machine_pc98(engine_, 1);
+    }
+
     return ExitCode::Success;
 }
 

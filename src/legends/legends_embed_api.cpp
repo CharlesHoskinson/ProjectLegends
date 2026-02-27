@@ -2894,10 +2894,8 @@ legends_error_t legends_midi_set_device(
     LEGENDS_REQUIRE(device_type != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine MIDI subsystem once wired.
-    (void)device_type;
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_midi_set_device(inst->engine_handle, device_type);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_midi_set_soundfont(
@@ -2909,10 +2907,8 @@ legends_error_t legends_midi_set_soundfont(
     LEGENDS_REQUIRE(sf2_path != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine FluidSynth subsystem once wired.
-    (void)sf2_path;
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_midi_set_soundfont(inst->engine_handle, sf2_path);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_midi_set_romdir(
@@ -2924,10 +2920,8 @@ legends_error_t legends_midi_set_romdir(
     LEGENDS_REQUIRE(rom_dir != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine MT-32 subsystem once wired.
-    (void)rom_dir;
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_midi_set_romdir(inst->engine_handle, rom_dir);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_capture_midi_audio(
@@ -2941,10 +2935,8 @@ legends_error_t legends_capture_midi_audio(
     LEGENDS_REQUIRE(out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Capture from engine MIDI audio ring buffer once wired.
-    (void)buf; (void)count;
-    *out = 0;
-    return LEGENDS_OK;
+    auto err = dosbox_lib_midi_capture_audio(inst->engine_handle, buf, count, out);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 // Sprint 5: Printer
@@ -2957,10 +2949,8 @@ legends_error_t legends_printer_set_output(
     LEGENDS_REQUIRE(output_path != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine printer subsystem once wired.
-    (void)output_path;
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_printer_set_output(inst->engine_handle, output_path);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_printer_is_active(
@@ -2972,9 +2962,8 @@ legends_error_t legends_printer_is_active(
     LEGENDS_REQUIRE(active_out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Query engine printer state once wired.
-    *active_out = 0;
-    return LEGENDS_OK;
+    auto err = dosbox_lib_printer_is_active(inst->engine_handle, active_out);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_printer_flush(legends_handle handle) {
@@ -2982,9 +2971,8 @@ legends_error_t legends_printer_flush(legends_handle handle) {
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Flush engine printer buffer once wired.
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_printer_flush(inst->engine_handle);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_set_ttf_font(
@@ -3009,10 +2997,8 @@ legends_error_t legends_ipx_enable(legends_handle handle, int enable) {
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine IPX subsystem once wired.
-    (void)enable;
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_ipx_enable(inst->engine_handle, enable);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_ipx_connect(
@@ -3025,10 +3011,8 @@ legends_error_t legends_ipx_connect(
     LEGENDS_REQUIRE(server != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine IPX networking once wired.
-    (void)server; (void)port;
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_ipx_connect(inst->engine_handle, server, port);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_ipx_disconnect(legends_handle handle) {
@@ -3036,9 +3020,8 @@ legends_error_t legends_ipx_disconnect(legends_handle handle) {
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Disconnect engine IPX session once wired.
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_ipx_disconnect(inst->engine_handle);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_ipx_is_connected(legends_handle handle, int* out) {
@@ -3047,9 +3030,8 @@ legends_error_t legends_ipx_is_connected(legends_handle handle, int* out) {
     LEGENDS_REQUIRE(out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Query engine IPX connection state once wired.
-    *out = 0;
-    return LEGENDS_OK;
+    auto err = dosbox_lib_ipx_is_connected(inst->engine_handle, out);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 // Sprint 6: 3dfx Glide
@@ -3058,10 +3040,8 @@ legends_error_t legends_glide_enable(legends_handle handle, int enable) {
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine Glide subsystem once wired.
-    (void)enable;
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_glide_enable(inst->engine_handle, enable);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_glide_set_resolution(
@@ -3073,10 +3053,8 @@ legends_error_t legends_glide_set_resolution(
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine Glide resolution once wired.
-    (void)w; (void)h;
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_glide_set_resolution(inst->engine_handle, w, h);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 // Sprint 7: PC-98
@@ -3085,10 +3063,8 @@ legends_error_t legends_set_machine_pc98(legends_handle handle, int enable) {
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine machine type once wired.
-    (void)enable;
-
-    return LEGENDS_OK;
+    auto err = dosbox_lib_set_machine_pc98(inst->engine_handle, enable);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 legends_error_t legends_is_pc98_mode(legends_handle handle, int* out) {
@@ -3097,9 +3073,8 @@ legends_error_t legends_is_pc98_mode(legends_handle handle, int* out) {
     LEGENDS_REQUIRE(out != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Query engine machine type once wired.
-    *out = 0;
-    return LEGENDS_OK;
+    auto err = dosbox_lib_is_pc98_mode(inst->engine_handle, out);
+    return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
 }
 
 } // extern "C"

@@ -472,6 +472,33 @@ WEAK_FUNCTION void SDL_Delay(uint32_t ms) {
     // Deterministic timing - no actual delay (virtual time)
 }
 
+// ----------------------------------------------------------------------------
+// Phase 3: Enhanced Features Forwarding Stubs
+// These stubs satisfy the linker when the real engine modules (printer.cpp,
+// ipx.cpp, midi.cpp) are not compiled into the headless/test build.
+// ----------------------------------------------------------------------------
+
+// Printer stubs (real implementations in printer.cpp, behind C_PRINTER)
+void dosbox_printer_set_output_dir(const char* path) { (void)path; }
+int  dosbox_printer_is_active() { return 0; }
+void dosbox_printer_flush() {}
+
+// IPX stubs (real implementations in ipx.cpp, behind C_IPX)
+void dosbox_ipx_set_enabled(int enable) { (void)enable; }
+int  dosbox_ipx_connect(const char* server, uint16_t port) { (void)server; (void)port; return 0; }
+void dosbox_ipx_disconnect() {}
+int  dosbox_ipx_is_connected() { return 0; }
+
+// MIDI stubs (real implementations in midi.cpp)
+void dosbox_midi_set_device(const char* device_type) { (void)device_type; }
+void dosbox_midi_set_soundfont(const char* sf2_path) { (void)sf2_path; }
+void dosbox_midi_set_romdir(const char* rom_dir) { (void)rom_dir; }
+int  dosbox_midi_capture_audio(int16_t* buf, size_t count, size_t* out) {
+    (void)buf; (void)count;
+    if (out) *out = 0;
+    return 1;
+}
+
 } // extern "C"
 
 #endif // AIBOX_HEADLESS

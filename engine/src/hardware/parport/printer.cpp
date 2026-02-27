@@ -2608,4 +2608,26 @@ void PRINTER_Init()
 	inited = true;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ProjectLegends Bridge — Forwarding Functions
+// ═══════════════════════════════════════════════════════════════════════════════
+
+extern "C" {
+
+void dosbox_printer_set_output_dir(const char* path) {
+    if (path) document_path = path;
+}
+
+int dosbox_printer_is_active() {
+    return (defaultPrinter != NULL) ? 1 : 0;
+}
+
+void dosbox_printer_flush() {
+    if (defaultPrinter != NULL) {
+        defaultPrinter->newPage(true, true);
+    }
+}
+
+} // extern "C"
+
 #endif

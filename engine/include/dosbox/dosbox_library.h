@@ -470,6 +470,40 @@ dosbox_lib_error_t dosbox_lib_get_pic_state(
 );
 
 /* =========================================================================
+ * PHASE 3: ENHANCED FEATURES BRIDGE API
+ * ========================================================================= */
+
+/* --- PC-98 Machine Type --- */
+
+dosbox_lib_error_t dosbox_lib_set_machine_pc98(dosbox_lib_handle_t handle, int enable);
+dosbox_lib_error_t dosbox_lib_is_pc98_mode(dosbox_lib_handle_t handle, int* out);
+
+/* --- 3dfx Glide --- */
+
+dosbox_lib_error_t dosbox_lib_glide_enable(dosbox_lib_handle_t handle, int enable);
+dosbox_lib_error_t dosbox_lib_glide_set_resolution(dosbox_lib_handle_t handle, uint16_t w, uint16_t h);
+
+/* --- Printer --- */
+
+dosbox_lib_error_t dosbox_lib_printer_set_output(dosbox_lib_handle_t handle, const char* path);
+dosbox_lib_error_t dosbox_lib_printer_is_active(dosbox_lib_handle_t handle, int* out);
+dosbox_lib_error_t dosbox_lib_printer_flush(dosbox_lib_handle_t handle);
+
+/* --- IPX Networking --- */
+
+dosbox_lib_error_t dosbox_lib_ipx_enable(dosbox_lib_handle_t handle, int enable);
+dosbox_lib_error_t dosbox_lib_ipx_connect(dosbox_lib_handle_t handle, const char* server, uint16_t port);
+dosbox_lib_error_t dosbox_lib_ipx_disconnect(dosbox_lib_handle_t handle);
+dosbox_lib_error_t dosbox_lib_ipx_is_connected(dosbox_lib_handle_t handle, int* out);
+
+/* --- MIDI & Synthesis --- */
+
+dosbox_lib_error_t dosbox_lib_midi_set_device(dosbox_lib_handle_t handle, const char* device_type);
+dosbox_lib_error_t dosbox_lib_midi_set_soundfont(dosbox_lib_handle_t handle, const char* sf2_path);
+dosbox_lib_error_t dosbox_lib_midi_set_romdir(dosbox_lib_handle_t handle, const char* rom_dir);
+dosbox_lib_error_t dosbox_lib_midi_capture_audio(dosbox_lib_handle_t handle, int16_t* buf, size_t count, size_t* out);
+
+/* =========================================================================
  * VGA/DISPLAY STATE API (H8)
  * ========================================================================= */
 
