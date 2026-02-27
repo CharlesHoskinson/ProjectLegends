@@ -175,6 +175,16 @@ TEST(HotkeyDispatcherTest, CtrlM_ToggleMute) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Alt+Enter — ToggleFullscreen
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(HotkeyDispatcherTest, AltEnter_ToggleFullscreen) {
+    auto r = matchHotkey(0x28, kHkModLAlt, false);
+    EXPECT_TRUE(r.matched);
+    EXPECT_EQ(r.action, Action::ToggleFullscreen);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // No match cases
 // ═══════════════════════════════════════════════════════════════════════════
 

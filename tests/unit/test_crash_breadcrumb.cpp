@@ -234,7 +234,6 @@ TEST_F(CrashBreadcrumbTest, ConcurrentWritesSafe) {
 }
 
 TEST_F(CrashBreadcrumbTest, ConcurrentReadWriteSafe) {
-    constexpr int kIterations = 200;
     std::atomic<bool> stop{false};
 
     // Writer thread

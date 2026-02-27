@@ -635,7 +635,13 @@ if(LEGENDS_BUILD_TESTS)
 
     target_sources(legends_unit_tests PRIVATE
         external/glad/glad.c
-        engine/src/libs/zmbv/zmbv.cpp  # ZMBV codec for video capture tests
+        engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture tests
+        engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
+        src/app/application.cpp              # Application lifecycle tests
+        # Platform-specific update checker (needed by application.cpp)
+        $<$<PLATFORM_ID:Windows>:src/app/update_checker_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
+        $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
     )
 
     target_include_directories(legends_unit_tests PRIVATE

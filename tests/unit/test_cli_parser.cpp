@@ -283,5 +283,33 @@ TEST(CLIParserTest, ParseMultipleOptionsAndPositional) {
     EXPECT_EQ(opts.program, "GAME.COM");
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// --mount flag
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(CLIParserTest, MountFlag_SingleArg) {
+    Args a{"app", "--mount", "D:=/tmp"};
+    CLIOptions opts;
+    EXPECT_TRUE(opts.parse(a.argc(), a.argv()));
+    ASSERT_EQ(opts.mount_args.size(), 1u);
+    EXPECT_EQ(opts.mount_args[0], "D:=/tmp");
+}
+
+TEST(CLIParserTest, MountFlag_MultipleArgs) {
+    Args a{"app", "--mount", "D:=/a", "--mount", "E:=/b"};
+    CLIOptions opts;
+    EXPECT_TRUE(opts.parse(a.argc(), a.argv()));
+    ASSERT_EQ(opts.mount_args.size(), 2u);
+    EXPECT_EQ(opts.mount_args[0], "D:=/a");
+    EXPECT_EQ(opts.mount_args[1], "E:=/b");
+}
+
+TEST(CLIParserTest, MountFlag_MissingValue) {
+    Args a{"app", "--mount"};
+    CLIOptions opts;
+    EXPECT_FALSE(opts.parse(a.argc(), a.argv()));
+    EXPECT_FALSE(opts.parse_ok);
+}
+
 } // namespace
 } // namespace legends

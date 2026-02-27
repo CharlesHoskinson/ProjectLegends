@@ -141,6 +141,13 @@ TEST_F(VideoCaptureTest, NullPCM_AddAudioThrowsFailFast) {
                  legends::gsl::fail_fast);
 }
 
+TEST_F(VideoCaptureTest, ZeroCount_AddAudioThrowsFailFast) {
+    ASSERT_TRUE(capture_.startCapture(output_path_, 64, 64, 30));
+    int16_t dummy = 0;
+    EXPECT_THROW(capture_.addAudioSamples(&dummy, 0),
+                 legends::gsl::fail_fast);
+}
+
 TEST_F(VideoCaptureTest, EmptyPath_StartThrowsFailFast) {
     EXPECT_THROW(capture_.startCapture("", 64, 64, 30),
                  legends::gsl::fail_fast);

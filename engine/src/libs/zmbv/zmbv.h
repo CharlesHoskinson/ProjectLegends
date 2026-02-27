@@ -26,6 +26,18 @@
 # endif
 #endif
 
+// When zlib.h is already included (e.g. by the translation unit), z_stream is
+// available.  In library/test builds where zlib is absent, provide a layout-
+// compatible byte-array placeholder so the header still compiles.  The actual
+// codec methods live in zmbv.cpp (guarded by C_SSHOT) and are never called in
+// builds that lack zlib.
+#if !defined(ZLIB_H) && !defined(_ZLIB_H) && !defined(ZLIB_H_)
+struct z_stream_s {
+    alignas(void*) unsigned char _opaque[sizeof(void*) * 14];
+};
+typedef struct z_stream_s z_stream;
+#endif
+
 #define CODEC_4CC "ZMBV"
 
 typedef enum {

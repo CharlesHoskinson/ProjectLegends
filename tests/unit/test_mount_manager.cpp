@@ -219,8 +219,83 @@ TEST(MountManagerTest, GetMountInfo_ReturnsNulloptWhenNotMounted) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// mountImage — Disk Image Mounting
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(MountManagerTest, MountImage_ValidISOPath) {
+    MountManager mgr;
+    auto tmp = std::filesystem::temp_directory_path() / "legends_mount_iso_test.iso";
+    { std::ofstream f(tmp, std::ios::binary); f << "fake ISO"; }
+
+    EXPECT_TRUE(mgr.mountImage('D', tmp.string(), MountType::ISO));
+    EXPECT_TRUE(mgr.isMounted('D'));
+    auto info = mgr.getMountInfo('D');
+    ASSERT_TRUE(info.has_value());
+    EXPECT_EQ(info->type, MountType::ISO);
+
+    mgr.unmount('D');
+    std::filesystem::remove(tmp);
+}
+
+TEST(MountManagerTest, MountImage_ValidFATPath) {
+    MountManager mgr;
+    auto tmp = std::filesystem::temp_directory_path() / "legends_mount_fat_test.img";
+    { std::ofstream f(tmp, std::ios::binary); f << "fake FAT"; }
+
+    EXPECT_TRUE(mgr.mountImage('E', tmp.string(), MountType::FATImage));
+    EXPECT_TRUE(mgr.isMounted('E'));
+    auto info = mgr.getMountInfo('E');
+    ASSERT_TRUE(info.has_value());
+    EXPECT_EQ(info->type, MountType::FATImage);
+
+    mgr.unmount('E');
+    std::filesystem::remove(tmp);
+}
+
+TEST(MountManagerTest, MountImage_NonexistentFile) {
+    MountManager mgr;
+    EXPECT_FALSE(mgr.mountImage('D', "/nonexistent/file.iso", MountType::ISO));
+    EXPECT_FALSE(mgr.lastError().empty());
+}
+
+TEST(MountManagerTest, MountImage_DuplicateLetter) {
+    MountManager mgr;
+    auto tmp = std::filesystem::temp_directory_path() / "legends_mount_dup_img.iso";
+    { std::ofstream f(tmp, std::ios::binary); f << "fake"; }
+
+    EXPECT_TRUE(mgr.mountImage('D', tmp.string(), MountType::ISO));
+    EXPECT_FALSE(mgr.mountImage('D', tmp.string(), MountType::ISO));
+
+    mgr.unmount('D');
+    std::filesystem::remove(tmp);
+}
+
+TEST(MountManagerTest, MountImage_InvalidType_ThrowsFailFast) {
+    MountManager mgr;
+    auto tmp = std::filesystem::temp_directory_path() / "legends_mount_dir_type.iso";
+    { std::ofstream f(tmp, std::ios::binary); f << "fake"; }
+
+    EXPECT_THROW(mgr.mountImage('D', tmp.string(), MountType::Directory),
+                 legends::gsl::fail_fast);
+
+    std::filesystem::remove(tmp);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // gsl-lite Contract Violations
 // ═══════════════════════════════════════════════════════════════════════════
+
+TEST(MountManagerTest, MountImage_InvalidLetter_ThrowsFailFast) {
+    MountManager mgr;
+    EXPECT_THROW(mgr.mountImage('1', "/tmp/test.iso", MountType::ISO),
+                 legends::gsl::fail_fast);
+}
+
+TEST(MountManagerTest, MountImage_EmptyPath_ThrowsFailFast) {
+    MountManager mgr;
+    EXPECT_THROW(mgr.mountImage('D', "", MountType::ISO),
+                 legends::gsl::fail_fast);
+}
 
 TEST(MountManagerTest, InvalidDriveLetter_MountThrowsFailFast) {
     MountManager mgr;

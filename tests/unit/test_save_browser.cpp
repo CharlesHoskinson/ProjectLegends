@@ -142,6 +142,14 @@ TEST_F(SaveBrowserTest, HandleKey_ReturnsTrueWhenOpen) {
     EXPECT_TRUE(browser_.handleKey(0x29, true));  // Escape consumed
 }
 
+TEST_F(SaveBrowserTest, HandleKey_KeyUp_Ignored) {
+    browser_.openForSave();
+    int initial_slot = browser_.selectedSlot();
+    // Key-up (down=false) for Right arrow — should be ignored
+    EXPECT_FALSE(browser_.handleKey(0x4F, false));
+    EXPECT_EQ(browser_.selectedSlot(), initial_slot);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Rendering
 // ═══════════════════════════════════════════════════════════════════════════
