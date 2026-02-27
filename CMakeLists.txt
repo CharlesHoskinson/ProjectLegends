@@ -555,6 +555,21 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_ipx_config.cpp
         tests/unit/test_glide_config.cpp
         tests/unit/test_pc98_config.cpp
+        # Phase 4: Polish & Release
+        tests/unit/test_file_logger.cpp
+        tests/unit/test_error_reporter.cpp
+        tests/unit/test_crash_breadcrumb.cpp
+        tests/unit/test_crash_reporter.cpp
+        # Phase 4 Sprint 2: Application coverage
+        tests/unit/test_application_init.cpp
+        tests/unit/test_application_events.cpp
+        tests/unit/test_application_lifecycle.cpp
+        # Phase 4 Sprint 4: SSIM
+        tests/unit/test_ssim.cpp
+        # Phase 4 Sprint 6: Portable mode
+        tests/unit/test_portable_mode.cpp
+        # Phase 4 Sprint 7: Update checker
+        tests/unit/test_update_checker.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
@@ -594,6 +609,17 @@ if(LEGENDS_BUILD_TESTS)
         src/app/ipx_config.cpp
         src/app/glide_config.cpp
         src/app/pc98_config.cpp
+        # Phase 4: Polish & Release
+        src/app/file_logger.cpp
+        src/app/error_reporter.cpp
+        src/app/crash_breadcrumb.cpp
+        src/app/crash_reporter.cpp
+        # Phase 4 Sprint 4: SSIM
+        src/app/ssim.cpp
+        # Phase 4 Sprint 6: Portable mode
+        src/app/portable_mode.cpp
+        # Phase 4 Sprint 7: Update checker
+        src/app/update_checker.cpp
     )
 
     target_sources(legends_unit_tests PRIVATE
@@ -724,9 +750,34 @@ if(LEGENDS_BUILD_TESTS)
         # Phase 1: QA
         tests/integration/test_volume_control.cpp
         tests/integration/test_dynamic_resolution.cpp
+        # Phase 4: Soak & Endurance
+        tests/integration/test_soak_endurance.cpp
+        # Phase 4, Sprint 3: Integration Test Suite
+        tests/integration/test_boot_to_prompt.cpp
+        tests/integration/test_determinism_hash.cpp
+        tests/integration/test_replay_determinism.cpp
+        tests/integration/test_cross_platform_smoke.cpp
+        tests/integration/test_save_state_compat.cpp
+        tests/integration/test_pairwise_config.cpp
+        # Phase 4, Sprint 4: Visual, Audio, and Timing Tests
+        tests/integration/test_golden_visual.cpp
+        tests/integration/test_visual_regression.cpp
+        tests/integration/test_audio_validation.cpp
+        tests/integration/test_frame_timing.cpp
+        # Phase 4, Sprint 7: Full Lifecycle
+        tests/integration/test_full_lifecycle.cpp
     )
 
     legends_set_strict_cxx_standard(legends_integration_tests)
+
+    # Sprint 4: SSIM source needed by golden visual & visual regression tests
+    target_sources(legends_integration_tests PRIVATE
+        src/app/ssim.cpp
+    )
+
+    target_include_directories(legends_integration_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
 
     target_link_libraries(legends_integration_tests PRIVATE
         legends_core
@@ -746,18 +797,53 @@ if(LEGENDS_BUILD_TESTS)
             TIMEOUT 60
     )
 
-    add_custom_target(test-integration
-        COMMAND ${CMAKE_CTEST_COMMAND} -L integration --output-on-failure
-        DEPENDS legends_integration_tests
-        COMMENT "Running integration tests"
+    # Override labels for soak tests so they are excluded from normal CI
+    # and only run in the soak-nightly workflow.
+    set_tests_properties(
+        SoakEnduranceTest.EnduranceRunMonitorsHealth
+        SoakEnduranceTest.RepeatedSaveLoadStability
+        SoakEnduranceTest.ContinuousFrameCaptureStability
+        SoakEnduranceTest.ContinuousAudioCaptureStability
+        SoakEnduranceTest.HashConsistencyOverTime
+        PROPERTIES LABELS "soak"
     )
 
-    # test-all includes all test types
-    add_custom_target(legends-test-all
-        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        DEPENDS legends_unit_tests legends_abi_test legends_integration_tests
-        COMMENT "Running all legends tests"
+    add_custom_target(test-integration
+        COMMAND ${CMAKE_CTEST_COMMAND} -L integration --label-exclude soak --output-on-failure
+        DEPENDS legends_integration_tests
+        COMMENT "Running integration tests (excluding soak)"
     )
+
+    # Soak tests: long-running endurance tests (excluded from normal CI)
+    add_custom_target(test-soak
+        COMMAND ${CMAKE_CTEST_COMMAND} -L soak --output-on-failure --timeout 46800
+        DEPENDS legends_integration_tests
+        COMMENT "Running soak/endurance tests"
+    )
+
+    # test-all includes all test types (excluding soak)
+    add_custom_target(legends-test-all
+        COMMAND ${CMAKE_CTEST_COMMAND} --label-exclude soak --output-on-failure
+        DEPENDS legends_unit_tests legends_abi_test legends_integration_tests
+        COMMENT "Running all legends tests (excluding soak)"
+    )
+
+    # ── Coverage Check (Phase 4 Sprint 7) ─────────────────────────────────
+    # Custom target to verify src/app/ coverage >= 80%
+    find_program(LCOV_EXE lcov)
+    find_program(GENHTML_EXE genhtml)
+    if(LCOV_EXE AND GENHTML_EXE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        add_custom_target(coverage-check
+            COMMENT "Checking test coverage for src/app/ (target: 80%)"
+            COMMAND ${LCOV_EXE} --capture --directory . --output-file coverage.info --quiet
+            COMMAND ${LCOV_EXE} --extract coverage.info "*/src/app/*" --output-file coverage_app.info --quiet
+            COMMAND ${GENHTML_EXE} coverage_app.info --output-directory coverage_report --quiet
+            COMMAND ${LCOV_EXE} --summary coverage_app.info
+                | grep -oP "lines\\.+:\\s+\\K[0-9.]+" || true
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            DEPENDS legends_unit_tests legends_integration_tests
+        )
+    endif()
 
 endif()
 
@@ -797,6 +883,27 @@ if(LEGENDS_BUILD_BENCHMARKS)
     )
 
     target_compile_definitions(pal_benchmarks PRIVATE
+        LEGENDS_LIBRARY_MODE=1
+    )
+
+    # Emulation performance benchmarks (Phase 4)
+    add_executable(emulation_benchmarks
+        benchmarks/bench_emulation.cpp
+    )
+
+    legends_set_strict_cxx_standard(emulation_benchmarks)
+
+    target_link_libraries(emulation_benchmarks PRIVATE
+        legends_core
+        benchmark::benchmark
+    )
+
+    target_include_directories(emulation_benchmarks PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_BINARY_DIR}/include
+    )
+
+    target_compile_definitions(emulation_benchmarks PRIVATE
         LEGENDS_LIBRARY_MODE=1
     )
 endif()
@@ -885,6 +992,20 @@ if(PAL_BACKEND_SDL3)
         src/app/ipx_config.cpp
         src/app/glide_config.cpp
         src/app/pc98_config.cpp
+        # Phase 4: Polish & Release
+        src/app/file_logger.cpp
+        src/app/error_reporter.cpp
+        src/app/crash_breadcrumb.cpp
+        src/app/crash_reporter.cpp
+        # Phase 4 Sprint 4: SSIM
+        src/app/ssim.cpp
+        # Phase 4 Sprint 6: Portable mode
+        src/app/portable_mode.cpp
+        # Phase 4 Sprint 7: Update checker (platform-conditional)
+        src/app/update_checker.cpp
+        $<$<PLATFORM_ID:Windows>:src/app/update_checker_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
+        $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
         external/glad/glad.c
     )
 

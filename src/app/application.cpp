@@ -7,6 +7,7 @@
 #include "app/cli_parser.h"
 #include "app/config_parser.h"
 #include "app/platform_dirs.h"
+#include "app/portable_mode.h"
 #include "app/scancode_map.h"
 #include "app/capture.h"
 #include "app/input_mapper.h"
@@ -198,17 +199,56 @@ ExitCode Application::init(int argc, char** argv) {
         return ExitCode::EngineCreateFailed;
     }
 
+    // ── Phase 4: Structured logging ─────────────────────────────────────
+    if (cli.log_enabled) {
+        std::string log_path = cli.log_file;
+        if (log_path.empty()) {
+            log_path = getLogDir() + "/legends.jsonl";
+        }
+        file_logger_.setMinLevel(parseLogLevel(cli.log_level.c_str()));
+        if (file_logger_.open(log_path)) {
+            file_logger_.log(LogLevel::Info, "Project Legends starting");
+        } else {
+            error_reporter_.report(ErrorSeverity::Warning,
+                "Failed to open log file: " + log_path);
+        }
+    }
+
+    // ── Phase 4: Crash reporting (opt-in) ────────────────────────────────
+    if (cli.crash_reporting) {
+        std::string crash_dir = getDataDir() + "/crashes";
+        if (!globalCrashReporter().enable(crash_dir)) {
+            error_reporter_.report(ErrorSeverity::Warning,
+                "Failed to enable crash reporting");
+        }
+        LEGENDS_BREADCRUMB("Application initialized");
+    }
+
+    // ── Phase 4: Update checker (opt-in) ────────────────────────────────
+    if (!cli.no_update_check) {
+        update_checker_ = createPlatformUpdateChecker();
+        if (update_checker_) {
+            update_checker_->setEnabled(true);
+            update_checker_->checkForUpdate();
+        }
+    }
+
     // ── Log callback ─────────────────────────────────────────────────────
     if (cli.log_enabled && engine_) {
-        legends_set_log_callback(engine_,
-            [](int level, const char* message, void* /*userdata*/) {
-                const char* prefix = "INFO";
-                if (level >= 3) prefix = "ERROR";
-                else if (level >= 2) prefix = "WARN";
-                else if (level >= 1) prefix = "DEBUG";
-                std::fprintf(stderr, "[%s] %s\n", prefix, message);
-            },
-            nullptr);
+        if (file_logger_.isOpen()) {
+            legends_set_log_callback(engine_,
+                FileLogger::engineLogCallback, &file_logger_);
+        } else {
+            legends_set_log_callback(engine_,
+                [](int level, const char* message, void* /*userdata*/) {
+                    const char* prefix = "INFO";
+                    if (level >= 3) prefix = "ERROR";
+                    else if (level >= 2) prefix = "WARN";
+                    else if (level >= 1) prefix = "DEBUG";
+                    std::fprintf(stderr, "[%s] %s\n", prefix, message);
+                },
+                nullptr);
+        }
     }
 
     // ── Action handlers ──────────────────────────────────────────────────
@@ -938,6 +978,13 @@ void Application::pumpAudio() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void Application::shutdown() {
+    // Phase 4: Log shutdown and flush
+    if (file_logger_.isOpen()) {
+        file_logger_.log(LogLevel::Info, "Application shutting down");
+        file_logger_.flush();
+    }
+    globalCrashReporter().disable();
+
     if (engine_) {
         legends_destroy(engine_);
         engine_ = nullptr;
@@ -948,6 +995,8 @@ void Application::shutdown() {
     context_.reset();
     window_.reset();
     pal::Platform::shutdown();
+
+    file_logger_.close();
 }
 
 } // namespace legends
