@@ -263,6 +263,36 @@ ExitCode Application::init(int argc, char** argv) {
     // ── Menu system ──────────────────────────────────────────────────────
     menu_system_.initialize(&action_bus_);
 
+    // ── Visual UI overlays ────────────────────────────────────────────────
+    mapper_ui_.initialize(&action_bus_, &input_mapper_);
+    save_browser_.initialize(&action_bus_, &save_manager_);
+
+    // ── Mount drives from CLI ────────────────────────────────────────────
+    for (const auto& mount_arg : cli.mount_args) {
+        auto parsed = MountManager::parseMountArg(mount_arg);
+        if (!parsed) {
+            std::fprintf(stderr, "Warning: Invalid --mount argument: %s\n",
+                         mount_arg.c_str());
+            continue;
+        }
+        auto type = MountManager::detectMountType(parsed->host_path);
+        bool ok = false;
+        if (type == MountType::Directory) {
+            ok = mount_manager_.mountLocal(parsed->letter, parsed->host_path);
+        } else {
+            ok = mount_manager_.mountImage(parsed->letter, parsed->host_path, type);
+        }
+        if (ok && engine_) {
+            legends_mount_drive(engine_, parsed->letter,
+                               parsed->host_path.c_str(), 0);
+            std::fprintf(stderr, "Mounted %c: -> %s\n",
+                         parsed->letter, parsed->host_path.c_str());
+        } else if (!ok) {
+            std::fprintf(stderr, "Warning: Failed to mount %c: %s\n",
+                         parsed->letter, mount_manager_.lastError().c_str());
+        }
+    }
+
     // ── Phase 3: Enhanced Features config ────────────────────────────────
 
     // Sprint 2: Shader config
@@ -427,6 +457,22 @@ bool Application::processEvents() {
                     break; // Don't forward to engine while AI panel is open
                 }
 
+                // ── Mapper UI input routing (when mapper is open) ────
+                if (mapper_ui_.isOpen()) {
+                    if (down) {
+                        mapper_ui_.handleKey(ev.key.scancode, true);
+                    }
+                    break; // Don't forward to engine while mapper is open
+                }
+
+                // ── Save browser input routing (when browser is open) ─
+                if (save_browser_.isOpen()) {
+                    if (down) {
+                        save_browser_.handleKey(ev.key.scancode, true);
+                    }
+                    break; // Don't forward to engine while browser is open
+                }
+
                 // ── Menu input routing (when menu is open) ──────────
                 if (menu_system_.isOpen()) {
                     if (down) {
@@ -473,6 +519,14 @@ bool Application::processEvents() {
                 if (menu_system_.isOpen() && ev.type == pal::InputEventType::MouseButtonDown) {
                     menu_system_.handleMouseClick(ev.mouse_button.x, ev.mouse_button.y);
                     break;
+                }
+
+                // Menu bar click routing (persistent bar, not full overlay)
+                if (menu_system_.isBarVisible() && !menu_system_.isOpen() &&
+                    ev.type == pal::InputEventType::MouseButtonDown) {
+                    if (menu_system_.handleBarClick(ev.mouse_button.x, ev.mouse_button.y)) {
+                        break;
+                    }
                 }
 
                 // Click to capture
@@ -687,9 +741,24 @@ void Application::registerActionHandlers() {
         setMouseCaptured(false);
     });
 
-    // Open mapper (placeholder)
-    action_bus_.registerHandler(Action::OpenMapper, [](int) {
-        std::fprintf(stderr, "Key mapper: visual UI not yet implemented\n");
+    // Open mapper UI (REQ-MAPPER-001)
+    action_bus_.registerHandler(Action::OpenMapper, [this](int) {
+        if (mapper_ui_.isOpen()) {
+            mapper_ui_.close();
+        } else {
+            mapper_ui_.open();
+        }
+    });
+
+    // Open save browser (REQ-SAVE-003)
+    action_bus_.registerHandler(Action::OpenSaveBrowser, [this](int param) {
+        if (save_browser_.isOpen()) {
+            save_browser_.close();
+        } else if (param == 0) {
+            save_browser_.openForSave();
+        } else {
+            save_browser_.openForLoad();
+        }
     });
 
     // Open menu
@@ -701,6 +770,49 @@ void Application::registerActionHandlers() {
         }
     });
 
+    // ── Phase 2: Mounting ─────────────────────────────────────────────────
+
+    action_bus_.registerHandler(Action::MountDrive, [this](int param) {
+        // param 0 = mount directory, param 1 = mount image
+        // TODO: Open file dialog for path selection (requires SDL3 file dialog)
+        (void)param;
+        std::fprintf(stderr, "Mount drive: file dialog not yet implemented\n");
+    });
+
+    action_bus_.registerHandler(Action::UnmountDrive, [this](int) {
+        // TODO: Open drive letter selection dialog
+        std::fprintf(stderr, "Unmount drive: drive selector not yet implemented\n");
+    });
+
+    // ── Phase 2: Video Capture ──────────────────────────────────────────────
+
+    action_bus_.registerHandler(Action::ToggleVideoCapture, [this](int) {
+        if (video_capture_.isRecording()) {
+            video_capture_.stopCapture();
+            std::fprintf(stderr, "Video capture stopped\n");
+        } else {
+            std::string dir = getCaptureDir();
+            std::filesystem::create_directories(dir);
+            std::string path = dir + "/" + generateCaptureFilename() + ".avi";
+            if (video_capture_.startCapture(path, ctx_width_, ctx_height_, 30)) {
+                std::fprintf(stderr, "Video capture started: %s\n", path.c_str());
+            } else {
+                std::fprintf(stderr, "Video capture failed to start\n");
+            }
+        }
+    });
+    action_bus_.registerHandler(Action::StartVideoCapture, [this](int) {
+        if (!video_capture_.isRecording()) {
+            action_bus_.dispatch(Action::ToggleVideoCapture);
+        }
+    });
+    action_bus_.registerHandler(Action::StopVideoCapture, [this](int) {
+        if (video_capture_.isRecording()) {
+            video_capture_.stopCapture();
+            std::fprintf(stderr, "Video capture stopped\n");
+        }
+    });
+
     // ── Phase 3: Enhanced Feature handlers ────────────────────────────────
 
     // Sprint 1: Toggle fullscreen
@@ -709,6 +821,7 @@ void Application::registerActionHandlers() {
         if (window_) {
             window_->setFullscreen(fullscreen_);
         }
+        menu_system_.setFullscreen(fullscreen_);
     });
 
     // Sprint 2: Shader handlers
@@ -914,12 +1027,36 @@ void Application::renderFrame() {
         }
     }
 
+    // Render persistent menu bar (hidden in fullscreen)
+    if (menu_system_.isBarVisible()) {
+        menu_system_.renderBar(static_cast<uint8_t*>(sctx.pixels),
+                               static_cast<uint16_t>(sw),
+                               static_cast<uint16_t>(sh),
+                               sctx.pitch);
+    }
+
     // Composite menu overlay if open
     if (menu_system_.isOpen()) {
         menu_system_.render(static_cast<uint8_t*>(sctx.pixels),
                             static_cast<uint16_t>(sw),
                             static_cast<uint16_t>(sh),
                             sctx.pitch);
+    }
+
+    // Composite mapper UI overlay if open
+    if (mapper_ui_.isOpen()) {
+        mapper_ui_.render(static_cast<uint8_t*>(sctx.pixels),
+                          static_cast<uint16_t>(sw),
+                          static_cast<uint16_t>(sh),
+                          sctx.pitch);
+    }
+
+    // Composite save browser overlay if open
+    if (save_browser_.isOpen()) {
+        save_browser_.render(static_cast<uint8_t*>(sctx.pixels),
+                             static_cast<uint16_t>(sw),
+                             static_cast<uint16_t>(sh),
+                             sctx.pitch);
     }
 
     // Composite AI panel overlay if open (mutually exclusive with menu)

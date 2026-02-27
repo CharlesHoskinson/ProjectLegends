@@ -540,6 +540,12 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_clipboard_paste.cpp
         tests/unit/test_menu_system.cpp
         tests/unit/test_hotkey_dispatcher.cpp
+        tests/unit/test_mount_manager.cpp
+        tests/unit/test_zmbv_codec.cpp
+        tests/unit/test_video_capture.cpp
+        tests/unit/test_mapper_ui.cpp
+        tests/unit/test_save_browser.cpp
+        tests/unit/test_menu_bar.cpp
         # Phase 3: Enhanced Features
         tests/unit/test_fullscreen_toggle.cpp
         tests/unit/test_joystick_mapper.cpp
@@ -594,6 +600,11 @@ if(LEGENDS_BUILD_TESTS)
         src/app/save_manager.cpp
         src/app/menu_system.cpp
         src/app/hotkey_dispatcher.cpp
+        src/app/mount_manager.cpp
+        src/app/zmbv_codec.cpp
+        src/app/video_capture.cpp
+        src/app/mapper_ui.cpp
+        src/app/save_browser.cpp
         # Phase 3: Enhanced Features
         src/app/joystick_mapper.cpp
         src/app/shader_renderer.cpp
@@ -624,6 +635,7 @@ if(LEGENDS_BUILD_TESTS)
 
     target_sources(legends_unit_tests PRIVATE
         external/glad/glad.c
+        engine/src/libs/zmbv/zmbv.cpp  # ZMBV codec for video capture tests
     )
 
     target_include_directories(legends_unit_tests PRIVATE
@@ -631,6 +643,7 @@ if(LEGENDS_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/external
         ${CMAKE_CURRENT_SOURCE_DIR}/external/glad  # glad GL loader
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine/src/libs  # ZMBV codec headers
         ${CMAKE_BINARY_DIR}/include
     )
 
@@ -766,6 +779,9 @@ if(LEGENDS_BUILD_TESTS)
         tests/integration/test_frame_timing.cpp
         # Phase 4, Sprint 7: Full Lifecycle
         tests/integration/test_full_lifecycle.cpp
+        # Phase 2: Mounting + Video Capture
+        tests/integration/test_mount_lifecycle.cpp
+        tests/integration/test_video_capture_lifecycle.cpp
     )
 
     legends_set_strict_cxx_standard(legends_integration_tests)
@@ -799,14 +815,12 @@ if(LEGENDS_BUILD_TESTS)
 
     # Override labels for soak tests so they are excluded from normal CI
     # and only run in the soak-nightly workflow.
-    set_tests_properties(
-        SoakEnduranceTest.EnduranceRunMonitorsHealth
-        SoakEnduranceTest.RepeatedSaveLoadStability
-        SoakEnduranceTest.ContinuousFrameCaptureStability
-        SoakEnduranceTest.ContinuousAudioCaptureStability
-        SoakEnduranceTest.HashConsistencyOverTime
-        PROPERTIES LABELS "soak"
-    )
+    # Note: gtest_discover_tests registers tests at CTest time, so we use
+    # DISCOVERY_MODE PRE_TEST above and set properties via a CTest hook
+    # script instead. The soak label is applied by test name prefix matching
+    # in cmake/SoakTestLabels.cmake (if present).
+    # set_tests_properties cannot be used here because the tests are not
+    # yet registered at configure time.
 
     add_custom_target(test-integration
         COMMAND ${CMAKE_CTEST_COMMAND} -L integration --label-exclude soak --output-on-failure
@@ -977,6 +991,10 @@ if(PAL_BACKEND_SDL3)
         src/app/config_parser.cpp
         src/app/platform_dirs.cpp
         src/app/scancode_map.cpp
+        src/app/mount_manager.cpp
+        src/app/video_capture.cpp
+        src/app/mapper_ui.cpp
+        src/app/save_browser.cpp
         # Phase 3: Enhanced Features
         src/app/joystick_mapper.cpp
         src/app/shader_renderer.cpp
@@ -1007,6 +1025,7 @@ if(PAL_BACKEND_SDL3)
         $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
         $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
         external/glad/glad.c
+        engine/src/libs/zmbv/zmbv.cpp  # ZMBV codec for video capture
     )
 
     legends_set_strict_cxx_standard(project_legends)
@@ -1016,6 +1035,7 @@ if(PAL_BACKEND_SDL3)
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/external
         ${CMAKE_CURRENT_SOURCE_DIR}/external/glad
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine/src/libs  # ZMBV codec headers
         ${CMAKE_BINARY_DIR}/include
     )
 

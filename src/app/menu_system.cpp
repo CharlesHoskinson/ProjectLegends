@@ -72,11 +72,14 @@ void MenuSystem::buildMenus() {
         menus_.push_back(std::move(m));
     }
 
-    // DOS (placeholder)
+    // DOS
     {
         Menu m;
         m.title = "DOS";
-        m.items.emplace_back("(no options)", -1);
+        m.items.emplace_back("Mount Directory...", static_cast<int>(Action::MountDrive), 0);
+        m.items.emplace_back("Mount Image...", static_cast<int>(Action::MountDrive), 1);
+        m.items.push_back(MenuItem::Separator());
+        m.items.emplace_back("Unmount Drive...", static_cast<int>(Action::UnmountDrive));
         menus_.push_back(std::move(m));
     }
 
@@ -93,6 +96,9 @@ void MenuSystem::buildMenus() {
     {
         Menu m;
         m.title = "Save";
+        m.items.emplace_back("Save Slot Browser...", static_cast<int>(Action::OpenSaveBrowser), 0);
+        m.items.emplace_back("Load Slot Browser...", static_cast<int>(Action::OpenSaveBrowser), 1);
+        m.items.push_back(MenuItem::Separator());
         for (int i = 1; i <= 9; ++i) {
             m.items.emplace_back("Save Slot " + std::to_string(i),
                                  static_cast<int>(Action::SaveState), i);
@@ -110,6 +116,7 @@ void MenuSystem::buildMenus() {
         Menu m;
         m.title = "Capture";
         m.items.emplace_back("Screenshot", static_cast<int>(Action::Screenshot));
+        m.items.emplace_back("Start/Stop Video Recording", static_cast<int>(Action::ToggleVideoCapture));
         m.items.push_back(MenuItem::Separator());
         m.items.emplace_back("Printer Output", static_cast<int>(Action::TogglePrinter));
         menus_.push_back(std::move(m));
@@ -291,6 +298,201 @@ void MenuSystem::activateItem() {
 
     close(); // Close menu before dispatching
     bus_->dispatch(static_cast<Action>(item.action_id), item.param);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bar Mode (REQ-MENU-001)
+// ─────────────────────────────────────────────────────────────────────────────
+
+bool MenuSystem::handleBarClick(int32_t x, int32_t y) {
+    if (menus_.empty()) return false;
+
+    // If dropdown is open, check dropdown item clicks first
+    if (dropdown_open_) {
+        // Check if click is in the dropdown panel
+        int drop_x = 0;
+        for (int i = 0; i < selected_menu_; ++i) {
+            drop_x += static_cast<int>(menus_[static_cast<size_t>(i)].title.size() + 2) * kCharW;
+        }
+
+        const auto& menu = menus_[static_cast<size_t>(selected_menu_)];
+        int drop_y = kMenuBarH;
+
+        // Compute dropdown dimensions
+        int max_label = 0;
+        for (const auto& item : menu.items) {
+            if (!item.separator) {
+                int len = static_cast<int>(item.label.size());
+                if (len > max_label) max_label = len;
+            }
+        }
+        int drop_w = (max_label + kItemPadX * 2) * kCharW;
+        if (drop_w < 80) drop_w = 80;
+
+        int drop_h = 0;
+        for (const auto& item : menu.items) {
+            drop_h += item.separator ? 4 : kCharH;
+        }
+
+        // Check click in dropdown area
+        if (x >= drop_x && x < drop_x + drop_w &&
+            y >= drop_y && y < drop_y + drop_h) {
+            // Find which item was clicked
+            int item_y = drop_y;
+            for (size_t i = 0; i < menu.items.size(); ++i) {
+                int item_h = menu.items[i].separator ? 4 : kCharH;
+                if (y >= item_y && y < item_y + item_h) {
+                    if (!menu.items[i].separator) {
+                        selected_item_ = static_cast<int>(i);
+                        activateItem();
+                        dropdown_open_ = false;
+                    }
+                    return true;
+                }
+                item_y += item_h;
+            }
+        }
+    }
+
+    // Check if click is in the menu bar area
+    if (y < kMenuBarH) {
+        int cx = 0;
+        for (size_t i = 0; i < menus_.size(); ++i) {
+            int title_w = static_cast<int>(menus_[i].title.size() + 2) * kCharW;
+            if (x >= cx && x < cx + title_w) {
+                selected_menu_ = static_cast<int>(i);
+                selected_item_ = 0;
+                dropdown_open_ = true;
+                return true;
+            }
+            cx += title_w;
+        }
+        return true;
+    }
+
+    // Click outside bar and dropdown — close dropdown
+    dropdown_open_ = false;
+    return false;
+}
+
+void MenuSystem::renderBar(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
+                            uint32_t pitch) {
+    if (menus_.empty() || width == 0 || height == 0) return;
+
+    if (pitch == 0) pitch = static_cast<uint32_t>(width) * 3;
+
+    // Fill menu bar background (dark blue)
+    for (int py = 0; py < kMenuBarH && py < height; ++py) {
+        for (int px = 0; px < width; ++px) {
+            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
+            rgb_buffer[idx]     = 0;
+            rgb_buffer[idx + 1] = 0;
+            rgb_buffer[idx + 2] = 170; // dark blue
+        }
+    }
+
+    // Draw menu titles
+    int title_x = 0;
+    for (size_t i = 0; i < menus_.size(); ++i) {
+        bool selected = dropdown_open_ && (static_cast<int>(i) == selected_menu_);
+        std::string label = " " + menus_[i].title + " ";
+        if (selected) {
+            drawString(rgb_buffer, width, height, pitch,
+                       title_x, 2, label,
+                       0, 0, 170,        // fg: dark blue
+                       255, 255, 255);   // bg: white (inverted)
+        } else {
+            drawString(rgb_buffer, width, height, pitch,
+                       title_x, 2, label,
+                       255, 255, 255,    // fg: white
+                       0, 0, 170);       // bg: dark blue
+        }
+        title_x += static_cast<int>(label.size()) * kCharW;
+    }
+
+    // If dropdown is open, render it (no full-screen darken)
+    if (!dropdown_open_) return;
+    if (selected_menu_ < 0 || selected_menu_ >= static_cast<int>(menus_.size())) return;
+
+    const auto& menu = menus_[static_cast<size_t>(selected_menu_)];
+
+    int drop_x = 0;
+    for (int i = 0; i < selected_menu_; ++i) {
+        drop_x += static_cast<int>(menus_[static_cast<size_t>(i)].title.size() + 2) * kCharW;
+    }
+
+    int max_label = 0;
+    for (const auto& item : menu.items) {
+        if (!item.separator) {
+            int len = static_cast<int>(item.label.size());
+            if (len > max_label) max_label = len;
+        }
+    }
+    int drop_w = (max_label + kItemPadX * 2) * kCharW;
+    if (drop_w < 80) drop_w = 80;
+
+    int drop_h = 0;
+    for (const auto& item : menu.items) {
+        drop_h += item.separator ? 4 : kCharH;
+    }
+
+    int drop_y = kMenuBarH;
+    if (drop_x + drop_w > width) drop_x = width - drop_w;
+    if (drop_x < 0) drop_x = 0;
+
+    // Fill dropdown background (black)
+    for (int py = drop_y; py < drop_y + drop_h && py < height; ++py) {
+        for (int px = drop_x; px < drop_x + drop_w && px < width; ++px) {
+            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
+            rgb_buffer[idx]     = 0;
+            rgb_buffer[idx + 1] = 0;
+            rgb_buffer[idx + 2] = 0;
+        }
+    }
+
+    // Draw items
+    int item_y = drop_y;
+    for (size_t i = 0; i < menu.items.size(); ++i) {
+        const auto& item = menu.items[i];
+
+        if (item.separator) {
+            int line_y = item_y + 2;
+            if (line_y >= 0 && line_y < height) {
+                for (int px = drop_x + 4; px < drop_x + drop_w - 4 && px < width; ++px) {
+                    if (px < 0) continue;
+                    size_t idx = static_cast<size_t>(line_y) * pitch + static_cast<size_t>(px) * 3;
+                    rgb_buffer[idx]     = 128;
+                    rgb_buffer[idx + 1] = 128;
+                    rgb_buffer[idx + 2] = 128;
+                }
+            }
+            item_y += 4;
+            continue;
+        }
+
+        bool highlighted = (static_cast<int>(i) == selected_item_);
+        std::string padded = std::string(kItemPadX, ' ') + item.label;
+        while (static_cast<int>(padded.size()) * kCharW < drop_w) {
+            padded += ' ';
+        }
+
+        if (highlighted) {
+            drawString(rgb_buffer, width, height, pitch,
+                       drop_x, item_y, padded,
+                       0, 0, 0,              // fg: black
+                       200, 200, 200);       // bg: light gray
+        } else {
+            bool disabled = (item.action_id < 0);
+            drawString(rgb_buffer, width, height, pitch,
+                       drop_x, item_y, padded,
+                       disabled ? static_cast<uint8_t>(128) : static_cast<uint8_t>(255),
+                       disabled ? static_cast<uint8_t>(128) : static_cast<uint8_t>(255),
+                       disabled ? static_cast<uint8_t>(128) : static_cast<uint8_t>(255),
+                       0, 0, 0);             // bg: black
+        }
+
+        item_y += kCharH;
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

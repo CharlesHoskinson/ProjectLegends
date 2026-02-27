@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace legends {
 
@@ -20,7 +21,12 @@ struct CLIOptions {
     uint32_t    memsize_kb     = 640;       // --memsize <kb>
     std::string profile        = "interactive"; // --profile <name>
     bool        log_enabled    = false;     // --log
+    std::string log_file;                   // --log-file <path>
+    std::string log_level      = "info";    // --log-level <level>
+    bool        crash_reporting = false;    // --crash-reporting
+    bool        no_update_check = false;   // --no-update-check
     std::string program;                    // positional [program]
+    std::vector<std::string> mount_args;    // --mount D:=/path (repeatable)
 
     bool        show_version   = false;     // --version (action)
     bool        show_help      = false;     // --help (action)

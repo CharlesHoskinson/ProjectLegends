@@ -43,6 +43,11 @@ HotkeyResult matchHotkey(uint16_t scancode, uint8_t modifiers, bool mouse_captur
         return {Action::LoadState, slot, true};
     }
 
+    // Ctrl+Shift+F5 — toggle video capture (SDL F5 = 0x3E)
+    if (ctrl && shift && !alt && scancode == 0x3E) {
+        return {Action::ToggleVideoCapture, 0, true};
+    }
+
     // Ctrl+F5 — screenshot (SDL F5 = 0x3E)
     if (ctrl && !shift && !alt && scancode == 0x3E) {
         return {Action::Screenshot, 0, true};

@@ -52,6 +52,29 @@ public:
     void render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
                 uint32_t pitch = 0);
 
+    // ── Bar Mode (REQ-MENU-001) ─────────────────────────────────────────
+
+    /// Check if the persistent menu bar is visible (hidden in fullscreen).
+    bool isBarVisible() const { return !fullscreen_; }
+
+    /// Set fullscreen state (hides/shows the persistent bar).
+    void setFullscreen(bool fs) { fullscreen_ = fs; }
+
+    /// Check if a dropdown panel is currently open (bar mode).
+    bool isDropdownOpen() const { return dropdown_open_; }
+
+    /// Get the currently selected menu index.
+    int selectedMenuIndex() const { return selected_menu_; }
+
+    /// Handle a mouse click in bar mode (called even when overlay is not open).
+    /// Returns true if consumed.
+    bool handleBarClick(int32_t x, int32_t y);
+
+    /// Render the persistent menu bar (no full-screen darken).
+    /// pitch = row stride in bytes. 0 means width * 3.
+    void renderBar(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
+                   uint32_t pitch = 0);
+
 private:
     void buildMenus();
     void activateItem();
@@ -70,6 +93,8 @@ private:
 
     ActionBus* bus_ = nullptr;
     bool open_ = false;
+    bool fullscreen_ = false;
+    bool dropdown_open_ = false;
     int selected_menu_ = 0;
     int selected_item_ = -1;
     std::vector<Menu> menus_;

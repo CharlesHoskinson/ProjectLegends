@@ -43,6 +43,33 @@ bool CLIOptions::parse(int argc, char** argv) {
             log_enabled = true;
             continue;
         }
+        if (std::strcmp(arg, "--log-file") == 0) {
+            if (i + 1 >= argc) {
+                parse_ok = false;
+                error_message = "--log-file requires a path argument";
+                return false;
+            }
+            log_file = argv[++i];
+            log_enabled = true;
+            continue;
+        }
+        if (std::strcmp(arg, "--log-level") == 0) {
+            if (i + 1 >= argc) {
+                parse_ok = false;
+                error_message = "--log-level requires a level argument";
+                return false;
+            }
+            log_level = argv[++i];
+            continue;
+        }
+        if (std::strcmp(arg, "--crash-reporting") == 0) {
+            crash_reporting = true;
+            continue;
+        }
+        if (std::strcmp(arg, "--no-update-check") == 0) {
+            no_update_check = true;
+            continue;
+        }
         if (std::strcmp(arg, "--conf") == 0) {
             if (i + 1 >= argc) {
                 parse_ok = false;
@@ -113,6 +140,15 @@ bool CLIOptions::parse(int argc, char** argv) {
             profile = argv[++i];
             continue;
         }
+        if (std::strcmp(arg, "--mount") == 0) {
+            if (i + 1 >= argc) {
+                parse_ok = false;
+                error_message = "--mount requires a D:=/path argument";
+                return false;
+            }
+            mount_args.push_back(argv[++i]);
+            continue;
+        }
 
         // Unknown flag
         if (arg[0] == '-') {
@@ -146,6 +182,11 @@ void CLIOptions::printUsage(const char* program_name) {
         "  --memsize <kb>     Conventional memory size in KB (default: 640)\n"
         "  --profile <name>   Execution profile: interactive, deterministic\n"
         "  --log              Enable engine log output\n"
+        "  --log-file <path>  Write structured JSON logs to file\n"
+        "  --log-level <lvl>  Log level: debug, info, warning, error (default: info)\n"
+        "  --crash-reporting  Enable opt-in crash dump reporting\n"
+        "  --no-update-check  Suppress automatic update checking\n"
+        "  --mount D:=/path   Mount host directory to drive letter (repeatable)\n"
         "  --version          Print version and exit\n"
         "  --help, -h         Print this help and exit\n"
         "\n"

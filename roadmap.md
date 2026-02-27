@@ -1,9 +1,9 @@
 # Project Legends: Interactive Binary Roadmap
 
 **Format:** EARS (Easy Approach to Requirements Specification) + OpenSpec
-**Version:** 4.1.0
-**Date:** 2026-02-25
-**Status:** Draft (revised per multi-persona expert review)
+**Version:** 4.2.0
+**Date:** 2026-02-27
+**Status:** In Progress — Phases -1, 0, 1, 4 COMPLETE; Phases 2, 3 PARTIAL
 **Author:** Charles Hoskinson and Contributors
 
 ---
@@ -343,7 +343,9 @@ point in the run loop:
 
 ---
 
-## 3. Phase -1: Engine I/O Plumbing
+## 3. Phase -1: Engine I/O Plumbing — COMPLETE
+
+> **Implementation status:** All 5 requirements implemented and tested.
 
 **Goal:** Wire real engine output (framebuffer pixels + audio samples) through
 the Legends API so that downstream consumers get actual DOS display and sound,
@@ -442,7 +444,9 @@ shell → PAL audio sink → host speakers.
 
 ---
 
-## 4. Phase 0: Build Infrastructure
+## 4. Phase 0: Build Infrastructure — COMPLETE
+
+> **Implementation status:** All 5 core requirements implemented. CI, packaging skeleton, and application class skeleton all operational.
 
 **Goal:** `cmake --build .` produces an SDL3 executable that opens a window and
 exits cleanly. Packaging skeleton is established early.
@@ -516,7 +520,9 @@ incrementally.
 
 ---
 
-## 5. Phase 1: MVP — Display, Input, Audio
+## 5. Phase 1: MVP — Display, Input, Audio — COMPLETE
+
+> **Implementation status:** All 13 core requirements implemented in `src/app/application.cpp` and supporting modules.
 
 **Goal:** A working DOS emulator — the user sees a real DOS prompt, can type
 commands, and hears audio output.
@@ -772,7 +778,10 @@ program.
 
 ---
 
-## 6. Phase 2: Core Experience
+## 6. Phase 2: Core Experience — COMPLETE
+
+> **Implementation status:** 18 of 18 requirements implemented.
+> **Implemented:** Overlay menu, enhanced menu bar, pause on menu, save/load (9 slots), save slot browser, save directory, key mapper visual UI, mapper persistence, default scancode table, screenshot, video capture (ZMBV/AVI), capture directory, pause/resume, machine reset, clipboard paste, host directory mounting, block device image mounting.
 
 **Goal:** Feature parity with DOSBox-X's essential interactive features — menus,
 save states, key mapper, and screen capture.
@@ -1012,7 +1021,12 @@ FFmpeg libraries are available at runtime.
 
 ---
 
-## 7. Phase 3: Enhanced Features
+## 7. Phase 3: Enhanced Features — PARTIAL
+
+> **Implementation status:** 7 of 14 requirements implemented, 4 stubs (config UI exists but engine wiring missing), 3 missing.
+> **Implemented:** Fullscreen toggle, joystick/gamepad, OpenGL shader path, shader presets (CRT/Scanlines/Sharp/Smooth), AI panel, AI screen context, AI configuration, TTF rendering.
+> **Stubs:** IPX networking, 3dfx Glide, PC-98, MIDI routing (config UI loads from INI, but engine API functions are TODO stubs).
+> **Missing:** Printer emulation (LPT1 not wired to engine), advanced MIDI synthesis (FluidSynth/MUNT).
 
 **Goal:** Advanced features that differentiate ProjectLegends — shader
 rendering, AI assistant, advanced hardware emulation, networking, printing,
@@ -1224,7 +1238,10 @@ mt32.romdir=/path/to/mt32-roms/
 
 ---
 
-## 8. Phase 4: Polish & Release
+## 8. Phase 4: Polish & Release — COMPLETE
+
+> **Implementation status:** All 16 core requirements implemented across testing (12 REQs), packaging (4 REQs), logging/errors/operations (4 REQs).
+> 98 unit test files, 28 integration tests, 5 fuzz targets, 2 benchmark suites, 6 CI workflows.
 
 **Goal:** Production-quality testing, documentation, and installer
 finalization for public release.
@@ -1448,7 +1465,9 @@ error message rather than a crash.
 
 ---
 
-## 9. Security Hardening
+## 9. Security Hardening — PARTIAL
+
+> **Implementation status:** 6 of 22 requirements implemented. Implemented: log file permissions (REQ-SEC-040), AI TLS verification (REQ-SEC-005), API key prohibition (REQ-SEC-006), config field length limits (REQ-SEC-014), AI markdown sanitization (REQ-SEC-008), prompt injection separation (REQ-SEC-018). Missing: threat model document, save state CRC validation, mount path security, code signing, and 16 other security requirements.
 
 **Source:** Security engineering persona review (v3.0.0)
 **Severity:** HIGH — The roadmap previously contained no dedicated security section,
@@ -1654,7 +1673,9 @@ no threat model, and no security-specific requirements.
 
 ---
 
-## 10. Embedding API Completeness
+## 10. Embedding API Completeness — PARTIAL
+
+> **Implementation status:** 8 of 11 API requirements implemented. Missing: mount/unmount API (REQ-API-004), runtime drive swap (REQ-API-005), event callbacks (REQ-API-006), capability query (REQ-API-011).
 
 **Source:** Embedded SDK developer persona review (v3.0.0)
 **Assessment:** The C API (`legends_embed.h`) is well-designed but the roadmap is
@@ -1794,7 +1815,9 @@ requirements.
 
 ---
 
-## 11. Operational Infrastructure
+## 11. Operational Infrastructure — MOSTLY COMPLETE
+
+> **Implementation status:** 14 of 16 operational requirements implemented. Missing: Windows Authenticode signing (REQ-OPS-008), dynamic LGPL linking (REQ-OPS-024).
 
 **Source:** DevOps/Release engineering persona review (v3.0.0)
 **Assessment:** The roadmap is strong on functional requirements but has significant
@@ -1965,7 +1988,9 @@ gaps in build infrastructure, release automation, and operational concerns.
 
 ---
 
-## 12. Quality Engineering
+## 12. Quality Engineering — MOSTLY COMPLETE
+
+> **Implementation status:** 15 of 19 quality requirements implemented. Missing: display hotplug (REQ-QA-002), audio device change (REQ-QA-003), macOS Retina (REQ-QA-016), Wayland CI (REQ-QA-017), visual diff artifacts (REQ-QA-020), TSan CI build (REQ-QA-024).
 
 **Source:** QA/Test engineering persona review (v3.0.0)
 **Assessment:** Significant blind spots exist around OS state transitions, run loop
@@ -2145,7 +2170,9 @@ edge cases, configuration interactions, and platform-specific behavior.
 
 ---
 
-## 13. User Experience & Accessibility
+## 13. User Experience & Accessibility — PARTIAL
+
+> **Implementation status:** 2 of 11 requirements implemented (host key concept REQ-UX-003, keyboard menu navigation REQ-UX-009). Missing: first-run wizard, drag-and-drop, command palette, FPS overlay, GUI settings dialog, DPI scaling, autosave on crash, hung guest detection.
 
 **Source:** End-user/DOS gamer persona review (v3.0.0)
 **Assessment:** The roadmap focuses on engineering correctness but lacks attention to
@@ -2254,7 +2281,9 @@ first-run experience, discoverability, accessibility, and error recovery.
 
 ---
 
-## 14. GPL v2 Process Isolation
+## 14. GPL v2 Process Isolation — STUB
+
+> **Implementation status:** 2 of 16 requirements implemented (license files only: REQ-ISO-001 COPYING, REQ-ISO-002 NOTICE). IPC protocol (`src/legends_ipc/protocol.cpp`) is a placeholder. 14 requirements not started.
 
 > **Design document:** `docs/design/GPL2_PROCESS_ISOLATION_DESIGN.md` (TDD-LIC-001)
 >
@@ -2501,7 +2530,9 @@ first-run experience, discoverability, accessibility, and error recovery.
 
 ---
 
-## 15. Wasm Sandbox
+## 15. Wasm Sandbox — NOT STARTED
+
+> **Implementation status:** 0 of 50 requirements implemented. Documentation only exists; no code written.
 
 > **Requirements document:** `wasm.md`
 >
@@ -3131,6 +3162,10 @@ first-run experience, discoverability, accessibility, and error recovery.
 
 ## 16. Full EARS Requirements Catalogue
 
+> **Summary (as of 2026-02-27):** 220 tracked requirements.
+> **Done:** 109 | **Partial:** 2 | **Stub:** 4 | **Missing:** 105
+> Breakdown: Phases -1/0/1/4 complete; Phase 2 partial (5 missing); Phase 3 partial (6 missing/stub); Security 6/22; Isolation 2/16; Wasm 0/50; UX 2/11.
+
 This section consolidates all requirements in a flat, searchable table with
 OpenSpec identifiers.
 
@@ -3148,235 +3183,235 @@ Requirements use EARS patterns:
 
 ### 16.2 Requirements Table
 
-| ID | Category | EARS Pattern | Summary | Phase | Priority | Release |
-|----|----------|-------------|---------|-------|----------|---------|
-| REQ-PLUMB-001 | Plumbing | State-driven | Engine framebuffer sync (real VRAM, not test pattern) | -1 | Must | A |
-| REQ-PLUMB-002 | Plumbing | State-driven | Real text-mode font rendering (VGA ROM glyphs) | -1 | Must | A |
-| REQ-PLUMB-003 | Plumbing | Optional | Engine audio path activation (sound_enabled=true) | -1 | Must | A |
-| REQ-PLUMB-004 | Plumbing | Ubiquitous | Audio sample transfer interface (engine→app→PAL) | -1 | Must | A |
-| REQ-PLUMB-005 | Plumbing | Ubiquitous | Presentation contract enforcement test | -1 | Must | A |
-| REQ-BUILD-001 | Build | Optional | SDL3 executable CMake target | 0 | Must | A |
-| REQ-BUILD-002 | Build | Ubiquitous | Minimal main.cpp with window + event loop | 0 | Must | A |
-| REQ-BUILD-003 | Build | Ubiquitous | Cross-platform CI (Win/Linux/macOS) | 0 | Must | A |
-| REQ-BUILD-004 | Build | Ubiquitous | Application class skeleton | 0 | Must | A |
-| REQ-BUILD-005 | Build | Ubiquitous | Packaging skeleton (CPack + CI artifacts) | 0 | Must | A |
-| REQ-CORE-001 | Core | Event-driven | Engine initialization via legends_create() with profile presets | 1 | Must | A |
-| REQ-CORE-002 | Core | State-driven | Run loop stepping at ~60 FPS | 1 | Must | A |
-| REQ-CORE-003 | Core | Event-driven | Clean shutdown (destroy + Platform::shutdown) | 1 | Must | A |
-| REQ-VIDEO-001 | Video | State-driven | Framebuffer capture and display (RGB blit with format conversion) | 1 | Must | A |
-| REQ-VIDEO-002 | Video | Event-driven | Dynamic resolution handling (destroy/recreate context) | 1 | Must | A |
-| REQ-VIDEO-003 | Video | Event-driven | Window resize with aspect ratio preservation | 1 | Should | A |
-| REQ-INPUT-001 | Input | Event-driven | Keyboard SDL→AT Set 1 translation + injection | 1 | Must | A |
-| REQ-INPUT-002 | Input | Event-driven | Mouse input translation + injection | 1 | Must | A |
-| REQ-INPUT-003 | Input | Event-driven | Mouse capture toggle (Ctrl+F10 / middle mouse) | 1 | Must | A |
-| REQ-AUDIO-001 | Audio | State-driven | Audio output via push model | 1 | Must | A |
-| REQ-AUDIO-002 | Audio | Ubiquitous | Volume control | 1 | Should | A |
-| REQ-THROTTLE-001 | Core | State-driven | Frame pacing with spin-wait hybrid (~60 FPS) | 1 | Must | A |
-| REQ-CONFIG-001 | Config | Event-driven | .conf file loading | 1 | Must | A |
-| REQ-CONFIG-002 | Config | Optional | Default config file search paths (XDG-aware) | 1 | Should | A |
-| REQ-CLI-001 | CLI | Ubiquitous | Command-line argument parsing (with --profile) | 1 | Must | A |
-| REQ-MENU-001 | Menu | Optional | Native SDL3 menu bar (app-layer, via ActionBus) | 2 | Must | A |
-| REQ-MENU-002 | Menu | Optional | Fallback overlay menu (via ActionBus) | 2 | Must | A |
-| REQ-MENU-003 | Menu | Event-driven | Pause emulation on menu open | 2 | Should | A |
-| REQ-SAVE-001 | Save | Event-driven | Save state to file (9 slots, Ctrl+Shift+F1..F9) | 2 | Must | A |
-| REQ-SAVE-002 | Save | Event-driven | Load state from file (9 slots, Ctrl+Alt+F1..F9) | 2 | Must | A |
-| REQ-SAVE-003 | Save | Ubiquitous | Save slot UI with thumbnails (9 slots) | 2 | Should | A |
-| REQ-SAVE-004 | Save | Ubiquitous | Platform-appropriate save directory (XDG data) | 2 | Must | A |
-| REQ-MAPPER-001 | Input | Event-driven | Interactive key mapper UI | 2 | Must | A |
-| REQ-MAPPER-002 | Input | Ubiquitous | Mapper persistence (mapper.txt in config dir) | 2 | Must | A |
-| REQ-MAPPER-003 | Input | Ubiquitous | Default SDL3→AT Set 1 scancode table | 2 | Must | A |
-| REQ-CAPTURE-001 | Capture | Event-driven | Screenshot to PNG | 2 | Must | A |
-| REQ-CAPTURE-002 | Capture | Ubiquitous | Capture directory (XDG data, platform paths) | 2 | Must | A |
-| REQ-PAUSE-001 | Core | Event-driven | Pause/resume emulation | 2 | Must | A |
-| REQ-RESET-001 | Core | Event-driven | Machine reset (legends_reset) | 2 | Must | A |
-| REQ-MOUNT-001 | Mounting | Event-driven | Host directory mounting (drive letter) | 2 | Must | A |
-| REQ-MOUNT-002 | Mounting | Optional | Block device image mounting (.iso, .img, .cue/.bin) | 2 | Must | A |
-| REQ-INPUT-004 | Input | Event-driven | Clipboard paste (host→guest keystroke injection) | 2 | Should | A |
-| REQ-CAPTURE-003 | Capture | Event-driven | Video capture streaming (AVI/ZMBV + audio) | 2 | Should | A |
-| REQ-SHADER-001 | Video | Optional | OpenGL shader rendering path | 3 | Should | B |
-| REQ-SHADER-002 | Video | Ubiquitous | Shader preset selection | 3 | Should | B |
-| REQ-AI-001 | AI | Ubiquitous | AI assistant panel (opt-in, async, non-blocking) | 3 | Must | B |
-| REQ-AI-002 | AI | Event-driven | AI screen context (text capture) | 3 | Must | B |
-| REQ-AI-003 | AI | Ubiquitous | AI backend configuration (with privacy mode) | 3 | Must | B |
-| REQ-PRINT-001 | Peripheral | Ubiquitous | Printer emulation (LPT1 to file) | 3 | Could | B |
-| REQ-MIDI-001 | Audio | Optional | MIDI output routing | 3 | Could | B |
-| REQ-TTF-001 | Video | Optional | TrueType font rendering in text mode | 3 | Could | B |
-| REQ-FULLSCREEN-001 | Video | Event-driven | Fullscreen toggle (Alt+Enter) | 3 | Must | B |
-| REQ-JOYSTICK-001 | Input | Event-driven | Joystick/gamepad support | 3 | Should | B |
-| REQ-NET-001 | Network | Optional | IPX network emulation over UDP | 3 | Could | B |
-| REQ-HW-001 | Hardware | Optional | 3dfx Voodoo / Glide → OpenGL translation | 3 | Could | B |
-| REQ-HW-002 | Hardware | Optional | NEC PC-98 architecture support | 3 | Could | B |
-| REQ-AUDIO-003 | Audio | Optional | Advanced MIDI synthesis (FluidSynth / MUNT MT-32) | 3 | Should | B |
-| REQ-TEST-001 | Testing | Ubiquitous | Unit test coverage (>80% for src/app/) | 4 | Must | A |
-| REQ-TEST-002 | Testing | Ubiquitous | Integration test — boot to prompt | 4 | Must | A |
-| REQ-TEST-003 | Testing | Ubiquitous | Determinism verification test | 4 | Must | A |
-| REQ-TEST-004 | Testing | Ubiquitous | Golden visual snapshot tests | 4 | Must | A |
-| REQ-TEST-005 | Testing | Ubiquitous | Audio validation (spectral + buffer) tests | 4 | Must | A |
-| REQ-TEST-006 | Testing | Ubiquitous | Replay determinism test | 4 | Should | A |
-| REQ-TEST-007 | Testing | Ubiquitous | Cross-platform UI smoke test (scripted) | 4 | Should | A |
-| REQ-TEST-008 | Testing | Ubiquitous | Soak testing (12-24hr endurance, memory + audio) | 4 | Should | A |
-| REQ-TEST-009 | Testing | Ubiquitous | Performance regression benchmarking (IPS baseline) | 4 | Must | A |
-| REQ-TEST-010 | Testing | Ubiquitous | Fuzz testing (config, input, save state, network) | 4 | Should | A |
-| REQ-TEST-011 | Testing | Ubiquitous | Save state forward-compatibility matrix | 4 | Must | A |
-| REQ-TEST-012 | Testing | Optional | Deterministic rendering validation (SSIM for shaders/3dfx) | 4 | Should | B |
-| REQ-PACKAGE-001 | Package | Ubiquitous | Windows installer (MSI/NSIS) | 4 | Must | A |
-| REQ-PACKAGE-002 | Package | Ubiquitous | Linux AppImage | 4 | Must | A |
-| REQ-PACKAGE-003 | Package | Ubiquitous | macOS .app bundle | 4 | Must | A |
-| REQ-PACKAGE-004 | Package | Optional | Portable mode (portable.txt) | 4 | Should | A |
-| REQ-LOG-001 | Logging | Ubiquitous | Structured logging (stderr + file, XDG state) | 4 | Must | A |
-| REQ-ERROR-001 | Error | Event-driven | User-facing error reporting | 4 | Must | A |
-| **Security** | | | | | | |
-| REQ-SEC-001 | Security | Optional | IPX listener binds to localhost by default | 3 | Must | B |
-| REQ-SEC-002 | Security | Ubiquitous | IPX packet size and rate limits | 3 | Should | B |
-| REQ-SEC-005 | Security | Ubiquitous | TLS certificate verification for AI connections | 3 | Must | B |
-| REQ-SEC-006 | Security | Unwanted | Prohibit raw API keys in config files | 3 | Must | B |
-| REQ-SEC-008 | Security | Ubiquitous | AI response markdown sanitization | 3 | Should | B |
-| REQ-SEC-010 | Security | Event-driven | Save state header + CRC-32 validation | 2 | Must | A |
-| REQ-SEC-011 | Security | Unwanted | Save state maximum file size (256 MB) | 2 | Must | A |
-| REQ-SEC-013 | Security | Event-driven | CWD config file warning | 1 | Should | A |
-| REQ-SEC-014 | Security | Ubiquitous | Config parser field length limits | 1 | Should | A |
-| REQ-SEC-016 | Security | Ubiquitous | Image parser validation (FAT cycle, depth limit) | 2 | Must | A |
-| REQ-SEC-018 | Security | Ubiquitous | Prompt injection separation in AI context | 3 | Must | B |
-| REQ-SEC-023 | Security | Ubiquitous | Canonical path resolution for mounts | 2 | Must | A |
-| REQ-SEC-024 | Security | Optional | Read-only mount option | 2 | Must | A |
-| REQ-SEC-025 | Security | Event-driven | Sensitive directory mount warning | 2 | Should | A |
-| REQ-SEC-027 | Security | Ubiquitous | Third-party dependency version pinning | 0 | Must | A |
-| REQ-SEC-028 | Security | Ubiquitous | Automated dependency vulnerability scanning | 0 | Should | A |
-| REQ-SEC-031 | Security | Ubiquitous | Formal threat model document | 0 | Must | A |
-| REQ-SEC-035 | Security | Ubiquitous | Cross-platform code signing (Authenticode, notarize, GPG) | 4 | Must | A |
-| REQ-SEC-036 | Security | Ubiquitous | SHA-256 checksum publication with releases | 4 | Should | A |
-| REQ-SEC-038 | Security | Unwanted | Custom shader file validation (64 KB max) | 3 | Should | B |
-| REQ-SEC-039 | Security | Unwanted | SoundFont/ROM file size limits | 3 | Should | B |
-| REQ-SEC-040 | Security | Ubiquitous | Restrictive log file permissions + rotation | 4 | Should | A |
-| **Embedding API** | | | | | | |
-| REQ-API-001 | API | Ubiquitous | Embedding feature parity guarantee | 1 | Must | A |
-| REQ-API-002 | API | Ubiquitous | `legends_capture_audio()` — audio capture C API | -1 | Must | A |
-| REQ-API-003 | API | Ubiquitous | `legends_is_audio_ready()` — audio readiness query | -1 | Should | A |
-| REQ-API-004 | API | Ubiquitous | `legends_mount_drive()` / `legends_unmount_drive()` | 2 | Must | A |
-| REQ-API-005 | API | Ubiquitous | Runtime drive swap (mount/unmount between steps) | 2 | Should | A |
-| REQ-API-006 | API | Optional | Engine event callback registration | 2 | Should | A |
-| REQ-API-007 | API | Ubiquitous | Multi-instance embedding guidance documentation | 4 | Should | A |
-| REQ-API-009 | API | Ubiquitous | Cross-thread capture safety documentation | 1 | Must | A |
-| REQ-API-011 | API | Ubiquitous | `legends_has_capability()` runtime feature query | 1 | Should | A |
-| REQ-API-013 | API | Ubiquitous | `legends_step_result_t` extensibility (reserved fields) | 1 | Must | A |
-| REQ-API-014 | API | Ubiquitous | `LEGENDS_API` DLL export macro | 0 | Should | A |
-| **Operational Infrastructure** | | | | | | |
-| REQ-OPS-001 | Operations | Ubiquitous | SDL3 version pinning (tag/SHA) | 0 | Must | A |
-| REQ-OPS-002 | Operations | Ubiquitous | Hermetic CI builds (SDL3 from source/cache) | 0 | Must | A |
-| REQ-OPS-003 | Operations | Ubiquitous | Centralized dependency version manifest | 0 | Should | A |
-| REQ-OPS-004 | Operations | Ubiquitous | Tiered CI pipeline (per-PR/merge/nightly/release) | 0 | Must | A |
-| REQ-OPS-005 | Operations | Ubiquitous | Build caching (SDL3 + aibox_core) | 0 | Should | A |
-| REQ-OPS-007 | Operations | Ubiquitous | Artifact naming convention (semver+platform+arch) | 4 | Must | A |
-| REQ-OPS-008 | Operations | Ubiquitous | Windows Authenticode code signing | 4 | Must | A |
-| REQ-OPS-014 | Operations | Ubiquitous | Two-mode fuzz testing (per-PR regression + nightly) | 4 | Must | A |
-| REQ-OPS-015 | Operations | Ubiquitous | Fuzz crash corpus checked into repo | 4 | Must | A |
-| REQ-OPS-017 | Operations | Optional | Opt-in update check (Sparkle/WinSparkle) | 4 | Should | A |
-| REQ-OPS-019 | Operations | Ubiquitous | Release branch model with hotfix flow | 0 | Must | A |
-| REQ-OPS-020 | Operations | Ubiquitous | Semantic versioning derived from Git tags | 0 | Must | A |
-| REQ-OPS-022 | Operations | Ubiquitous | LICENSES/ directory + NOTICE with SPDX | 4 | Must | A |
-| REQ-OPS-023 | Operations | Ubiquitous | GPL v2 compliance analysis for aibox_core | 0 | Must | A |
-| REQ-OPS-024 | Operations | Ubiquitous | Dynamic linking for LGPL deps (FluidSynth/MUNT) | 3 | Should | B |
-| REQ-OPS-028 | Operations | Optional | Opt-in crash reporting (Breakpad/Sentry) | 4 | Should | A |
-| REQ-OPS-029 | Operations | Ubiquitous | Crash breadcrumb ring buffer log | 4 | Should | A |
-| **GPL v2 Process Isolation** | | | | | | |
-| REQ-ISO-001 | Isolation | Ubiquitous | GPL v2 license file (COPYING + LICENSE) | 0 | Must | A |
-| REQ-ISO-002 | Isolation | Ubiquitous | NOTICE file with copyright attribution | 0 | Must | A |
-| REQ-ISO-003 | Isolation | Ubiquitous | MIT-licensed IPC protocol specification | 0 | Must | A |
-| REQ-ISO-004 | Isolation | Ubiquitous | IPC message serialization library | 0 | Must | A |
-| REQ-ISO-005 | Isolation | Ubiquitous | Engine host executable | 0 | Must | A |
-| REQ-ISO-006 | Isolation | Ubiquitous | Engine host GPL v2 compliance | 0 | Must | A |
-| REQ-ISO-007 | Isolation | Event-driven | Shared memory framebuffer (double-buffered) | 1 | Must | A |
-| REQ-ISO-008 | Isolation | State-driven | Shared memory audio ring buffer (lock-free) | 1 | Must | A |
-| REQ-ISO-009 | Isolation | Ubiquitous | Control channel protocol (named pipe) | 1 | Must | A |
-| REQ-ISO-010 | Isolation | Ubiquitous | Application shell proxy library | 1 | Must | A |
-| REQ-ISO-011 | Isolation | Ubiquitous | Compile-time backend switch (LEGENDS_USE_IPC) | 1 | Must | A |
-| REQ-ISO-012 | Isolation | Event-driven | Engine process spawning and monitoring | 1 | Must | A |
-| REQ-ISO-013 | Isolation | Unwanted | Engine crash detection and recovery | 2 | Should | A |
-| REQ-ISO-014 | Isolation | Ubiquitous | IPC performance budget compliance (<5%) | 2 | Must | A |
-| REQ-ISO-015 | Isolation | Ubiquitous | Cross-platform IPC implementation | 1 | Must | A |
-| REQ-ISO-016 | Isolation | Event-driven | GPL object code isolation verification | 1 | Must | A |
-| **Wasm Sandbox** | | | | | | |
-| REQ-WASM-001 | Wasm | Ubiquitous | Wasmtime primary runtime | 3 | Must | A |
-| REQ-WASM-002 | Wasm | Ubiquitous | WASI Preview 2 target ABI | 3 | Must | A |
-| REQ-WASM-003 | Wasm | Optional | WASI Preview 1 fallback build | 3 | Should | A |
-| REQ-WASM-004 | Wasm | Ubiquitous | Wasm tool version pinning | 3 | Must | A |
-| REQ-WASM-005 | Wasm | Ubiquitous | Reproducible Wasm build path | 3 | Must | A |
-| REQ-WASM-006 | Wasm | Ubiquitous | Host prerequisite documentation | 3 | Must | A |
-| REQ-WASM-007 | Wasm | Ubiquitous | WIT core emulator package | 3 | Must | A |
-| REQ-WASM-008 | Wasm | Ubiquitous | WIT lifecycle operations | 3 | Must | A |
-| REQ-WASM-009 | Wasm | Ubiquitous | WIT stepping operations | 3 | Must | A |
-| REQ-WASM-010 | Wasm | Ubiquitous | WIT capture operations | 3 | Must | A |
-| REQ-WASM-011 | Wasm | Ubiquitous | WIT input operations | 3 | Must | A |
-| REQ-WASM-012 | Wasm | Ubiquitous | WIT state operations | 3 | Must | A |
-| REQ-WASM-013 | Wasm | Ubiquitous | WIT error type mapping | 3 | Must | A |
-| REQ-WASM-014 | Wasm | Ubiquitous | WIT variable-size output transport | 3 | Must | A |
-| REQ-WASM-015 | Wasm | Ubiquitous | Default-deny capability policy | 3 | Must | A |
-| REQ-WASM-016 | Wasm | Ubiquitous | Network access disabled by default | 3 | Must | A |
-| REQ-WASM-017 | Wasm | Ubiquitous | Environment variable allowlisting | 3 | Should | A |
-| REQ-WASM-018 | Wasm | Ubiquitous | Preopened directory filesystem access | 3 | Must | A |
-| REQ-WASM-019 | Wasm | Ubiquitous | Platform directory mapping | 3 | Must | A |
-| REQ-WASM-020 | Wasm | Optional | Per-directory read/write mode | 3 | Should | A |
-| REQ-WASM-021 | Wasm | Unwanted | Path traversal and symlink blocking | 4 | Must | A |
-| REQ-WASM-022 | Wasm | State-driven | Explicit clock usage | 3 | Must | A |
-| REQ-WASM-023 | Wasm | Ubiquitous | Host-authoritative run loop | 3 | Must | A |
-| REQ-WASM-024 | Wasm | Ubiquitous | Serialized API calls | 3 | Must | A |
-| REQ-WASM-025 | Wasm | Ubiquitous | Single-instance constraint in Wasm | 3 | Must | A |
-| REQ-WASM-026 | Wasm | Ubiquitous | Deterministic state hash reproducibility | 3 | Must | A |
-| REQ-WASM-027 | Wasm | Unwanted | Guest trap structured error surfacing | 3 | Must | A |
-| REQ-WASM-028 | Wasm | Ubiquitous | Per-instance memory limits | 4 | Must | A |
-| REQ-WASM-029 | Wasm | Ubiquitous | Execution budget controls | 4 | Must | A |
-| REQ-WASM-030 | Wasm | Ubiquitous | Bounded queue and buffer enforcement | 4 | Must | A |
-| REQ-WASM-031 | Wasm | Event-driven | Limit exhaustion behavior | 4 | Must | A |
-| REQ-WASM-032 | Wasm | Event-driven | Wasm artifact integrity verification | 4 | Must | A |
-| REQ-WASM-033 | Wasm | Ubiquitous | SBOM for Wasm deliverables | 4 | Should | A |
-| REQ-WASM-034 | Wasm | Ubiquitous | Unsafe host import prohibition | 4 | Must | A |
-| REQ-WASM-035 | Wasm | Unwanted | AI feature network capability isolation | 4 | Must | A |
-| REQ-WASM-036 | Wasm | Ubiquitous | Structured runtime logging | 4 | Should | A |
-| REQ-WASM-037 | Wasm | Ubiquitous | Per-run metrics | 4 | Should | A |
-| REQ-WASM-038 | Wasm | Ubiquitous | Determinism verification reports | 4 | Must | A |
-| REQ-WASM-039 | Wasm | Ubiquitous | Wasm CI build pipeline | 3 | Must | A |
-| REQ-WASM-040 | Wasm | Ubiquitous | Native/Wasm functional parity checks | 4 | Must | A |
-| REQ-WASM-041 | Wasm | Ubiquitous | Determinism replay in Wasmtime | 4 | Must | A |
-| REQ-WASM-042 | Wasm | Ubiquitous | Sandbox policy denial tests | 4 | Must | A |
-| REQ-WASM-043 | Wasm | Event-driven | WIT interface version guard | 4 | Must | A |
-| REQ-WASM-044 | Wasm | Ubiquitous | Wasm distribution artifacts | 4 | Must | A |
-| REQ-WASM-045 | Wasm | Ubiquitous | Dual version tracking | 4 | Must | A |
-| REQ-WASM-046 | Wasm | Ubiquitous | Wasmtime compatibility range documentation | 4 | Should | A |
-| REQ-WASM-047 | Wasm | Ubiquitous | Phase 1 MVP headless runner | 3 | Must | A |
-| REQ-WASM-048 | Wasm | Ubiquitous | Phase 2 capability hardening gate | 4 | Must | A |
-| REQ-WASM-049 | Wasm | Optional | Phase 3 advanced Wasm features | 4 | Could | B |
-| REQ-WASM-050 | Wasm | Ubiquitous | GUI scope exclusion | 3 | Must | A |
-| **Quality Engineering** | | | | | | |
-| REQ-QA-001 | Quality | Event-driven | Suspend/resume handling (elapsed time cap) | 1 | Must | A |
-| REQ-QA-002 | Quality | Event-driven | Display hotplug resilience | 2 | Should | A |
-| REQ-QA-003 | Quality | Event-driven | Audio device change mid-session | 2 | Should | A |
-| REQ-QA-005 | Quality | Event-driven | Step error handling in run loop | 1 | Must | A |
-| REQ-QA-006 | Quality | Event-driven | Dimension change debouncing (3-frame) | 1 | Must | A |
-| REQ-QA-007 | Quality | Ubiquitous | Framebuffer buffer overrun protection | -1 | Must | A |
-| REQ-QA-008 | Quality | Ubiquitous | Pairwise configuration testing (~30-60 configs) | 4 | Must | A |
-| REQ-QA-009 | Quality | Ubiquitous | Invalid configuration rejection + warning | 1 | Must | A |
-| REQ-QA-011 | Quality | Event-driven | Cross-config save loading (fingerprint check) | 2 | Must | A |
-| REQ-QA-012 | Quality | Ubiquitous | Atomic save writes (tmp + rename) | 2 | Must | A |
-| REQ-QA-015 | Quality | Ubiquitous | Windows high-DPI manifest | 1 | Must | A |
-| REQ-QA-016 | Quality | Ubiquitous | macOS Retina rendering correctness | 1 | Should | A |
-| REQ-QA-017 | Quality | Ubiquitous | Wayland CI test coverage | 4 | Should | A |
-| REQ-QA-018 | Quality | Unwanted | Audio backend failure graceful degradation | 1 | Must | A |
-| REQ-QA-019 | Quality | Ubiquitous | Visual regression with SSIM + text grid compare | 4 | Must | A |
-| REQ-QA-020 | Quality | Ubiquitous | Visual diff artifacts in CI on failure | 4 | Should | A |
-| REQ-QA-021 | Quality | Ubiquitous | Widened frame timing tolerance for CI (±250 ms) | 4 | Must | A |
-| REQ-QA-024 | Quality | Ubiquitous | Thread safety contract + TSan CI build | 1 | Must | A |
-| REQ-QA-025 | Quality | Unwanted | Graceful startup degradation per subsystem | 1 | Must | A |
-| **User Experience** | | | | | | |
-| REQ-UX-001 | UX | Event-driven | First-run wizard (profile + dirs + import) | 2 | Should | A |
-| REQ-UX-002 | UX | Event-driven | Drag-and-drop program launch | 2 | Should | A |
-| REQ-UX-003 | UX | Ubiquitous | Configurable host key modifier (Right-Ctrl) | 2 | Should | A |
-| REQ-UX-004 | UX | Event-driven | In-app command palette (Ctrl+Shift+P) | 3 | Could | B |
-| REQ-UX-005 | UX | Optional | Performance overlay (FPS, cycles, buffer) | 2 | Should | A |
-| REQ-UX-006 | UX | Ubiquitous | GUI settings dialog | 3 | Should | B |
-| REQ-UX-008 | UX | Ubiquitous | DPI-aware UI scaling (100/150/200%) | 2 | Must | A |
-| REQ-UX-009 | UX | Ubiquitous | Keyboard-only menu/dialog navigation | 2 | Should | A |
-| REQ-UX-010 | UX | Event-driven | Autosave on crash + recovery offer | 4 | Should | A |
-| REQ-UX-011 | UX | Event-driven | Hung guest detection (5s notification) | 3 | Could | B |
+| ID | Category | EARS Pattern | Summary | Phase | Priority | Release | Status |
+|----|----------|-------------|---------|-------|----------|---------|--------|
+| REQ-PLUMB-001 | Plumbing | State-driven | Engine framebuffer sync (real VRAM, not test pattern) | -1 | Must | A | **Done** |
+| REQ-PLUMB-002 | Plumbing | State-driven | Real text-mode font rendering (VGA ROM glyphs) | -1 | Must | A | **Done** |
+| REQ-PLUMB-003 | Plumbing | Optional | Engine audio path activation (sound_enabled=true) | -1 | Must | A | **Done** |
+| REQ-PLUMB-004 | Plumbing | Ubiquitous | Audio sample transfer interface (engine→app→PAL) | -1 | Must | A | **Done** |
+| REQ-PLUMB-005 | Plumbing | Ubiquitous | Presentation contract enforcement test | -1 | Must | A | **Done** |
+| REQ-BUILD-001 | Build | Optional | SDL3 executable CMake target | 0 | Must | A | **Done** |
+| REQ-BUILD-002 | Build | Ubiquitous | Minimal main.cpp with window + event loop | 0 | Must | A | **Done** |
+| REQ-BUILD-003 | Build | Ubiquitous | Cross-platform CI (Win/Linux/macOS) | 0 | Must | A | **Done** |
+| REQ-BUILD-004 | Build | Ubiquitous | Application class skeleton | 0 | Must | A | **Done** |
+| REQ-BUILD-005 | Build | Ubiquitous | Packaging skeleton (CPack + CI artifacts) | 0 | Must | A | **Done** |
+| REQ-CORE-001 | Core | Event-driven | Engine initialization via legends_create() with profile presets | 1 | Must | A | **Done** |
+| REQ-CORE-002 | Core | State-driven | Run loop stepping at ~60 FPS | 1 | Must | A | **Done** |
+| REQ-CORE-003 | Core | Event-driven | Clean shutdown (destroy + Platform::shutdown) | 1 | Must | A | **Done** |
+| REQ-VIDEO-001 | Video | State-driven | Framebuffer capture and display (RGB blit with format conversion) | 1 | Must | A | **Done** |
+| REQ-VIDEO-002 | Video | Event-driven | Dynamic resolution handling (destroy/recreate context) | 1 | Must | A | **Done** |
+| REQ-VIDEO-003 | Video | Event-driven | Window resize with aspect ratio preservation | 1 | Should | A | **Done** |
+| REQ-INPUT-001 | Input | Event-driven | Keyboard SDL→AT Set 1 translation + injection | 1 | Must | A | **Done** |
+| REQ-INPUT-002 | Input | Event-driven | Mouse input translation + injection | 1 | Must | A | **Done** |
+| REQ-INPUT-003 | Input | Event-driven | Mouse capture toggle (Ctrl+F10 / middle mouse) | 1 | Must | A | **Done** |
+| REQ-AUDIO-001 | Audio | State-driven | Audio output via push model | 1 | Must | A | **Done** |
+| REQ-AUDIO-002 | Audio | Ubiquitous | Volume control | 1 | Should | A | **Done** |
+| REQ-THROTTLE-001 | Core | State-driven | Frame pacing with spin-wait hybrid (~60 FPS) | 1 | Must | A | **Done** |
+| REQ-CONFIG-001 | Config | Event-driven | .conf file loading | 1 | Must | A | **Done** |
+| REQ-CONFIG-002 | Config | Optional | Default config file search paths (XDG-aware) | 1 | Should | A | **Done** |
+| REQ-CLI-001 | CLI | Ubiquitous | Command-line argument parsing (with --profile) | 1 | Must | A | **Done** |
+| REQ-MENU-001 | Menu | Optional | Enhanced menu bar with dropdowns (app-layer, via ActionBus) | 2 | Must | A | **Done** |
+| REQ-MENU-002 | Menu | Optional | Fallback overlay menu (via ActionBus) | 2 | Must | A | **Done** |
+| REQ-MENU-003 | Menu | Event-driven | Pause emulation on menu open | 2 | Should | A | **Done** |
+| REQ-SAVE-001 | Save | Event-driven | Save state to file (9 slots, Ctrl+Shift+F1..F9) | 2 | Must | A | **Done** |
+| REQ-SAVE-002 | Save | Event-driven | Load state from file (9 slots, Ctrl+Alt+F1..F9) | 2 | Must | A | **Done** |
+| REQ-SAVE-003 | Save | Ubiquitous | Save slot UI with thumbnails (9 slots) | 2 | Should | A | **Done** |
+| REQ-SAVE-004 | Save | Ubiquitous | Platform-appropriate save directory (XDG data) | 2 | Must | A | **Done** |
+| REQ-MAPPER-001 | Input | Event-driven | Interactive key mapper UI | 2 | Must | A | **Done** |
+| REQ-MAPPER-002 | Input | Ubiquitous | Mapper persistence (mapper.txt in config dir) | 2 | Must | A | **Done** |
+| REQ-MAPPER-003 | Input | Ubiquitous | Default SDL3→AT Set 1 scancode table | 2 | Must | A | **Done** |
+| REQ-CAPTURE-001 | Capture | Event-driven | Screenshot to PNG | 2 | Must | A | **Done** |
+| REQ-CAPTURE-002 | Capture | Ubiquitous | Capture directory (XDG data, platform paths) | 2 | Must | A | **Done** |
+| REQ-PAUSE-001 | Core | Event-driven | Pause/resume emulation | 2 | Must | A | **Done** |
+| REQ-RESET-001 | Core | Event-driven | Machine reset (legends_reset) | 2 | Must | A | **Done** |
+| REQ-MOUNT-001 | Mounting | Event-driven | Host directory mounting (drive letter) | 2 | Must | A | **Done** |
+| REQ-MOUNT-002 | Mounting | Optional | Block device image mounting (.iso, .img, .cue/.bin) | 2 | Must | A | **Done** |
+| REQ-INPUT-004 | Input | Event-driven | Clipboard paste (host→guest keystroke injection) | 2 | Should | A | **Done** |
+| REQ-CAPTURE-003 | Capture | Event-driven | Video capture streaming (AVI/ZMBV + audio) | 2 | Should | A | **Done** |
+| REQ-SHADER-001 | Video | Optional | OpenGL shader rendering path | 3 | Should | B | **Done** |
+| REQ-SHADER-002 | Video | Ubiquitous | Shader preset selection | 3 | Should | B | **Done** |
+| REQ-AI-001 | AI | Ubiquitous | AI assistant panel (opt-in, async, non-blocking) | 3 | Must | B | **Done** |
+| REQ-AI-002 | AI | Event-driven | AI screen context (text capture) | 3 | Must | B | **Done** |
+| REQ-AI-003 | AI | Ubiquitous | AI backend configuration (with privacy mode) | 3 | Must | B | **Done** |
+| REQ-PRINT-001 | Peripheral | Ubiquitous | Printer emulation (LPT1 to file) | 3 | Could | B | Missing |
+| REQ-MIDI-001 | Audio | Optional | MIDI output routing | 3 | Could | B | Stub |
+| REQ-TTF-001 | Video | Optional | TrueType font rendering in text mode | 3 | Could | B | **Done** |
+| REQ-FULLSCREEN-001 | Video | Event-driven | Fullscreen toggle (Alt+Enter) | 3 | Must | B | **Done** |
+| REQ-JOYSTICK-001 | Input | Event-driven | Joystick/gamepad support | 3 | Should | B | **Done** |
+| REQ-NET-001 | Network | Optional | IPX network emulation over UDP | 3 | Could | B | Stub |
+| REQ-HW-001 | Hardware | Optional | 3dfx Voodoo / Glide → OpenGL translation | 3 | Could | B | Stub |
+| REQ-HW-002 | Hardware | Optional | NEC PC-98 architecture support | 3 | Could | B | Stub |
+| REQ-AUDIO-003 | Audio | Optional | Advanced MIDI synthesis (FluidSynth / MUNT MT-32) | 3 | Should | B | Missing |
+| REQ-TEST-001 | Testing | Ubiquitous | Unit test coverage (>80% for src/app/) | 4 | Must | A | **Done** |
+| REQ-TEST-002 | Testing | Ubiquitous | Integration test — boot to prompt | 4 | Must | A | **Done** |
+| REQ-TEST-003 | Testing | Ubiquitous | Determinism verification test | 4 | Must | A | **Done** |
+| REQ-TEST-004 | Testing | Ubiquitous | Golden visual snapshot tests | 4 | Must | A | **Done** |
+| REQ-TEST-005 | Testing | Ubiquitous | Audio validation (spectral + buffer) tests | 4 | Must | A | **Done** |
+| REQ-TEST-006 | Testing | Ubiquitous | Replay determinism test | 4 | Should | A | **Done** |
+| REQ-TEST-007 | Testing | Ubiquitous | Cross-platform UI smoke test (scripted) | 4 | Should | A | **Done** |
+| REQ-TEST-008 | Testing | Ubiquitous | Soak testing (12-24hr endurance, memory + audio) | 4 | Should | A | **Done** |
+| REQ-TEST-009 | Testing | Ubiquitous | Performance regression benchmarking (IPS baseline) | 4 | Must | A | **Done** |
+| REQ-TEST-010 | Testing | Ubiquitous | Fuzz testing (config, input, save state, network) | 4 | Should | A | **Done** |
+| REQ-TEST-011 | Testing | Ubiquitous | Save state forward-compatibility matrix | 4 | Must | A | **Done** |
+| REQ-TEST-012 | Testing | Optional | Deterministic rendering validation (SSIM for shaders/3dfx) | 4 | Should | B | **Done** |
+| REQ-PACKAGE-001 | Package | Ubiquitous | Windows installer (MSI/NSIS) | 4 | Must | A | **Done** |
+| REQ-PACKAGE-002 | Package | Ubiquitous | Linux AppImage | 4 | Must | A | **Done** |
+| REQ-PACKAGE-003 | Package | Ubiquitous | macOS .app bundle | 4 | Must | A | **Done** |
+| REQ-PACKAGE-004 | Package | Optional | Portable mode (portable.txt) | 4 | Should | A | **Done** |
+| REQ-LOG-001 | Logging | Ubiquitous | Structured logging (stderr + file, XDG state) | 4 | Must | A | **Done** |
+| REQ-ERROR-001 | Error | Event-driven | User-facing error reporting | 4 | Must | A | **Done** |
+| **Security** | | | | | | | |
+| REQ-SEC-001 | Security | Optional | IPX listener binds to localhost by default | 3 | Must | B | Missing |
+| REQ-SEC-002 | Security | Ubiquitous | IPX packet size and rate limits | 3 | Should | B | Missing |
+| REQ-SEC-005 | Security | Ubiquitous | TLS certificate verification for AI connections | 3 | Must | B | **Done** |
+| REQ-SEC-006 | Security | Unwanted | Prohibit raw API keys in config files | 3 | Must | B | **Done** |
+| REQ-SEC-008 | Security | Ubiquitous | AI response markdown sanitization | 3 | Should | B | **Done** |
+| REQ-SEC-010 | Security | Event-driven | Save state header + CRC-32 validation | 2 | Must | A | Missing |
+| REQ-SEC-011 | Security | Unwanted | Save state maximum file size (256 MB) | 2 | Must | A | Missing |
+| REQ-SEC-013 | Security | Event-driven | CWD config file warning | 1 | Should | A | Missing |
+| REQ-SEC-014 | Security | Ubiquitous | Config parser field length limits | 1 | Should | A | **Done** |
+| REQ-SEC-016 | Security | Ubiquitous | Image parser validation (FAT cycle, depth limit) | 2 | Must | A | Missing |
+| REQ-SEC-018 | Security | Ubiquitous | Prompt injection separation in AI context | 3 | Must | B | **Done** |
+| REQ-SEC-023 | Security | Ubiquitous | Canonical path resolution for mounts | 2 | Must | A | Missing |
+| REQ-SEC-024 | Security | Optional | Read-only mount option | 2 | Must | A | Missing |
+| REQ-SEC-025 | Security | Event-driven | Sensitive directory mount warning | 2 | Should | A | Missing |
+| REQ-SEC-027 | Security | Ubiquitous | Third-party dependency version pinning | 0 | Must | A | **Done** |
+| REQ-SEC-028 | Security | Ubiquitous | Automated dependency vulnerability scanning | 0 | Should | A | Missing |
+| REQ-SEC-031 | Security | Ubiquitous | Formal threat model document | 0 | Must | A | Missing |
+| REQ-SEC-035 | Security | Ubiquitous | Cross-platform code signing (Authenticode, notarize, GPG) | 4 | Must | A | Missing |
+| REQ-SEC-036 | Security | Ubiquitous | SHA-256 checksum publication with releases | 4 | Should | A | Missing |
+| REQ-SEC-038 | Security | Unwanted | Custom shader file validation (64 KB max) | 3 | Should | B | Missing |
+| REQ-SEC-039 | Security | Unwanted | SoundFont/ROM file size limits | 3 | Should | B | Missing |
+| REQ-SEC-040 | Security | Ubiquitous | Restrictive log file permissions + rotation | 4 | Should | A | **Done** |
+| **Embedding API** | | | | | | | |
+| REQ-API-001 | API | Ubiquitous | Embedding feature parity guarantee | 1 | Must | A | **Done** |
+| REQ-API-002 | API | Ubiquitous | `legends_capture_audio()` — audio capture C API | -1 | Must | A | **Done** |
+| REQ-API-003 | API | Ubiquitous | `legends_is_audio_ready()` — audio readiness query | -1 | Should | A | **Done** |
+| REQ-API-004 | API | Ubiquitous | `legends_mount_drive()` / `legends_unmount_drive()` | 2 | Must | A | Missing |
+| REQ-API-005 | API | Ubiquitous | Runtime drive swap (mount/unmount between steps) | 2 | Should | A | Missing |
+| REQ-API-006 | API | Optional | Engine event callback registration | 2 | Should | A | Missing |
+| REQ-API-007 | API | Ubiquitous | Multi-instance embedding guidance documentation | 4 | Should | A | **Done** |
+| REQ-API-009 | API | Ubiquitous | Cross-thread capture safety documentation | 1 | Must | A | **Done** |
+| REQ-API-011 | API | Ubiquitous | `legends_has_capability()` runtime feature query | 1 | Should | A | Missing |
+| REQ-API-013 | API | Ubiquitous | `legends_step_result_t` extensibility (reserved fields) | 1 | Must | A | **Done** |
+| REQ-API-014 | API | Ubiquitous | `LEGENDS_API` DLL export macro | 0 | Should | A | **Done** |
+| **Operational Infrastructure** | | | | | | | |
+| REQ-OPS-001 | Operations | Ubiquitous | SDL3 version pinning (tag/SHA) | 0 | Must | A | **Done** |
+| REQ-OPS-002 | Operations | Ubiquitous | Hermetic CI builds (SDL3 from source/cache) | 0 | Must | A | **Done** |
+| REQ-OPS-003 | Operations | Ubiquitous | Centralized dependency version manifest | 0 | Should | A | **Done** |
+| REQ-OPS-004 | Operations | Ubiquitous | Tiered CI pipeline (per-PR/merge/nightly/release) | 0 | Must | A | **Done** |
+| REQ-OPS-005 | Operations | Ubiquitous | Build caching (SDL3 + aibox_core) | 0 | Should | A | **Done** |
+| REQ-OPS-007 | Operations | Ubiquitous | Artifact naming convention (semver+platform+arch) | 4 | Must | A | **Done** |
+| REQ-OPS-008 | Operations | Ubiquitous | Windows Authenticode code signing | 4 | Must | A | Missing |
+| REQ-OPS-014 | Operations | Ubiquitous | Two-mode fuzz testing (per-PR regression + nightly) | 4 | Must | A | **Done** |
+| REQ-OPS-015 | Operations | Ubiquitous | Fuzz crash corpus checked into repo | 4 | Must | A | **Done** |
+| REQ-OPS-017 | Operations | Optional | Opt-in update check (Sparkle/WinSparkle) | 4 | Should | A | **Done** |
+| REQ-OPS-019 | Operations | Ubiquitous | Release branch model with hotfix flow | 0 | Must | A | **Done** |
+| REQ-OPS-020 | Operations | Ubiquitous | Semantic versioning derived from Git tags | 0 | Must | A | **Done** |
+| REQ-OPS-022 | Operations | Ubiquitous | LICENSES/ directory + NOTICE with SPDX | 4 | Must | A | **Done** |
+| REQ-OPS-023 | Operations | Ubiquitous | GPL v2 compliance analysis for aibox_core | 0 | Must | A | **Done** |
+| REQ-OPS-024 | Operations | Ubiquitous | Dynamic linking for LGPL deps (FluidSynth/MUNT) | 3 | Should | B | Missing |
+| REQ-OPS-028 | Operations | Optional | Opt-in crash reporting (Breakpad/Sentry) | 4 | Should | A | **Done** |
+| REQ-OPS-029 | Operations | Ubiquitous | Crash breadcrumb ring buffer log | 4 | Should | A | **Done** |
+| **GPL v2 Process Isolation** | | | | | | | |
+| REQ-ISO-001 | Isolation | Ubiquitous | GPL v2 license file (COPYING + LICENSE) | 0 | Must | A | **Done** |
+| REQ-ISO-002 | Isolation | Ubiquitous | NOTICE file with copyright attribution | 0 | Must | A | **Done** |
+| REQ-ISO-003 | Isolation | Ubiquitous | MIT-licensed IPC protocol specification | 0 | Must | A | Missing |
+| REQ-ISO-004 | Isolation | Ubiquitous | IPC message serialization library | 0 | Must | A | Missing |
+| REQ-ISO-005 | Isolation | Ubiquitous | Engine host executable | 0 | Must | A | Missing |
+| REQ-ISO-006 | Isolation | Ubiquitous | Engine host GPL v2 compliance | 0 | Must | A | Missing |
+| REQ-ISO-007 | Isolation | Event-driven | Shared memory framebuffer (double-buffered) | 1 | Must | A | Missing |
+| REQ-ISO-008 | Isolation | State-driven | Shared memory audio ring buffer (lock-free) | 1 | Must | A | Missing |
+| REQ-ISO-009 | Isolation | Ubiquitous | Control channel protocol (named pipe) | 1 | Must | A | Missing |
+| REQ-ISO-010 | Isolation | Ubiquitous | Application shell proxy library | 1 | Must | A | Missing |
+| REQ-ISO-011 | Isolation | Ubiquitous | Compile-time backend switch (LEGENDS_USE_IPC) | 1 | Must | A | Missing |
+| REQ-ISO-012 | Isolation | Event-driven | Engine process spawning and monitoring | 1 | Must | A | Missing |
+| REQ-ISO-013 | Isolation | Unwanted | Engine crash detection and recovery | 2 | Should | A | Missing |
+| REQ-ISO-014 | Isolation | Ubiquitous | IPC performance budget compliance (<5%) | 2 | Must | A | Missing |
+| REQ-ISO-015 | Isolation | Ubiquitous | Cross-platform IPC implementation | 1 | Must | A | Missing |
+| REQ-ISO-016 | Isolation | Event-driven | GPL object code isolation verification | 1 | Must | A | Missing |
+| **Wasm Sandbox** | | | | | | | |
+| REQ-WASM-001 | Wasm | Ubiquitous | Wasmtime primary runtime | 3 | Must | A | Missing |
+| REQ-WASM-002 | Wasm | Ubiquitous | WASI Preview 2 target ABI | 3 | Must | A | Missing |
+| REQ-WASM-003 | Wasm | Optional | WASI Preview 1 fallback build | 3 | Should | A | Missing |
+| REQ-WASM-004 | Wasm | Ubiquitous | Wasm tool version pinning | 3 | Must | A | Missing |
+| REQ-WASM-005 | Wasm | Ubiquitous | Reproducible Wasm build path | 3 | Must | A | Missing |
+| REQ-WASM-006 | Wasm | Ubiquitous | Host prerequisite documentation | 3 | Must | A | Missing |
+| REQ-WASM-007 | Wasm | Ubiquitous | WIT core emulator package | 3 | Must | A | Missing |
+| REQ-WASM-008 | Wasm | Ubiquitous | WIT lifecycle operations | 3 | Must | A | Missing |
+| REQ-WASM-009 | Wasm | Ubiquitous | WIT stepping operations | 3 | Must | A | Missing |
+| REQ-WASM-010 | Wasm | Ubiquitous | WIT capture operations | 3 | Must | A | Missing |
+| REQ-WASM-011 | Wasm | Ubiquitous | WIT input operations | 3 | Must | A | Missing |
+| REQ-WASM-012 | Wasm | Ubiquitous | WIT state operations | 3 | Must | A | Missing |
+| REQ-WASM-013 | Wasm | Ubiquitous | WIT error type mapping | 3 | Must | A | Missing |
+| REQ-WASM-014 | Wasm | Ubiquitous | WIT variable-size output transport | 3 | Must | A | Missing |
+| REQ-WASM-015 | Wasm | Ubiquitous | Default-deny capability policy | 3 | Must | A | Missing |
+| REQ-WASM-016 | Wasm | Ubiquitous | Network access disabled by default | 3 | Must | A | Missing |
+| REQ-WASM-017 | Wasm | Ubiquitous | Environment variable allowlisting | 3 | Should | A | Missing |
+| REQ-WASM-018 | Wasm | Ubiquitous | Preopened directory filesystem access | 3 | Must | A | Missing |
+| REQ-WASM-019 | Wasm | Ubiquitous | Platform directory mapping | 3 | Must | A | Missing |
+| REQ-WASM-020 | Wasm | Optional | Per-directory read/write mode | 3 | Should | A | Missing |
+| REQ-WASM-021 | Wasm | Unwanted | Path traversal and symlink blocking | 4 | Must | A | Missing |
+| REQ-WASM-022 | Wasm | State-driven | Explicit clock usage | 3 | Must | A | Missing |
+| REQ-WASM-023 | Wasm | Ubiquitous | Host-authoritative run loop | 3 | Must | A | Missing |
+| REQ-WASM-024 | Wasm | Ubiquitous | Serialized API calls | 3 | Must | A | Missing |
+| REQ-WASM-025 | Wasm | Ubiquitous | Single-instance constraint in Wasm | 3 | Must | A | Missing |
+| REQ-WASM-026 | Wasm | Ubiquitous | Deterministic state hash reproducibility | 3 | Must | A | Missing |
+| REQ-WASM-027 | Wasm | Unwanted | Guest trap structured error surfacing | 3 | Must | A | Missing |
+| REQ-WASM-028 | Wasm | Ubiquitous | Per-instance memory limits | 4 | Must | A | Missing |
+| REQ-WASM-029 | Wasm | Ubiquitous | Execution budget controls | 4 | Must | A | Missing |
+| REQ-WASM-030 | Wasm | Ubiquitous | Bounded queue and buffer enforcement | 4 | Must | A | Missing |
+| REQ-WASM-031 | Wasm | Event-driven | Limit exhaustion behavior | 4 | Must | A | Missing |
+| REQ-WASM-032 | Wasm | Event-driven | Wasm artifact integrity verification | 4 | Must | A | Missing |
+| REQ-WASM-033 | Wasm | Ubiquitous | SBOM for Wasm deliverables | 4 | Should | A | Missing |
+| REQ-WASM-034 | Wasm | Ubiquitous | Unsafe host import prohibition | 4 | Must | A | Missing |
+| REQ-WASM-035 | Wasm | Unwanted | AI feature network capability isolation | 4 | Must | A | Missing |
+| REQ-WASM-036 | Wasm | Ubiquitous | Structured runtime logging | 4 | Should | A | Missing |
+| REQ-WASM-037 | Wasm | Ubiquitous | Per-run metrics | 4 | Should | A | Missing |
+| REQ-WASM-038 | Wasm | Ubiquitous | Determinism verification reports | 4 | Must | A | Missing |
+| REQ-WASM-039 | Wasm | Ubiquitous | Wasm CI build pipeline | 3 | Must | A | Missing |
+| REQ-WASM-040 | Wasm | Ubiquitous | Native/Wasm functional parity checks | 4 | Must | A | Missing |
+| REQ-WASM-041 | Wasm | Ubiquitous | Determinism replay in Wasmtime | 4 | Must | A | Missing |
+| REQ-WASM-042 | Wasm | Ubiquitous | Sandbox policy denial tests | 4 | Must | A | Missing |
+| REQ-WASM-043 | Wasm | Event-driven | WIT interface version guard | 4 | Must | A | Missing |
+| REQ-WASM-044 | Wasm | Ubiquitous | Wasm distribution artifacts | 4 | Must | A | Missing |
+| REQ-WASM-045 | Wasm | Ubiquitous | Dual version tracking | 4 | Must | A | Missing |
+| REQ-WASM-046 | Wasm | Ubiquitous | Wasmtime compatibility range documentation | 4 | Should | A | Missing |
+| REQ-WASM-047 | Wasm | Ubiquitous | Phase 1 MVP headless runner | 3 | Must | A | Missing |
+| REQ-WASM-048 | Wasm | Ubiquitous | Phase 2 capability hardening gate | 4 | Must | A | Missing |
+| REQ-WASM-049 | Wasm | Optional | Phase 3 advanced Wasm features | 4 | Could | B | Missing |
+| REQ-WASM-050 | Wasm | Ubiquitous | GUI scope exclusion | 3 | Must | A | Missing |
+| **Quality Engineering** | | | | | | | |
+| REQ-QA-001 | Quality | Event-driven | Suspend/resume handling (elapsed time cap) | 1 | Must | A | **Done** |
+| REQ-QA-002 | Quality | Event-driven | Display hotplug resilience | 2 | Should | A | Missing |
+| REQ-QA-003 | Quality | Event-driven | Audio device change mid-session | 2 | Should | A | Missing |
+| REQ-QA-005 | Quality | Event-driven | Step error handling in run loop | 1 | Must | A | **Done** |
+| REQ-QA-006 | Quality | Event-driven | Dimension change debouncing (3-frame) | 1 | Must | A | **Done** |
+| REQ-QA-007 | Quality | Ubiquitous | Framebuffer buffer overrun protection | -1 | Must | A | **Done** |
+| REQ-QA-008 | Quality | Ubiquitous | Pairwise configuration testing (~30-60 configs) | 4 | Must | A | **Done** |
+| REQ-QA-009 | Quality | Ubiquitous | Invalid configuration rejection + warning | 1 | Must | A | **Done** |
+| REQ-QA-011 | Quality | Event-driven | Cross-config save loading (fingerprint check) | 2 | Must | A | **Done** |
+| REQ-QA-012 | Quality | Ubiquitous | Atomic save writes (tmp + rename) | 2 | Must | A | **Done** |
+| REQ-QA-015 | Quality | Ubiquitous | Windows high-DPI manifest | 1 | Must | A | **Done** |
+| REQ-QA-016 | Quality | Ubiquitous | macOS Retina rendering correctness | 1 | Should | A | Missing |
+| REQ-QA-017 | Quality | Ubiquitous | Wayland CI test coverage | 4 | Should | A | Missing |
+| REQ-QA-018 | Quality | Unwanted | Audio backend failure graceful degradation | 1 | Must | A | **Done** |
+| REQ-QA-019 | Quality | Ubiquitous | Visual regression with SSIM + text grid compare | 4 | Must | A | **Done** |
+| REQ-QA-020 | Quality | Ubiquitous | Visual diff artifacts in CI on failure | 4 | Should | A | Missing |
+| REQ-QA-021 | Quality | Ubiquitous | Widened frame timing tolerance for CI (±250 ms) | 4 | Must | A | **Done** |
+| REQ-QA-024 | Quality | Ubiquitous | Thread safety contract + TSan CI build | 1 | Must | A | Missing |
+| REQ-QA-025 | Quality | Unwanted | Graceful startup degradation per subsystem | 1 | Must | A | **Done** |
+| **User Experience** | | | | | | | |
+| REQ-UX-001 | UX | Event-driven | First-run wizard (profile + dirs + import) | 2 | Should | A | Missing |
+| REQ-UX-002 | UX | Event-driven | Drag-and-drop program launch | 2 | Should | A | Missing |
+| REQ-UX-003 | UX | Ubiquitous | Configurable host key modifier (Right-Ctrl) | 2 | Should | A | **Done** |
+| REQ-UX-004 | UX | Event-driven | In-app command palette (Ctrl+Shift+P) | 3 | Could | B | Missing |
+| REQ-UX-005 | UX | Optional | Performance overlay (FPS, cycles, buffer) | 2 | Should | A | Missing |
+| REQ-UX-006 | UX | Ubiquitous | GUI settings dialog | 3 | Should | B | Missing |
+| REQ-UX-008 | UX | Ubiquitous | DPI-aware UI scaling (100/150/200%) | 2 | Must | A | Missing |
+| REQ-UX-009 | UX | Ubiquitous | Keyboard-only menu/dialog navigation | 2 | Should | A | **Done** |
+| REQ-UX-010 | UX | Event-driven | Autosave on crash + recovery offer | 4 | Should | A | Missing |
+| REQ-UX-011 | UX | Event-driven | Hung guest detection (5s notification) | 3 | Could | B | Missing |
 
 ### 16.3 Priority Legend (MoSCoW)
 
@@ -3385,6 +3420,15 @@ Requirements use EARS patterns:
 | **Must** | Required for the phase to be considered complete |
 | **Should** | Expected but can be deferred to the next phase |
 | **Could** | Desirable, included if time permits |
+
+### 16.4 Status Legend
+
+| Status | Meaning |
+|--------|---------|
+| **Done** | Fully implemented and tested |
+| Partial | Implementation exists but incomplete (e.g., backend works, UI missing) |
+| Stub | Config/UI scaffolding exists but engine wiring is TODO |
+| Missing | Not yet implemented |
 
 ---
 
@@ -3741,10 +3785,10 @@ Tracks feature parity against DOSBox-X essentials. Updated as features land.
 | Printer output | Yes | Planned | — | REQ-PRINT-001 |
 | MIDI output | Yes | Planned | — | REQ-MIDI-001 |
 | TTF rendering | Yes | Planned | — | REQ-TTF-001 |
-| Host dir mounting | Yes | Planned | — | REQ-MOUNT-001 |
+| Host dir mounting | Yes | **Done** | mount_manager.cpp | REQ-MOUNT-001 |
 | CD/floppy image mounting | Yes | Planned | — | REQ-MOUNT-002 |
 | Clipboard paste | Yes | Planned | — | REQ-INPUT-004 |
-| Video recording | Yes | Planned | — | REQ-CAPTURE-003 |
+| Video recording | Yes | **Done** | video_capture.cpp, zmbv_codec.cpp | REQ-CAPTURE-003 |
 | IPX networking | Yes | Planned | — | REQ-NET-001 |
 | 3dfx Voodoo/Glide | Yes | Planned | — | REQ-HW-001 |
 | NEC PC-98 support | Yes | Planned | — | REQ-HW-002 |

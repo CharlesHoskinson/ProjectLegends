@@ -37,6 +37,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <array>
@@ -2729,6 +2730,134 @@ legends_error_t legends_set_log_callback(
     if (callback != nullptr) {
         LEGENDS_LOG_DEBUG("Log callback registered");
     }
+
+    return LEGENDS_OK;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 2: Drive Mounting API
+// REQ-MOUNT-001: Host directory mounting
+// REQ-MOUNT-002: Block device image mounting
+// ─────────────────────────────────────────────────────────────────────────────
+
+legends_error_t legends_mount_drive(
+    legends_handle handle,
+    char drive_letter,
+    const char* host_path,
+    uint32_t flags
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // Validate drive letter
+    char norm = drive_letter;
+    if (norm >= 'a' && norm <= 'z') norm = static_cast<char>(norm - 'a' + 'A');
+    LEGENDS_REQUIRE(norm >= 'A' && norm <= 'Z', LEGENDS_ERR_INVALID_CONFIG);
+
+    // Validate path
+    LEGENDS_REQUIRE(host_path != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_REQUIRE(host_path[0] != '\0', LEGENDS_ERR_INVALID_CONFIG);
+
+    // Verify path exists on the host filesystem
+    std::error_code ec;
+    bool exists = std::filesystem::exists(host_path, ec);
+    LEGENDS_REQUIRE(exists && !ec, LEGENDS_ERR_IO_FAILED);
+
+    // Detect mount type
+    bool is_dir = std::filesystem::is_directory(host_path, ec) && !ec;
+
+    // Check drive index
+    int drive_idx = norm - 'A';
+
+    // TODO: Wire to engine DriveManager once machine_context subsystem
+    // initialization is complete. For now, validate inputs and track state.
+    //
+    // Future implementation:
+    //   if (is_dir) {
+    //       auto* drive = new localDrive(host_path, ...);
+    //       Drives[drive_idx] = drive;
+    //   } else {
+    //       // Detect image type by extension and create appropriate DOS_Drive
+    //   }
+
+    (void)drive_idx;
+    (void)is_dir;
+    (void)flags;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_unmount_drive(
+    legends_handle handle,
+    char drive_letter
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // Validate drive letter
+    char norm = drive_letter;
+    if (norm >= 'a' && norm <= 'z') norm = static_cast<char>(norm - 'a' + 'A');
+    LEGENDS_REQUIRE(norm >= 'A' && norm <= 'Z', LEGENDS_ERR_INVALID_CONFIG);
+
+    // TODO: Wire to engine DriveManager::UnmountDrive(drive_idx)
+    // once machine_context subsystem initialization is complete.
+    //
+    // Future implementation:
+    //   int drive_idx = norm - 'A';
+    //   if (!Drives[drive_idx]) return LEGENDS_ERR_INVALID_STATE;
+    //   DriveManager::UnmountDrive(drive_idx);
+
+    return LEGENDS_OK;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 2: Video Capture API
+// REQ-CAPTURE-003: AVI/ZMBV video recording
+// ─────────────────────────────────────────────────────────────────────────────
+
+legends_error_t legends_start_video_capture(
+    legends_handle handle,
+    const char* output_path
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+    LEGENDS_REQUIRE(output_path != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_REQUIRE(output_path[0] != '\0', LEGENDS_ERR_INVALID_CONFIG);
+
+    // TODO: Wire to VideoCapture instance managed by Application layer.
+    // The Application class owns the VideoCapture and feeds it frames
+    // from renderFrame() and audio from pumpAudio(). This C API call
+    // will delegate to the Application's video capture controller.
+    (void)output_path;
+
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_stop_video_capture(
+    legends_handle handle
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Delegate to Application's VideoCapture::stopCapture()
+    return LEGENDS_OK;
+}
+
+legends_error_t legends_is_video_capturing(
+    legends_handle handle,
+    int* capturing_out
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(capturing_out != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_CHECK_THREAD();
+
+    // TODO: Query Application's VideoCapture::isRecording()
+    *capturing_out = 0;
 
     return LEGENDS_OK;
 }

@@ -625,6 +625,92 @@ LEGENDS_API legends_error_t legends_get_last_error(
 );
 
 /* =========================================================================
+ * DRIVE MOUNTING API (Phase 2)
+ * ========================================================================= */
+
+/** Mount flag: mount as read-only */
+#define LEGENDS_MOUNT_FLAG_READONLY  0x01
+/** Mount flag: treat as CD-ROM drive */
+#define LEGENDS_MOUNT_FLAG_CDROM     0x02
+
+/**
+ * @brief Mount a host directory or image file to a DOS drive letter.
+ *
+ * For directories: mounts the host path as a DOS drive.
+ * For images (.iso, .img, .ima, .cue, .bin): mounts the image file.
+ * The mount type is auto-detected from the path.
+ *
+ * @param handle Valid handle
+ * @param drive_letter Drive letter ('A'-'Z', case-insensitive)
+ * @param host_path Host filesystem path (directory or image file)
+ * @param flags Bitwise OR of LEGENDS_MOUNT_FLAG_* (0 for defaults)
+ * @return LEGENDS_OK on success,
+ *         LEGENDS_ERR_INVALID_CONFIG if drive_letter is invalid,
+ *         LEGENDS_ERR_IO_FAILED if path doesn't exist,
+ *         LEGENDS_ERR_INVALID_STATE if drive already mounted
+ */
+LEGENDS_API legends_error_t legends_mount_drive(
+    legends_handle handle,
+    char drive_letter,
+    const char* host_path,
+    uint32_t flags
+);
+
+/**
+ * @brief Unmount a DOS drive letter.
+ *
+ * @param handle Valid handle
+ * @param drive_letter Drive letter ('A'-'Z', case-insensitive)
+ * @return LEGENDS_OK on success,
+ *         LEGENDS_ERR_INVALID_CONFIG if drive_letter is invalid,
+ *         LEGENDS_ERR_INVALID_STATE if drive is not mounted
+ */
+LEGENDS_API legends_error_t legends_unmount_drive(
+    legends_handle handle,
+    char drive_letter
+);
+
+/* =========================================================================
+ * VIDEO CAPTURE API (Phase 2)
+ * ========================================================================= */
+
+/**
+ * @brief Start video capture to an AVI file.
+ *
+ * Records emulator output using ZMBV video codec and PCM audio.
+ *
+ * @param handle Valid handle
+ * @param output_path Path for the output .avi file
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_start_video_capture(
+    legends_handle handle,
+    const char* output_path
+);
+
+/**
+ * @brief Stop video capture and finalize the AVI file.
+ *
+ * @param handle Valid handle
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_stop_video_capture(
+    legends_handle handle
+);
+
+/**
+ * @brief Check if video capture is active.
+ *
+ * @param handle Valid handle
+ * @param[out] capturing_out 1 if capturing, 0 otherwise
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_is_video_capturing(
+    legends_handle handle,
+    int* capturing_out
+);
+
+/* =========================================================================
  * JOYSTICK INPUT API (Phase 3, Sprint 1)
  * ========================================================================= */
 

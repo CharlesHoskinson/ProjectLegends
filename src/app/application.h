@@ -9,8 +9,12 @@
 
 #include "app/action_bus.h"
 #include "app/input_mapper.h"
+#include "app/mount_manager.h"
 #include "app/save_manager.h"
 #include "app/menu_system.h"
+#include "app/video_capture.h"
+#include "app/mapper_ui.h"
+#include "app/save_browser.h"
 #include "app/joystick_mapper.h"
 #include "app/shader_renderer.h"
 #include "app/ai_config.h"
@@ -23,6 +27,11 @@
 #include "app/ipx_config.h"
 #include "app/glide_config.h"
 #include "app/pc98_config.h"
+#include "app/file_logger.h"
+#include "app/error_reporter.h"
+#include "app/crash_breadcrumb.h"
+#include "app/crash_reporter.h"
+#include "app/update_checker.h"
 
 #include <pal/platform.h>
 #include <legends/legends_embed.h>
@@ -111,8 +120,12 @@ private:
 
     ActionBus    action_bus_;
     InputMapper  input_mapper_;
+    MountManager mount_manager_;
     SaveManager  save_manager_;
     MenuSystem   menu_system_;
+    VideoCapture video_capture_;
+    MapperUI     mapper_ui_;
+    SaveBrowser  save_browser_;
     bool         paused_        = false;
     std::string  base_title_    = "Project Legends";
 
@@ -144,6 +157,12 @@ private:
 
     // Sprint 7: PC-98
     PC98Config      pc98_config_;
+
+    // ── Phase 4 state ────────────────────────────────────────────────────
+
+    FileLogger      file_logger_;
+    ErrorReporter   error_reporter_;
+    std::unique_ptr<UpdateChecker> update_checker_;
 
     void registerActionHandlers();
     void updateWindowTitle();

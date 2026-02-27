@@ -32,6 +32,14 @@ enum class Action : uint16_t {
     ReleaseMouseCapture,
     OpenMenu,
 
+    // ── Phase 2: Core Experience (continued) ───────────────────────────
+    MountDrive,         // param = drive letter ('A'-'Z')
+    UnmountDrive,       // param = drive letter ('A'-'Z')
+    StartVideoCapture,
+    StopVideoCapture,
+    ToggleVideoCapture,
+    OpenSaveBrowser,    // param = 0 for save, 1 for load
+
     // ── Phase 3: Enhanced Features ──────────────────────────────────────
 
     // Sprint 1: Fullscreen + Joystick

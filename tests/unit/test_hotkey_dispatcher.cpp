@@ -300,5 +300,25 @@ TEST(HotkeyDispatcherTest, CtrlShiftF8_SaveState_Slot8) {
     EXPECT_EQ(r.param, 8);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Ctrl+Shift+F5 — ToggleVideoCapture (priority over Ctrl+F5)
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(HotkeyDispatcherTest, CtrlShiftF5_ToggleVideoCapture) {
+    auto r = matchHotkey(0x3E, kHkModLCtrl | kHkModLShift, false);
+    EXPECT_TRUE(r.matched);
+    EXPECT_EQ(r.action, Action::ToggleVideoCapture);
+}
+
+TEST(HotkeyDispatcherTest, CtrlShiftF5_TakesPriorityOverCtrlF5) {
+    // Ctrl+Shift+F5 = ToggleVideoCapture, NOT Screenshot
+    auto video = matchHotkey(0x3E, kHkModLCtrl | kHkModLShift, false);
+    EXPECT_EQ(video.action, Action::ToggleVideoCapture);
+
+    // Ctrl+F5 (without shift) = Screenshot
+    auto screenshot = matchHotkey(0x3E, kHkModLCtrl, false);
+    EXPECT_EQ(screenshot.action, Action::Screenshot);
+}
+
 } // namespace
 } // namespace legends
