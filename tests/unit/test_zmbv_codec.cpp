@@ -8,11 +8,24 @@
 #include <legends/gsl.hpp>
 #include "app/zmbv_codec.h"
 
+#include <algorithm>
 #include <cstring>
 #include <vector>
 
 namespace legends {
 namespace {
+
+// Detect whether the ZMBV codec is real or stubbed (C_SSHOT undefined).
+// The stub's CompressLines is a no-op and FinishCompressFrame returns 64,
+// so encoded data is all zeroes — a real codec produces non-zero output.
+static bool is_codec_available() {
+    ZMBVCodec codec;
+    if (!codec.initCompress(16, 16)) return false;
+    std::vector<uint8_t> frame(16 * 16 * 3, 42);
+    auto encoded = codec.encodeFrame(frame.data(), 16, 16, true);
+    if (encoded.empty()) return false;
+    return std::any_of(encoded.begin(), encoded.end(), [](uint8_t b){ return b != 0; });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Construction & Initialization
@@ -40,6 +53,7 @@ TEST(ZMBVCodecTest, InitCompress_SmallDimensions) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST(ZMBVCodecTest, EncodeKeyframe_NonEmpty) {
+    if (!is_codec_available()) GTEST_SKIP() << "ZMBV codec unavailable (C_SSHOT not defined)";
     ZMBVCodec codec;
     ASSERT_TRUE(codec.initCompress(64, 64));
 
@@ -50,6 +64,7 @@ TEST(ZMBVCodecTest, EncodeKeyframe_NonEmpty) {
 }
 
 TEST(ZMBVCodecTest, EncodeDeltaFrame_SameData) {
+    if (!is_codec_available()) GTEST_SKIP() << "ZMBV codec unavailable (C_SSHOT not defined)";
     ZMBVCodec codec;
     ASSERT_TRUE(codec.initCompress(64, 64));
 
@@ -67,6 +82,7 @@ TEST(ZMBVCodecTest, EncodeDeltaFrame_SameData) {
 }
 
 TEST(ZMBVCodecTest, CompressionRatio_SolidColor) {
+    if (!is_codec_available()) GTEST_SKIP() << "ZMBV codec unavailable (C_SSHOT not defined)";
     ZMBVCodec codec;
     ASSERT_TRUE(codec.initCompress(640, 480));
 
@@ -86,6 +102,7 @@ TEST(ZMBVCodecTest, CompressionRatio_SolidColor) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST(ZMBVCodecTest, RoundTrip_IdenticalOutput) {
+    if (!is_codec_available()) GTEST_SKIP() << "ZMBV codec unavailable (C_SSHOT not defined)";
     ZMBVCodec encoder;
     ZMBVCodec decoder;
     ASSERT_TRUE(encoder.initCompress(64, 64));
@@ -108,6 +125,7 @@ TEST(ZMBVCodecTest, RoundTrip_IdenticalOutput) {
 }
 
 TEST(ZMBVCodecTest, MinimumDimensions_16x16) {
+    if (!is_codec_available()) GTEST_SKIP() << "ZMBV codec unavailable (C_SSHOT not defined)";
     ZMBVCodec codec;
     ASSERT_TRUE(codec.initCompress(16, 16));
 

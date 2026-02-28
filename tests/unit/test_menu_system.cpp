@@ -210,8 +210,11 @@ TEST_F(MenuSystemTest, NavigationSkipsSeparatorItems) {
 
 TEST_F(MenuSystemTest, EnterOnDisabledItemDoesNotDispatch) {
     menu_.open();
-    // Navigate to CPU menu (index 1) which has "(no options)" with action_id=-1
-    menu_.handleKey(0x4F, true); // Right → CPU
+    // Navigate to Help menu (index 10) which has "About" with action_id=-1.
+    // Menus: Main(0), CPU(1), Video(2), Sound(3), DOS(4), Network(5),
+    //        Save(6), Capture(7), Tools(8), Input(9), Help(10)
+    for (int i = 0; i < 10; ++i)
+        menu_.handleKey(0x4F, true); // Right to Help
     menu_.handleKey(0x28, true); // Enter on disabled item
     // Menu should remain open since disabled items don't activate
     EXPECT_TRUE(menu_.isOpen());

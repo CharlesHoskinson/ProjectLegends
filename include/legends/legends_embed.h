@@ -978,6 +978,70 @@ LEGENDS_API legends_error_t legends_set_log_callback(
     void* userdata
 );
 
+/* =========================================================================
+ * EVENT CALLBACK API (REQ-API-006)
+ * ========================================================================= */
+
+/** Event types for legends_register_event_callback. */
+#define LEGENDS_EVENT_MODE_CHANGE       1   /**< Video mode changed */
+#define LEGENDS_EVENT_DRIVE_ACTIVITY    2   /**< Drive read/write */
+#define LEGENDS_EVENT_SHUTDOWN_REQUEST  3   /**< Guest initiated shutdown */
+#define LEGENDS_EVENT_ERROR             4   /**< Non-fatal error */
+
+/**
+ * @brief Event callback function type.
+ *
+ * @param event_type One of LEGENDS_EVENT_* constants
+ * @param data Event-specific data (may be NULL)
+ * @param data_size Size of data in bytes
+ * @param userdata User-provided context
+ */
+typedef void (*legends_event_callback_t)(
+    int event_type,
+    const void* data,
+    size_t data_size,
+    void* userdata
+);
+
+/**
+ * @brief Register an event callback.
+ *
+ * @param handle Valid handle
+ * @param event_type LEGENDS_EVENT_* constant
+ * @param callback Callback function (NULL to unregister)
+ * @param userdata Context passed to callback
+ * @return LEGENDS_OK on success
+ */
+LEGENDS_API legends_error_t legends_register_event_callback(
+    legends_handle handle,
+    int event_type,
+    legends_event_callback_t callback,
+    void* userdata
+);
+
+/* =========================================================================
+ * CAPABILITY QUERY API (REQ-API-011)
+ * ========================================================================= */
+
+/**
+ * @brief Query whether a named capability is available.
+ *
+ * Checks compile-time flags and runtime state to determine
+ * if a feature is supported. Known capability strings:
+ *   "video_capture", "audio_capture", "save_state",
+ *   "mount", "glide", "pc98", "midi"
+ *
+ * @param handle Valid handle
+ * @param capability_name Null-terminated capability name
+ * @param[out] out 1 if capability is available, 0 otherwise
+ * @return LEGENDS_OK on success, LEGENDS_ERR_NULL_POINTER if name is NULL
+ */
+LEGENDS_API legends_error_t legends_has_capability(
+    legends_handle handle,
+    const char* capability_name,
+    int* out
+);
+
 #ifdef __cplusplus
 }
 #endif

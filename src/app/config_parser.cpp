@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -17,6 +19,17 @@ bool ConfigParser::loadFile(const std::string& path) {
     std::ifstream file(path);
     if (!file.is_open()) {
         return false;
+    }
+
+    // REQ-SEC-013: Warn if loading config from CWD (may be unintentional).
+    std::error_code ec;
+    auto canonical = std::filesystem::weakly_canonical(path, ec);
+    auto cwd = std::filesystem::current_path(ec);
+    if (!ec && canonical.has_parent_path() && canonical.parent_path() == cwd) {
+        std::fprintf(stderr,
+            "Warning: Loading config from current directory (%s) "
+            "— this may be unintentional\n",
+            canonical.string().c_str());
     }
 
     sections_.clear();

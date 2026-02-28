@@ -15,6 +15,7 @@
 
 #include "instance_state.h"
 #include "legends/machine_context.h"
+#include <legends/legends_embed.h>
 
 // Forward-declare the DOSBox-X engine handle type to avoid engine include dependency.
 // The actual dosbox/dosbox_library.h is only needed by legends_embed_api.cpp.
@@ -79,6 +80,14 @@ struct legends_instance {
 
     // ── DMA state (8 channels) ─────────────────────────────────────────────
     std::array<legends::internal::DMAChannelState, 8> dma{};
+
+    // ── Event callbacks (REQ-API-006) ───────────────────────────────────────
+    struct EventCallback {
+        legends_event_callback_t fn{nullptr};
+        void* userdata{nullptr};
+    };
+    static constexpr int kMaxEventTypes = 5; // 1-based: indices 1..4
+    std::array<EventCallback, kMaxEventTypes> event_callbacks{};
 
     // Constructor: set hardware-correct defaults that can't be expressed
     // as aggregate initializers (bitfield defaults).

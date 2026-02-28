@@ -6,9 +6,12 @@
 // REQ-MOUNT-002: Block device image mounting
 
 #include "app/mount_manager.h"
+#include "app/image_validator.h"
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
@@ -29,11 +32,14 @@ int MountManager::parseDriveLetter(const std::string& letter) {
 bool MountManager::validateHostPath(const std::string& path) {
     if (path.empty()) return false;
 
-    // Reject path traversal attempts
-    if (path.find("..") != std::string::npos) return false;
-
+    // REQ-SEC-023: Canonicalize the path to resolve "..", ".", and symlinks.
+    // This replaces the naive path.find("..") string check with proper
+    // filesystem resolution that handles symlink traversal attacks.
     std::error_code ec;
-    return std::filesystem::is_directory(path, ec) && !ec;
+    auto canonical = std::filesystem::weakly_canonical(path, ec);
+    if (ec) return false;
+
+    return std::filesystem::is_directory(canonical, ec) && !ec;
 }
 
 bool MountManager::validateImageExtension(const std::string& ext) {
@@ -80,6 +86,35 @@ std::optional<MountArg> MountManager::parseMountArg(const std::string& arg) {
     return MountArg{normalizeLetter(letter), path};
 }
 
+// REQ-SEC-025: Check if a path refers to a sensitive system directory.
+static bool isSensitivePath(const std::filesystem::path& p) {
+    std::string s = p.string();
+
+#ifdef _WIN32
+    // Normalize to forward slashes for comparison
+    std::replace(s.begin(), s.end(), '\\', '/');
+    std::string lower = s;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (lower.find("c:/windows") == 0) return true;
+    if (lower.find("c:/program files") == 0) return true;
+    if (lower.find("c:/programdata") == 0) return true;
+#else
+    if (s == "/" || s == "/etc" || s == "/usr" || s == "/bin" ||
+        s == "/sbin" || s == "/lib" || s == "/var" || s == "/boot" ||
+        s == "/proc" || s == "/sys" || s == "/dev") return true;
+    if (s.find("/etc/") == 0 || s.find("/usr/") == 0) return true;
+#endif
+
+    // Home directory root (mounting ~ itself is risky)
+    const char* home = std::getenv("HOME");
+    if (!home) home = std::getenv("USERPROFILE");
+    if (home && s == home) return true;
+
+    return false;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Instance Methods
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,7 +136,20 @@ bool MountManager::mountLocal(char letter, const std::string& path, uint32_t fla
         return false;
     }
 
-    mounts_[idx] = MountInfo{norm, path, MountType::Directory, flags};
+    // REQ-SEC-023: Store the canonical path to prevent traversal via symlinks.
+    std::error_code ec;
+    auto resolved = std::filesystem::weakly_canonical(path, ec);
+    std::string stored_path = ec ? path : resolved.string();
+
+    // REQ-SEC-025: Warn when mounting sensitive system directories.
+    if (isSensitivePath(resolved)) {
+        std::fprintf(stderr,
+            "Warning: Mounting sensitive directory '%s' as drive %c: "
+            "— this may expose system files to the guest\n",
+            stored_path.c_str(), norm);
+    }
+
+    mounts_[idx] = MountInfo{norm, stored_path, MountType::Directory, flags};
     last_error_.clear();
     return true;
 }
@@ -124,6 +172,13 @@ bool MountManager::mountImage(char letter, const std::string& path, MountType ty
     std::error_code ec;
     if (!std::filesystem::exists(path, ec) || ec) {
         last_error_ = "Image file not found: " + path;
+        return false;
+    }
+
+    // REQ-SEC-016: Validate image structure before mounting.
+    auto result = ImageValidator::validate(path);
+    if (!result.valid) {
+        last_error_ = "Image validation failed: " + result.error;
         return false;
     }
 

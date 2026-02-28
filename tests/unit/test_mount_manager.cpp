@@ -9,9 +9,11 @@
 #include <legends/gsl.hpp>
 #include "app/mount_manager.h"
 
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
 namespace legends {
 namespace {
@@ -219,13 +221,48 @@ TEST(MountManagerTest, GetMountInfo_ReturnsNulloptWhenNotMounted) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Test Helpers — Create minimal valid disk images for REQ-SEC-016 validation
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Create a minimal valid FAT12 boot sector image.
+// Total sectors = 1 (just the boot sector itself) to match the small file size.
+static void writeFakeFATImage(const std::filesystem::path& path) {
+    std::vector<uint8_t> boot(512, 0);
+    boot[0] = 0xEB;              // Jump instruction
+    boot[1] = 0x3C;              // Jump offset
+    boot[2] = 0x90;              // NOP
+    // BPB: bytes per sector = 512
+    boot[11] = 0x00; boot[12] = 0x02;
+    boot[13] = 1;                // Sectors per cluster
+    // Reserved sectors = 1
+    boot[14] = 0x01; boot[15] = 0x00;
+    boot[16] = 2;                // Number of FATs
+    // Total sectors (16-bit) = 1 (matches file size of 512 bytes)
+    boot[19] = 0x01; boot[20] = 0x00;
+    // Boot signature
+    boot[510] = 0x55;
+    boot[511] = 0xAA;
+
+    std::ofstream f(path, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(boot.data()), 512);
+}
+
+// Create a minimal valid ISO image (>= 34816 bytes: 32K system area + 2K PVD)
+static void writeFakeISOImage(const std::filesystem::path& path) {
+    std::vector<uint8_t> data(34816, 0);
+    std::ofstream f(path, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(data.data()),
+            static_cast<std::streamsize>(data.size()));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // mountImage — Disk Image Mounting
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST(MountManagerTest, MountImage_ValidISOPath) {
     MountManager mgr;
     auto tmp = std::filesystem::temp_directory_path() / "legends_mount_iso_test.iso";
-    { std::ofstream f(tmp, std::ios::binary); f << "fake ISO"; }
+    writeFakeISOImage(tmp);
 
     EXPECT_TRUE(mgr.mountImage('D', tmp.string(), MountType::ISO));
     EXPECT_TRUE(mgr.isMounted('D'));
@@ -240,7 +277,7 @@ TEST(MountManagerTest, MountImage_ValidISOPath) {
 TEST(MountManagerTest, MountImage_ValidFATPath) {
     MountManager mgr;
     auto tmp = std::filesystem::temp_directory_path() / "legends_mount_fat_test.img";
-    { std::ofstream f(tmp, std::ios::binary); f << "fake FAT"; }
+    writeFakeFATImage(tmp);
 
     EXPECT_TRUE(mgr.mountImage('E', tmp.string(), MountType::FATImage));
     EXPECT_TRUE(mgr.isMounted('E'));
@@ -261,7 +298,7 @@ TEST(MountManagerTest, MountImage_NonexistentFile) {
 TEST(MountManagerTest, MountImage_DuplicateLetter) {
     MountManager mgr;
     auto tmp = std::filesystem::temp_directory_path() / "legends_mount_dup_img.iso";
-    { std::ofstream f(tmp, std::ios::binary); f << "fake"; }
+    writeFakeISOImage(tmp);
 
     EXPECT_TRUE(mgr.mountImage('D', tmp.string(), MountType::ISO));
     EXPECT_FALSE(mgr.mountImage('D', tmp.string(), MountType::ISO));

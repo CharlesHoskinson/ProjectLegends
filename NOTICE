@@ -1,0 +1,46 @@
+Project Legends - Third-Party Software Attribution
+====================================================
+
+This software incorporates or depends on the following third-party components:
+
+1. DOSBox-X
+   License: GNU General Public License v2.0
+   Copyright: DOSBox-X Team and contributors
+   URL: https://github.com/joncampbell123/dosbox-x
+
+2. gsl-lite (v1.0.0)
+   License: MIT
+   Copyright: Martin Moene and contributors
+   URL: https://github.com/gsl-lite/gsl-lite
+
+3. SDL3 (release-3.2.8)
+   License: zlib License
+   Copyright: Sam Lantinga and contributors
+   URL: https://github.com/libsdl-org/SDL
+
+4. GoogleTest (v1.14.0)
+   License: BSD 3-Clause
+   Copyright: Google LLC
+   URL: https://github.com/google/googletest
+
+5. Google Benchmark (v1.8.3)
+   License: Apache License 2.0
+   Copyright: Google LLC
+   URL: https://github.com/google/benchmark
+
+6. FluidSynth (v2.3.5) [Optional, Phase 3]
+   License: GNU Lesser General Public License v2.1
+   Copyright: FluidSynth contributors
+   URL: https://github.com/FluidSynth/fluidsynth
+
+7. MUNT / mt32emu (v2.7.0) [Optional, Phase 3]
+   License: GNU Lesser General Public License v2.1
+   Copyright: MUNT contributors
+   URL: https://github.com/munt/munt
+
+8. zlib
+   License: zlib License
+   Copyright: Jean-loup Gailly and Mark Adler
+   URL: https://www.zlib.net
+
+For complete license texts, see the individual project repositories listed above.

@@ -603,6 +603,7 @@ if(LEGENDS_BUILD_TESTS)
         src/app/menu_system.cpp
         src/app/hotkey_dispatcher.cpp
         src/app/mount_manager.cpp
+        src/app/image_validator.cpp
         src/app/zmbv_codec.cpp
         src/app/video_capture.cpp
         src/app/mapper_ui.cpp
@@ -1000,6 +1001,7 @@ if(PAL_BACKEND_SDL3)
         src/app/platform_dirs.cpp
         src/app/scancode_map.cpp
         src/app/mount_manager.cpp
+        src/app/image_validator.cpp
         src/app/video_capture.cpp
         src/app/mapper_ui.cpp
         src/app/save_browser.cpp
@@ -1191,8 +1193,4 @@ endif()
 # ─────────────────────────────────────────────────────────────────────────────
 # Packaging (CPack — must come last)
 # ─────────────────────────────────────────────────────────────────────────────
-if(EXISTS "${CMAKE_SOURCE_DIR}/COPYING")
-    include(cmake/packaging.cmake)
-else()
-    message(STATUS "Skipping CPack — COPYING file not found (create COPYING, LICENSE, NOTICE for packaging)")
-endif()
+include(cmake/packaging.cmake)

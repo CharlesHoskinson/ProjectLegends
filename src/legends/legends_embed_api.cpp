@@ -938,6 +938,8 @@ legends_error_t legends_create(
         // will overwrite these with actual engine state.
         inst->frame_state.reset();
         inst->frame_state.init_test_pattern();
+        inst->frame_state.cursor_x = 0;
+        inst->frame_state.cursor_y = 0;
         inst->frame_state.load_embedded_font();
 
         // Initialize input state
@@ -1033,6 +1035,8 @@ legends_error_t legends_reset(legends_handle handle) {
 
         // Reinitialize frame state with test pattern
         inst->frame_state.init_test_pattern();
+        inst->frame_state.cursor_x = 0;
+        inst->frame_state.cursor_y = 0;
 
         inst->last_error.clear();
         return LEGENDS_OK;
@@ -2759,31 +2763,41 @@ legends_error_t legends_mount_drive(
     LEGENDS_REQUIRE(host_path != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(host_path[0] != '\0', LEGENDS_ERR_INVALID_CONFIG);
 
-    // Verify path exists on the host filesystem
+    // REQ-SEC-023: Canonicalize the path to resolve traversal and symlinks.
     std::error_code ec;
-    bool exists = std::filesystem::exists(host_path, ec);
+    auto canonical = std::filesystem::weakly_canonical(host_path, ec);
+    LEGENDS_REQUIRE(!ec, LEGENDS_ERR_IO_FAILED);
+    std::string resolved = canonical.string();
+
+    // Verify resolved path exists on the host filesystem
+    bool exists = std::filesystem::exists(resolved, ec);
     LEGENDS_REQUIRE(exists && !ec, LEGENDS_ERR_IO_FAILED);
 
     // Detect mount type
-    bool is_dir = std::filesystem::is_directory(host_path, ec) && !ec;
+    bool is_dir = std::filesystem::is_directory(resolved, ec) && !ec;
 
     // Check drive index
     int drive_idx = norm - 'A';
+
+    // REQ-SEC-024: Track readonly flag for enforcement when engine is wired.
+    bool readonly = (flags & LEGENDS_MOUNT_FLAG_READONLY) != 0;
 
     // TODO: Wire to engine DriveManager once machine_context subsystem
     // initialization is complete. For now, validate inputs and track state.
     //
     // Future implementation:
     //   if (is_dir) {
-    //       auto* drive = new localDrive(host_path, ...);
+    //       auto* drive = new localDrive(resolved.c_str(), ...);
+    //       if (readonly) drive->setReadOnly(true);
     //       Drives[drive_idx] = drive;
     //   } else {
-    //       // Detect image type by extension and create appropriate DOS_Drive
+    //       // Detect image type and create appropriate DOS_Drive
+    //       // Pass readonly flag to image drive constructor
     //   }
 
     (void)drive_idx;
     (void)is_dir;
-    (void)flags;
+    (void)readonly;
 
     return LEGENDS_OK;
 }
@@ -3075,6 +3089,72 @@ legends_error_t legends_is_pc98_mode(legends_handle handle, int* out) {
 
     auto err = dosbox_lib_is_pc98_mode(inst->engine_handle, out);
     return (err == DOSBOX_LIB_OK) ? LEGENDS_OK : LEGENDS_ERR_INTERNAL;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REQ-API-006: Event Callback Registration
+// ─────────────────────────────────────────────────────────────────────────────
+
+legends_error_t legends_register_event_callback(
+    legends_handle handle,
+    int event_type,
+    legends_event_callback_t callback,
+    void* userdata
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+
+    LEGENDS_REQUIRE(event_type >= 1 && event_type < legends_instance::kMaxEventTypes,
+                    LEGENDS_ERR_INVALID_CONFIG);
+
+    inst->event_callbacks[event_type] = {callback, userdata};
+    return LEGENDS_OK;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REQ-API-011: Capability Query
+// ─────────────────────────────────────────────────────────────────────────────
+
+legends_error_t legends_has_capability(
+    legends_handle handle,
+    const char* capability_name,
+    int* out
+) {
+    auto* inst = get_instance(handle);
+    LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_REQUIRE(capability_name != nullptr, LEGENDS_ERR_NULL_POINTER);
+    LEGENDS_REQUIRE(out != nullptr, LEGENDS_ERR_NULL_POINTER);
+
+    std::string cap(capability_name);
+    int result = 0;
+
+    if (cap == "save_state") {
+        result = 1;  // Always available
+    } else if (cap == "mount") {
+        result = 1;  // Always available
+    } else if (cap == "video_capture") {
+#ifdef C_SSHOT
+        result = 1;
+#endif
+    } else if (cap == "audio_capture") {
+        result = 0;  // Not yet implemented
+    } else if (cap == "glide") {
+#ifdef C_GLIDE
+        result = 1;
+#endif
+    } else if (cap == "pc98") {
+        result = 1;  // Always available (machine mode switch)
+    } else if (cap == "midi") {
+#ifdef C_FLUIDSYNTH
+        result = 1;
+#elif defined(C_MT32)
+        result = 1;
+#endif
+    }
+
+    *out = result;
+    return LEGENDS_OK;
 }
 
 } // extern "C"

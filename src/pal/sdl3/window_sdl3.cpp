@@ -30,7 +30,7 @@ public:
         }
 
         // Build SDL3 window flags
-        SDL_WindowFlags flags = 0;
+        SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
         if (config.resizable) {
             flags |= SDL_WINDOW_RESIZABLE;
         }
@@ -38,11 +38,27 @@ public:
             flags |= SDL_WINDOW_FULLSCREEN;
         }
 
+        // REQ-UX-008: Apply DPI scaling to window dimensions.
+        // Query the primary display's content scale and adjust the
+        // requested size so the window appears at the intended physical
+        // size regardless of the display's DPI setting.
+        float dpi_scale = 1.0f;
+        int display_count = 0;
+        SDL_DisplayID* displays = SDL_GetDisplays(&display_count);
+        if (displays && display_count > 0) {
+            float scale = SDL_GetDisplayContentScale(displays[0]);
+            if (scale > 0.0f) dpi_scale = scale;
+            SDL_free(displays);
+        }
+
+        int scaled_w = static_cast<int>(config.width * dpi_scale);
+        int scaled_h = static_cast<int>(config.height * dpi_scale);
+
         // SDL3: CreateWindow has no x,y parameters - uses SDL_WINDOWPOS_CENTERED by default
         window_ = SDL_CreateWindow(
             config.title ? config.title : "DOSBox-X",
-            static_cast<int>(config.width),
-            static_cast<int>(config.height),
+            scaled_w,
+            scaled_h,
             flags
         );
 
