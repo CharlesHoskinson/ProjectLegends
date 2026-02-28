@@ -51,9 +51,12 @@ safe_multiply_3(std::size_t a, std::size_t b, std::size_t c) noexcept {
  */
 #define SAFE_MULTIPLY_OR_ERROR(a, b, result_var) \
     do { \
-        if ((b) != 0 && (a) > SIZE_MAX / (b)) { \
+        const std::size_t aibox_safe_multiply_lhs = static_cast<std::size_t>(a); \
+        const std::size_t aibox_safe_multiply_rhs = static_cast<std::size_t>(b); \
+        if (aibox_safe_multiply_rhs != 0 && \
+            aibox_safe_multiply_lhs > SIZE_MAX / aibox_safe_multiply_rhs) { \
             DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, \
                 "Integer overflow: " #a " * " #b); \
         } \
-        (result_var) = static_cast<std::size_t>(a) * (b); \
+        (result_var) = aibox_safe_multiply_lhs * aibox_safe_multiply_rhs; \
     } while (0)

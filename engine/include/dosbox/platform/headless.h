@@ -305,9 +305,9 @@ struct HeadlessBackend {
     HeadlessBackend(const HeadlessBackend&) = delete;
     HeadlessBackend& operator=(const HeadlessBackend&) = delete;
 
-    // Movable
-    HeadlessBackend(HeadlessBackend&&) = default;
-    HeadlessBackend& operator=(HeadlessBackend&&) = default;
+    // Non-movable due to mutex-bearing members.
+    HeadlessBackend(HeadlessBackend&&) = delete;
+    HeadlessBackend& operator=(HeadlessBackend&&) = delete;
 
     /**
      * @brief Get as PlatformBackend for use with DOSBox.

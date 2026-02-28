@@ -181,17 +181,22 @@ enum class InputEventType : uint8_t { Key = 0, Mouse = 1 };
 struct InputEvent {
     InputEventType type;
     uint64_t sequence;
+
+    struct KeyEventData {
+        uint8_t scancode;
+        bool is_down;
+        bool is_extended;
+    };
+
+    struct MouseEventData {
+        int16_t delta_x;
+        int16_t delta_y;
+        uint8_t buttons;
+    };
+
     union {
-        struct {
-            uint8_t scancode;
-            bool is_down;
-            bool is_extended;
-        } key;
-        struct {
-            int16_t delta_x;
-            int16_t delta_y;
-            uint8_t buttons;
-        } mouse;
+        KeyEventData key;
+        MouseEventData mouse;
     };
 };
 

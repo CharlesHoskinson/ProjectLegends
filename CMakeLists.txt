@@ -664,6 +664,17 @@ if(LEGENDS_BUILD_TESTS)
         gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
     )
 
+    # gtest_discover_tests runs the executable during build; copy SDL3 runtime
+    # DLL on Windows so test discovery can load dependencies.
+    if(WIN32 AND PAL_BACKEND_SDL3 AND TARGET SDL3::SDL3-shared)
+        add_custom_command(TARGET legends_unit_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:SDL3::SDL3-shared>"
+                "$<TARGET_FILE_DIR:legends_unit_tests>"
+            COMMENT "Copying SDL3.dll to legends_unit_tests output directory"
+        )
+    endif()
+
     gtest_discover_tests(legends_unit_tests
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         PROPERTIES LABELS "unit"
@@ -814,6 +825,15 @@ if(LEGENDS_BUILD_TESTS)
     target_compile_definitions(legends_integration_tests PRIVATE
         LEGENDS_LIBRARY_MODE=1
     )
+
+    if(WIN32 AND PAL_BACKEND_SDL3 AND TARGET SDL3::SDL3-shared)
+        add_custom_command(TARGET legends_integration_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:SDL3::SDL3-shared>"
+                "$<TARGET_FILE_DIR:legends_integration_tests>"
+            COMMENT "Copying SDL3.dll to legends_integration_tests output directory"
+        )
+    endif()
 
     gtest_discover_tests(legends_integration_tests
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -1002,6 +1022,7 @@ if(PAL_BACKEND_SDL3)
         src/app/scancode_map.cpp
         src/app/mount_manager.cpp
         src/app/image_validator.cpp
+        src/app/zmbv_codec.cpp
         src/app/video_capture.cpp
         src/app/mapper_ui.cpp
         src/app/save_browser.cpp
@@ -1035,7 +1056,8 @@ if(PAL_BACKEND_SDL3)
         $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
         $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
         external/glad/glad.c
-        engine/src/libs/zmbv/zmbv.cpp  # ZMBV codec for video capture
+        engine/src/libs/zmbv/zmbv.cpp
+        engine/src/libs/zmbv/zmbv_stubs.cpp  # ZMBV codec fallback when C_SSHOT is disabled
     )
 
     legends_set_strict_cxx_standard(project_legends)

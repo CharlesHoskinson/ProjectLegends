@@ -173,40 +173,47 @@ struct InputEvent {
     InputEventType type;
     uint64_t timestamp = 0;  ///< Emulation cycle when event should be processed
 
+    struct KeyEventData {
+        KeyCode code;
+        KeyMod mods;
+        bool repeat;     ///< True if key repeat (not initial press)
+    };
+
+    struct MouseMotionData {
+        int16_t dx;      ///< Relative X motion
+        int16_t dy;      ///< Relative Y motion
+    };
+
+    struct MouseButtonData {
+        MouseButton button;
+        int16_t x;       ///< Position at click (optional)
+        int16_t y;
+    };
+
+    struct MouseWheelData {
+        int16_t dx;      ///< Horizontal scroll
+        int16_t dy;      ///< Vertical scroll
+    };
+
+    struct JoystickAxisData {
+        uint8_t joystick_id;
+        uint8_t axis;
+        int16_t value;   ///< -32768 to 32767
+    };
+
+    struct JoystickButtonData {
+        uint8_t joystick_id;
+        uint8_t button;
+        bool pressed;
+    };
+
     union {
-        struct {
-            KeyCode code;
-            KeyMod mods;
-            bool repeat;     ///< True if key repeat (not initial press)
-        } key;
-
-        struct {
-            int16_t dx;      ///< Relative X motion
-            int16_t dy;      ///< Relative Y motion
-        } mouse_motion;
-
-        struct {
-            MouseButton button;
-            int16_t x;       ///< Position at click (optional)
-            int16_t y;
-        } mouse_button;
-
-        struct {
-            int16_t dx;      ///< Horizontal scroll
-            int16_t dy;      ///< Vertical scroll
-        } mouse_wheel;
-
-        struct {
-            uint8_t joystick_id;
-            uint8_t axis;
-            int16_t value;   ///< -32768 to 32767
-        } joystick_axis;
-
-        struct {
-            uint8_t joystick_id;
-            uint8_t button;
-            bool pressed;
-        } joystick_button;
+        KeyEventData key;
+        MouseMotionData mouse_motion;
+        MouseButtonData mouse_button;
+        MouseWheelData mouse_wheel;
+        JoystickAxisData joystick_axis;
+        JoystickButtonData joystick_button;
     };
 
     // ─────────────────────────────────────────────────────────────────────────
