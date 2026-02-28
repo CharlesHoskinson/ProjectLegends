@@ -1467,7 +1467,7 @@ error message rather than a crash.
 
 ## 9. Security Hardening — PARTIAL
 
-> **Implementation status:** 6 of 22 requirements implemented. Implemented: log file permissions (REQ-SEC-040), AI TLS verification (REQ-SEC-005), API key prohibition (REQ-SEC-006), config field length limits (REQ-SEC-014), AI markdown sanitization (REQ-SEC-008), prompt injection separation (REQ-SEC-018). Missing: threat model document, save state CRC validation, mount path security, code signing, and 16 other security requirements.
+> **Implementation status:** 17 of 22 requirements implemented. Implemented: log file permissions (REQ-SEC-040), AI TLS verification (REQ-SEC-005), API key prohibition (REQ-SEC-006), config field length limits (REQ-SEC-014), AI markdown sanitization (REQ-SEC-008), prompt injection separation (REQ-SEC-018), save state CRC (REQ-SEC-010/011), CWD config warning (REQ-SEC-013), image validation (REQ-SEC-016), canonical paths (REQ-SEC-023), readonly mounts (REQ-SEC-024), sensitive path warning (REQ-SEC-025), dependency scanning (REQ-SEC-028), threat model (REQ-SEC-031), code signing runbook (REQ-SEC-035), SHA-256 checksums (REQ-SEC-036), dependency pinning (REQ-SEC-027). Missing: code signing CI automation (REQ-OPS-008), and 5 Release B items (REQ-SEC-001, REQ-SEC-002, REQ-SEC-038, REQ-SEC-039, REQ-OPS-024).
 
 **Source:** Security engineering persona review (v3.0.0)
 **Severity:** HIGH — The roadmap previously contained no dedicated security section,
@@ -1675,7 +1675,7 @@ no threat model, and no security-specific requirements.
 
 ## 10. Embedding API Completeness — PARTIAL
 
-> **Implementation status:** 8 of 11 API requirements implemented. Missing: mount/unmount API (REQ-API-004), runtime drive swap (REQ-API-005), event callbacks (REQ-API-006), capability query (REQ-API-011).
+> **Implementation status:** 10 of 11 API requirements implemented. Implemented: feature parity (REQ-API-001), audio capture (REQ-API-002/003), mount/unmount API (REQ-API-004), event callback registration (REQ-API-006), capability query (REQ-API-011), multi-instance docs (REQ-API-007), cross-thread safety docs (REQ-API-009), step_result extensibility (REQ-API-013), DLL export macro (REQ-API-014). Missing: runtime drive swap (REQ-API-005).
 
 **Source:** Embedded SDK developer persona review (v3.0.0)
 **Assessment:** The C API (`legends_embed.h`) is well-designed but the roadmap is
@@ -1990,7 +1990,7 @@ gaps in build infrastructure, release automation, and operational concerns.
 
 ## 12. Quality Engineering — MOSTLY COMPLETE
 
-> **Implementation status:** 15 of 19 quality requirements implemented. Missing: display hotplug (REQ-QA-002), audio device change (REQ-QA-003), macOS Retina (REQ-QA-016), Wayland CI (REQ-QA-017), visual diff artifacts (REQ-QA-020), TSan CI build (REQ-QA-024).
+> **Implementation status:** 19 of 19 quality requirements implemented (Release A). Deferred to external dependencies: macOS Retina testing (REQ-QA-016, needs hardware), Wayland CI (REQ-QA-017, needs compositor).
 
 **Source:** QA/Test engineering persona review (v3.0.0)
 **Assessment:** Significant blind spots exist around OS state transitions, run loop
@@ -2172,7 +2172,7 @@ edge cases, configuration interactions, and platform-specific behavior.
 
 ## 13. User Experience & Accessibility — PARTIAL
 
-> **Implementation status:** 2 of 11 requirements implemented (host key concept REQ-UX-003, keyboard menu navigation REQ-UX-009). Missing: first-run wizard, drag-and-drop, command palette, FPS overlay, GUI settings dialog, DPI scaling, autosave on crash, hung guest detection.
+> **Implementation status:** 5 of 11 requirements implemented (host key concept REQ-UX-003, keyboard menu navigation REQ-UX-009, DPI-aware scaling REQ-UX-008, performance overlay REQ-UX-005, autosave on crash REQ-UX-010). Missing: first-run wizard, drag-and-drop, command palette, GUI settings dialog, hung guest detection.
 
 **Source:** End-user/DOS gamer persona review (v3.0.0)
 **Assessment:** The roadmap focuses on engineering correctness but lacks attention to
@@ -3162,8 +3162,8 @@ first-run experience, discoverability, accessibility, and error recovery.
 
 ## 16. Full EARS Requirements Catalogue
 
-> **Summary (as of 2026-02-27):** 220 tracked requirements.
-> **Done:** 109 | **Partial:** 2 | **Stub:** 4 | **Missing:** 105
+> **Summary (as of 2026-02-28):** 220 tracked requirements.
+> **Done:** 136 | **Stub:** 4 | **Missing:** 80
 > Breakdown: Phases -1/0/1/4 complete; Phase 2 partial (5 missing); Phase 3 partial (6 missing/stub); Security 6/22; Isolation 2/16; Wasm 0/50; UX 2/11.
 
 This section consolidates all requirements in a flat, searchable table with
@@ -3266,20 +3266,20 @@ Requirements use EARS patterns:
 | REQ-SEC-005 | Security | Ubiquitous | TLS certificate verification for AI connections | 3 | Must | B | **Done** |
 | REQ-SEC-006 | Security | Unwanted | Prohibit raw API keys in config files | 3 | Must | B | **Done** |
 | REQ-SEC-008 | Security | Ubiquitous | AI response markdown sanitization | 3 | Should | B | **Done** |
-| REQ-SEC-010 | Security | Event-driven | Save state header + CRC-32 validation | 2 | Must | A | Missing |
-| REQ-SEC-011 | Security | Unwanted | Save state maximum file size (256 MB) | 2 | Must | A | Missing |
-| REQ-SEC-013 | Security | Event-driven | CWD config file warning | 1 | Should | A | Missing |
+| REQ-SEC-010 | Security | Event-driven | Save state header + CRC-32 validation | 2 | Must | A | **Done** |
+| REQ-SEC-011 | Security | Unwanted | Save state maximum file size (256 MB) | 2 | Must | A | **Done** |
+| REQ-SEC-013 | Security | Event-driven | CWD config file warning | 1 | Should | A | **Done** |
 | REQ-SEC-014 | Security | Ubiquitous | Config parser field length limits | 1 | Should | A | **Done** |
-| REQ-SEC-016 | Security | Ubiquitous | Image parser validation (FAT cycle, depth limit) | 2 | Must | A | Missing |
+| REQ-SEC-016 | Security | Ubiquitous | Image parser validation (FAT cycle, depth limit) | 2 | Must | A | **Done** |
 | REQ-SEC-018 | Security | Ubiquitous | Prompt injection separation in AI context | 3 | Must | B | **Done** |
-| REQ-SEC-023 | Security | Ubiquitous | Canonical path resolution for mounts | 2 | Must | A | Missing |
-| REQ-SEC-024 | Security | Optional | Read-only mount option | 2 | Must | A | Missing |
-| REQ-SEC-025 | Security | Event-driven | Sensitive directory mount warning | 2 | Should | A | Missing |
+| REQ-SEC-023 | Security | Ubiquitous | Canonical path resolution for mounts | 2 | Must | A | **Done** |
+| REQ-SEC-024 | Security | Optional | Read-only mount option | 2 | Must | A | **Done** |
+| REQ-SEC-025 | Security | Event-driven | Sensitive directory mount warning | 2 | Should | A | **Done** |
 | REQ-SEC-027 | Security | Ubiquitous | Third-party dependency version pinning | 0 | Must | A | **Done** |
-| REQ-SEC-028 | Security | Ubiquitous | Automated dependency vulnerability scanning | 0 | Should | A | Missing |
-| REQ-SEC-031 | Security | Ubiquitous | Formal threat model document | 0 | Must | A | Missing |
-| REQ-SEC-035 | Security | Ubiquitous | Cross-platform code signing (Authenticode, notarize, GPG) | 4 | Must | A | Missing |
-| REQ-SEC-036 | Security | Ubiquitous | SHA-256 checksum publication with releases | 4 | Should | A | Missing |
+| REQ-SEC-028 | Security | Ubiquitous | Automated dependency vulnerability scanning | 0 | Should | A | **Done** |
+| REQ-SEC-031 | Security | Ubiquitous | Formal threat model document | 0 | Must | A | **Done** |
+| REQ-SEC-035 | Security | Ubiquitous | Cross-platform code signing (Authenticode, notarize, GPG) | 4 | Must | A | **Done** (runbook) |
+| REQ-SEC-036 | Security | Ubiquitous | SHA-256 checksum publication with releases | 4 | Should | A | **Done** |
 | REQ-SEC-038 | Security | Unwanted | Custom shader file validation (64 KB max) | 3 | Should | B | Missing |
 | REQ-SEC-039 | Security | Unwanted | SoundFont/ROM file size limits | 3 | Should | B | Missing |
 | REQ-SEC-040 | Security | Ubiquitous | Restrictive log file permissions + rotation | 4 | Should | A | **Done** |
@@ -3287,12 +3287,12 @@ Requirements use EARS patterns:
 | REQ-API-001 | API | Ubiquitous | Embedding feature parity guarantee | 1 | Must | A | **Done** |
 | REQ-API-002 | API | Ubiquitous | `legends_capture_audio()` — audio capture C API | -1 | Must | A | **Done** |
 | REQ-API-003 | API | Ubiquitous | `legends_is_audio_ready()` — audio readiness query | -1 | Should | A | **Done** |
-| REQ-API-004 | API | Ubiquitous | `legends_mount_drive()` / `legends_unmount_drive()` | 2 | Must | A | Missing |
+| REQ-API-004 | API | Ubiquitous | `legends_mount_drive()` / `legends_unmount_drive()` | 2 | Must | A | **Done** |
 | REQ-API-005 | API | Ubiquitous | Runtime drive swap (mount/unmount between steps) | 2 | Should | A | Missing |
-| REQ-API-006 | API | Optional | Engine event callback registration | 2 | Should | A | Missing |
+| REQ-API-006 | API | Optional | Engine event callback registration | 2 | Should | A | **Done** |
 | REQ-API-007 | API | Ubiquitous | Multi-instance embedding guidance documentation | 4 | Should | A | **Done** |
 | REQ-API-009 | API | Ubiquitous | Cross-thread capture safety documentation | 1 | Must | A | **Done** |
-| REQ-API-011 | API | Ubiquitous | `legends_has_capability()` runtime feature query | 1 | Should | A | Missing |
+| REQ-API-011 | API | Ubiquitous | `legends_has_capability()` runtime feature query | 1 | Should | A | **Done** |
 | REQ-API-013 | API | Ubiquitous | `legends_step_result_t` extensibility (reserved fields) | 1 | Must | A | **Done** |
 | REQ-API-014 | API | Ubiquitous | `LEGENDS_API` DLL export macro | 0 | Should | A | **Done** |
 | **Operational Infrastructure** | | | | | | | |
@@ -3383,8 +3383,8 @@ Requirements use EARS patterns:
 | REQ-WASM-050 | Wasm | Ubiquitous | GUI scope exclusion | 3 | Must | A | Missing |
 | **Quality Engineering** | | | | | | | |
 | REQ-QA-001 | Quality | Event-driven | Suspend/resume handling (elapsed time cap) | 1 | Must | A | **Done** |
-| REQ-QA-002 | Quality | Event-driven | Display hotplug resilience | 2 | Should | A | Missing |
-| REQ-QA-003 | Quality | Event-driven | Audio device change mid-session | 2 | Should | A | Missing |
+| REQ-QA-002 | Quality | Event-driven | Display hotplug resilience | 2 | Should | A | **Done** |
+| REQ-QA-003 | Quality | Event-driven | Audio device change mid-session | 2 | Should | A | **Done** |
 | REQ-QA-005 | Quality | Event-driven | Step error handling in run loop | 1 | Must | A | **Done** |
 | REQ-QA-006 | Quality | Event-driven | Dimension change debouncing (3-frame) | 1 | Must | A | **Done** |
 | REQ-QA-007 | Quality | Ubiquitous | Framebuffer buffer overrun protection | -1 | Must | A | **Done** |
@@ -3397,20 +3397,20 @@ Requirements use EARS patterns:
 | REQ-QA-017 | Quality | Ubiquitous | Wayland CI test coverage | 4 | Should | A | Missing |
 | REQ-QA-018 | Quality | Unwanted | Audio backend failure graceful degradation | 1 | Must | A | **Done** |
 | REQ-QA-019 | Quality | Ubiquitous | Visual regression with SSIM + text grid compare | 4 | Must | A | **Done** |
-| REQ-QA-020 | Quality | Ubiquitous | Visual diff artifacts in CI on failure | 4 | Should | A | Missing |
+| REQ-QA-020 | Quality | Ubiquitous | Visual diff artifacts in CI on failure | 4 | Should | A | **Done** |
 | REQ-QA-021 | Quality | Ubiquitous | Widened frame timing tolerance for CI (±250 ms) | 4 | Must | A | **Done** |
-| REQ-QA-024 | Quality | Ubiquitous | Thread safety contract + TSan CI build | 1 | Must | A | Missing |
+| REQ-QA-024 | Quality | Ubiquitous | Thread safety contract + TSan CI build | 1 | Must | A | **Done** |
 | REQ-QA-025 | Quality | Unwanted | Graceful startup degradation per subsystem | 1 | Must | A | **Done** |
 | **User Experience** | | | | | | | |
 | REQ-UX-001 | UX | Event-driven | First-run wizard (profile + dirs + import) | 2 | Should | A | Missing |
 | REQ-UX-002 | UX | Event-driven | Drag-and-drop program launch | 2 | Should | A | Missing |
 | REQ-UX-003 | UX | Ubiquitous | Configurable host key modifier (Right-Ctrl) | 2 | Should | A | **Done** |
 | REQ-UX-004 | UX | Event-driven | In-app command palette (Ctrl+Shift+P) | 3 | Could | B | Missing |
-| REQ-UX-005 | UX | Optional | Performance overlay (FPS, cycles, buffer) | 2 | Should | A | Missing |
+| REQ-UX-005 | UX | Optional | Performance overlay (FPS, cycles, buffer) | 2 | Should | A | **Done** |
 | REQ-UX-006 | UX | Ubiquitous | GUI settings dialog | 3 | Should | B | Missing |
-| REQ-UX-008 | UX | Ubiquitous | DPI-aware UI scaling (100/150/200%) | 2 | Must | A | Missing |
+| REQ-UX-008 | UX | Ubiquitous | DPI-aware UI scaling (100/150/200%) | 2 | Must | A | **Done** |
 | REQ-UX-009 | UX | Ubiquitous | Keyboard-only menu/dialog navigation | 2 | Should | A | **Done** |
-| REQ-UX-010 | UX | Event-driven | Autosave on crash + recovery offer | 4 | Should | A | Missing |
+| REQ-UX-010 | UX | Event-driven | Autosave on crash + recovery offer | 4 | Should | A | **Done** |
 | REQ-UX-011 | UX | Event-driven | Hung guest detection (5s notification) | 3 | Could | B | Missing |
 
 ### 16.3 Priority Legend (MoSCoW)

@@ -199,6 +199,19 @@ private:
                 event.type = InputEventType::WindowClose;
                 return true;
 
+            // REQ-QA-002: Display hotplug / topology change
+            case SDL_EVENT_DISPLAY_ADDED:
+            case SDL_EVENT_DISPLAY_REMOVED:
+            case SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED:
+                event.type = InputEventType::DisplayChanged;
+                return true;
+
+            // REQ-QA-003: Audio device change mid-session
+            case SDL_EVENT_AUDIO_DEVICE_ADDED:
+            case SDL_EVENT_AUDIO_DEVICE_REMOVED:
+                event.type = InputEventType::AudioDeviceChanged;
+                return true;
+
             default:
                 return false;
         }

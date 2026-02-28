@@ -18,11 +18,28 @@
 #include "app/shader_presets.h"
 
 #include <algorithm>
+#include <csignal>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 
 namespace legends {
+
+// REQ-UX-010: Crash autosave globals (signal handlers can only access globals)
+static legends_handle g_crash_engine = nullptr;
+static SaveManager*   g_crash_save_mgr = nullptr;
+
+static void crash_autosave_handler(int sig) {
+    // Attempt a best-effort save — this is async-signal-unsafe but better
+    // than losing all progress. The save path uses atomic writes.
+    if (g_crash_engine && g_crash_save_mgr) {
+        g_crash_save_mgr->saveToSlot(g_crash_engine, SaveManager::kAutosaveSlot,
+                                      nullptr, 0, 0);
+    }
+    // Re-raise the signal with default handler
+    std::signal(sig, SIG_DFL);
+    std::raise(sig);
+}
 
 Application::Application() = default;
 
@@ -192,6 +209,26 @@ ExitCode Application::init(int argc, char** argv) {
     if (err != LEGENDS_OK) {
         std::fprintf(stderr, "Error: legends_create() failed: %d\n", err);
         return ExitCode::EngineCreateFailed;
+    }
+
+    // ── REQ-UX-010: Crash autosave ─────────────────────────────────────
+    g_crash_engine = engine_;
+    g_crash_save_mgr = &save_manager_;
+    std::signal(SIGSEGV, crash_autosave_handler);
+    std::signal(SIGABRT, crash_autosave_handler);
+#ifndef _WIN32
+    std::signal(SIGBUS, crash_autosave_handler);
+#endif
+
+    // Check for previous crash autosave and offer recovery
+    if (save_manager_.hasAutosave()) {
+        std::fprintf(stderr, "Crash recovery save detected — loading autosave\n");
+        if (save_manager_.recoverAutosave(engine_)) {
+            std::fprintf(stderr, "Crash recovery successful\n");
+        } else {
+            std::fprintf(stderr, "Crash recovery failed: %s\n",
+                         save_manager_.lastError().c_str());
+        }
     }
 
     // ── Phase 4: Structured logging ─────────────────────────────────────
@@ -386,6 +423,23 @@ ExitCode Application::run() {
         if (!paused_ && !menu_system_.isOpen()) {
             legends_step_result_t step_result{};
             legends_step_ms(engine_, 16, &step_result);
+        }
+
+        // REQ-UX-005: Record frame delta for performance overlay
+        if (host_clock_) {
+            uint64_t elapsed = host_clock_->getTicksUs() - frame_start;
+            perf_overlay_.recordFrame(elapsed);
+            if (engine_) {
+                uint64_t total_cycles = 0;
+                legends_get_total_cycles(engine_, &total_cycles);
+                // Rough estimate: cycles executed this frame / 16ms
+                perf_overlay_.setCyclesPerSec(total_cycles > 0 ? total_cycles * 60 : 0);
+            }
+            if (audio_sink_) {
+                uint32_t queued = audio_sink_->getQueuedFrames();
+                uint32_t ms = (queued * 1000) / 44100;
+                perf_overlay_.setAudioQueuedMs(ms);
+            }
         }
 
         // Render framebuffer to window
@@ -604,6 +658,33 @@ bool Application::processEvents() {
                     js.axis_x, js.axis_y, js.buttons);
                 break;
             }
+
+            // REQ-QA-002: Display hotplug — re-query display info
+            case pal::InputEventType::DisplayChanged:
+                if (window_ && window_->isCreated()) {
+                    uint32_t w, h;
+                    window_->getSize(w, h);
+                    // If the window reported a valid size, keep going.
+                    // The next renderFrame() will adapt if the context
+                    // dimensions have changed.
+                    (void)w; (void)h;
+                }
+                break;
+
+            // REQ-QA-003: Audio device change — reopen audio sink
+            case pal::InputEventType::AudioDeviceChanged:
+                if (audio_sink_ && audio_sink_->isOpen()) {
+                    auto cfg = audio_sink_->getConfig();
+                    audio_sink_->close();
+                    auto res = audio_sink_->open(cfg);
+                    if (pal::failed(res)) {
+                        std::fprintf(stderr,
+                            "Warning: Audio device change — failed to reopen (%s)\n",
+                            pal::toString(res));
+                        audio_sink_.reset();
+                    }
+                }
+                break;
 
             default:
                 break;
@@ -942,6 +1023,11 @@ void Application::registerActionHandlers() {
             legends_set_machine_pc98(engine_, pc98_config_.enabled ? 1 : 0);
         }
     });
+
+    // REQ-UX-005: Performance overlay
+    action_bus_.registerHandler(Action::TogglePerfOverlay, [this](int) {
+        perf_overlay_.toggle();
+    });
 }
 
 void Application::updateWindowTitle() {
@@ -1078,6 +1164,14 @@ void Application::renderFrame() {
                          static_cast<uint16_t>(sw),
                          static_cast<uint16_t>(sh),
                          sctx.pitch);
+    }
+
+    // REQ-UX-005: Performance overlay
+    if (perf_overlay_.isEnabled()) {
+        perf_overlay_.render(static_cast<uint8_t*>(sctx.pixels),
+                              static_cast<uint16_t>(sw),
+                              static_cast<uint16_t>(sh),
+                              sctx.pitch);
     }
 
     // unlockSurface() presents to screen

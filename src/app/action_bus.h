@@ -69,6 +69,9 @@ enum class Action : uint16_t {
 
     // Sprint 7: PC-98
     SetMachinePC98,
+
+    // Release A: UX Polish
+    TogglePerfOverlay,  // REQ-UX-005
 };
 
 class ActionBus {

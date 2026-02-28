@@ -24,7 +24,9 @@ enum class InputEventType {
     WindowClose,
     WindowResize,
     WindowFocus,
-    WindowUnfocus
+    WindowUnfocus,
+    DisplayChanged,      // REQ-QA-002: Display hotplug / DPI change
+    AudioDeviceChanged   // REQ-QA-003: Audio device added/removed
 };
 
 /// Input event from the host
@@ -160,6 +162,8 @@ constexpr const char* toString(InputEventType type) noexcept {
         case InputEventType::WindowResize:    return "WindowResize";
         case InputEventType::WindowFocus:     return "WindowFocus";
         case InputEventType::WindowUnfocus:   return "WindowUnfocus";
+        case InputEventType::DisplayChanged:      return "DisplayChanged";
+        case InputEventType::AudioDeviceChanged:  return "AudioDeviceChanged";
     }
     return "Unknown";
 }

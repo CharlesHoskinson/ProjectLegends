@@ -752,6 +752,14 @@ constexpr size_t MAX_INDEXED_PIXELS_SIZE = 4 * 1024 * 1024;
 #define LEGENDS_LOG_DEBUG(msg) do { if (inst) inst->log_state.debug(msg); } while(0)
 #define LEGENDS_LOG_WARN(msg) do { if (inst) inst->log_state.warn(msg); } while(0)
 
+// REQ-API-006: Fire a registered event callback.
+inline void fire_event(legends_instance* inst, int event_type,
+                        const void* data = nullptr, size_t data_size = 0) {
+    if (!inst || event_type < 1 || event_type >= legends_instance::kMaxEventTypes) return;
+    auto& cb = inst->event_callbacks[event_type];
+    if (cb.fn) cb.fn(event_type, data, data_size, cb.userdata);
+}
+
 } // anonymous namespace
 
 extern "C" {
@@ -1152,8 +1160,20 @@ legends_error_t legends_step_cycles(
                 break;
         }
 
+        // REQ-API-006: Detect video mode changes for event callbacks.
+        uint16_t prev_w = inst->frame_state.gfx_width;
+        uint16_t prev_h = inst->frame_state.gfx_height;
+        bool prev_text = inst->frame_state.is_text_mode;
+
         // Sync legends layer state from engine
         sync_state_from_engine(inst);
+
+        // Fire mode change event if display dimensions or text/gfx mode changed
+        if (inst->frame_state.gfx_width != prev_w ||
+            inst->frame_state.gfx_height != prev_h ||
+            inst->frame_state.is_text_mode != prev_text) {
+            fire_event(inst, LEGENDS_EVENT_MODE_CHANGE);
+        }
 
         // Fill result if requested
         if (result_out != nullptr) {
@@ -2782,22 +2802,24 @@ legends_error_t legends_mount_drive(
     // REQ-SEC-024: Track readonly flag for enforcement when engine is wired.
     bool readonly = (flags & LEGENDS_MOUNT_FLAG_READONLY) != 0;
 
-    // TODO: Wire to engine DriveManager once machine_context subsystem
-    // initialization is complete. For now, validate inputs and track state.
-    //
-    // Future implementation:
-    //   if (is_dir) {
-    //       auto* drive = new localDrive(resolved.c_str(), ...);
-    //       if (readonly) drive->setReadOnly(true);
-    //       Drives[drive_idx] = drive;
-    //   } else {
-    //       // Detect image type and create appropriate DOS_Drive
-    //       // Pass readonly flag to image drive constructor
-    //   }
+    // REQ-API-004: Wire to engine drive system.
+    // Only directory mounts are supported via the C API (image mounts
+    // require additional format detection handled by MountManager).
+    if (!is_dir) {
+        inst->last_error = "Only directory mounts are supported via legends_mount_drive()";
+        return LEGENDS_ERR_INVALID_CONFIG;
+    }
 
-    (void)drive_idx;
-    (void)is_dir;
-    (void)readonly;
+    auto err = dosbox_lib_mount_local(inst->engine_handle, drive_idx,
+                                       resolved.c_str(), readonly ? 1 : 0);
+    if (err != DOSBOX_LIB_OK) {
+        inst->last_error = "Engine mount failed";
+        fire_event(inst, LEGENDS_EVENT_ERROR);
+        return LEGENDS_ERR_INTERNAL;
+    }
+
+    // REQ-API-006: Notify listeners of drive activity.
+    fire_event(inst, LEGENDS_EVENT_DRIVE_ACTIVITY, &drive_idx, sizeof(drive_idx));
 
     return LEGENDS_OK;
 }
@@ -2815,13 +2837,17 @@ legends_error_t legends_unmount_drive(
     if (norm >= 'a' && norm <= 'z') norm = static_cast<char>(norm - 'a' + 'A');
     LEGENDS_REQUIRE(norm >= 'A' && norm <= 'Z', LEGENDS_ERR_INVALID_CONFIG);
 
-    // TODO: Wire to engine DriveManager::UnmountDrive(drive_idx)
-    // once machine_context subsystem initialization is complete.
-    //
-    // Future implementation:
-    //   int drive_idx = norm - 'A';
-    //   if (!Drives[drive_idx]) return LEGENDS_ERR_INVALID_STATE;
-    //   DriveManager::UnmountDrive(drive_idx);
+    // REQ-API-004: Wire to engine drive system.
+    int drive_idx = norm - 'A';
+    auto err = dosbox_lib_unmount_drive(inst->engine_handle, drive_idx);
+    if (err != DOSBOX_LIB_OK) {
+        inst->last_error = "Engine unmount failed (no drive at this index)";
+        fire_event(inst, LEGENDS_EVENT_ERROR);
+        return LEGENDS_ERR_INVALID_STATE;
+    }
+
+    // REQ-API-006: Notify listeners of drive activity.
+    fire_event(inst, LEGENDS_EVENT_DRIVE_ACTIVITY, &drive_idx, sizeof(drive_idx));
 
     return LEGENDS_OK;
 }
