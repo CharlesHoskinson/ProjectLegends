@@ -87,11 +87,11 @@ TEST_F(SoakEnduranceTest, EnduranceRunMonitorsHealth) {
     size_t initial_rss = getCurrentRSS();
     size_t max_rss = initial_rss;
     uint64_t step_count = 0;
-    uint64_t last_hash = 0;
+    uint8_t last_hash[32] = {};
     int hash_mismatches = 0;
 
     // Capture initial state hash
-    legends_get_state_hash(engine_, &last_hash);
+    legends_get_state_hash(engine_, last_hash);
 
     constexpr int kCheckIntervalMs = 100;
     constexpr int kStepMs = 16;
@@ -113,11 +113,14 @@ TEST_F(SoakEnduranceTest, EnduranceRunMonitorsHealth) {
             legends_capture_audio(engine_, nullptr, 0, &audio_avail);
 
             // State hash consistency (deterministic mode)
-            uint64_t current_hash = 0;
-            legends_get_state_hash(engine_, &current_hash);
+            uint8_t current_hash[32] = {};
+            legends_get_state_hash(engine_, current_hash);
             // Hash will change as engine progresses, but should not be zero
-            if (current_hash == 0) {
-                ++hash_mismatches;
+            {
+                uint8_t zero[32] = {};
+                if (memcmp(current_hash, zero, 32) == 0) {
+                    ++hash_mismatches;
+                }
             }
         }
     }
@@ -219,8 +222,8 @@ TEST_F(SoakEnduranceTest, ContinuousAudioCaptureStability) {
 
 TEST_F(SoakEnduranceTest, HashConsistencyOverTime) {
     // Step engine and verify hash changes but stays valid
-    std::vector<uint64_t> hashes;
     constexpr int kSamples = 50;
+    uint8_t hashes[kSamples][32] = {};
 
     for (int i = 0; i < kSamples; ++i) {
         for (int s = 0; s < 100; ++s) {
@@ -228,23 +231,22 @@ TEST_F(SoakEnduranceTest, HashConsistencyOverTime) {
             legends_step_ms(engine_, 16, &result);
         }
 
-        uint64_t hash = 0;
-        legends_get_state_hash(engine_, &hash);
-        hashes.push_back(hash);
+        legends_get_state_hash(engine_, hashes[i]);
     }
 
     // At least some hashes should be different (engine is progressing)
     bool all_same = true;
-    for (size_t i = 1; i < hashes.size(); ++i) {
-        if (hashes[i] != hashes[0]) {
+    for (int i = 1; i < kSamples; ++i) {
+        if (memcmp(hashes[i], hashes[0], 32) != 0) {
             all_same = false;
             break;
         }
     }
     // In deterministic mode the hash may or may not change depending on what the engine does
     // but it should never be zero
-    for (auto h : hashes) {
-        EXPECT_NE(h, 0u) << "Hash should not be zero";
+    uint8_t zero[32] = {};
+    for (int i = 0; i < kSamples; ++i) {
+        EXPECT_NE(memcmp(hashes[i], zero, 32), 0) << "Hash should not be zero";
     }
 }
 

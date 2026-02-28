@@ -54,9 +54,12 @@ TEST_F(FullLifecycleTest, InitConfigureBootSaveLoadQuit) {
     stepFrames(60); // ~1 second of emulated time
 
     // Step 2: Capture initial state
-    uint64_t boot_hash = 0;
-    legends_get_state_hash(engine_, &boot_hash);
-    EXPECT_NE(boot_hash, 0u) << "Boot hash should be non-zero";
+    uint8_t boot_hash[32] = {};
+    legends_get_state_hash(engine_, boot_hash);
+    {
+        uint8_t zero[32] = {};
+        EXPECT_NE(memcmp(boot_hash, zero, 32), 0) << "Boot hash should be non-zero";
+    }
 
     // Step 3: Capture framebuffer
     size_t rgb_size = 0;
@@ -81,25 +84,25 @@ TEST_F(FullLifecycleTest, InitConfigureBootSaveLoadQuit) {
     legends_save_state(engine_, save_data.data(), save_data.size(), &actual_save);
     EXPECT_GT(actual_save, 0u) << "Save should write data";
 
-    uint64_t pre_save_hash = 0;
-    legends_get_state_hash(engine_, &pre_save_hash);
+    uint8_t pre_save_hash[32] = {};
+    legends_get_state_hash(engine_, pre_save_hash);
 
     // Step 6: Mutate state (inject keys, step further)
     legends_key_event(engine_, 0x1E, 1); // 'A' down
     legends_key_event(engine_, 0x1E, 0); // 'A' up
     stepFrames(30);
 
-    uint64_t post_mutate_hash = 0;
-    legends_get_state_hash(engine_, &post_mutate_hash);
+    uint8_t post_mutate_hash[32] = {};
+    legends_get_state_hash(engine_, post_mutate_hash);
     // Hash may or may not differ depending on engine behavior
 
     // Step 7: Load state (restore to pre-mutation)
     legends_error_t load_err = legends_load_state(engine_, save_data.data(), actual_save);
     EXPECT_EQ(load_err, LEGENDS_OK) << "Load state should succeed";
 
-    uint64_t post_load_hash = 0;
-    legends_get_state_hash(engine_, &post_load_hash);
-    EXPECT_EQ(post_load_hash, pre_save_hash)
+    uint8_t post_load_hash[32] = {};
+    legends_get_state_hash(engine_, post_load_hash);
+    EXPECT_EQ(memcmp(post_load_hash, pre_save_hash, 32), 0)
         << "Hash after load should match hash before save";
 
     // Step 8: Continue execution after load
@@ -132,12 +135,15 @@ TEST_F(FullLifecycleTest, MultipleEngineInstances) {
     }
 
     // Both should have valid state
-    uint64_t hash1 = 0, hash2 = 0;
-    legends_get_state_hash(engine_, &hash1);
-    legends_get_state_hash(engine2, &hash2);
-    EXPECT_NE(hash1, 0u);
-    EXPECT_NE(hash2, 0u);
-    EXPECT_EQ(hash1, hash2) << "Deterministic engines should have same hash";
+    uint8_t hash1[32] = {}, hash2[32] = {};
+    legends_get_state_hash(engine_, hash1);
+    legends_get_state_hash(engine2, hash2);
+    {
+        uint8_t zero[32] = {};
+        EXPECT_NE(memcmp(hash1, zero, 32), 0);
+        EXPECT_NE(memcmp(hash2, zero, 32), 0);
+    }
+    EXPECT_EQ(memcmp(hash1, hash2, 32), 0) << "Deterministic engines should have same hash";
 
     legends_destroy(engine2);
 }
@@ -206,18 +212,21 @@ TEST_F(FullLifecycleTest, MouseEventProcessing) {
 TEST_F(FullLifecycleTest, ResetAndContinue) {
     stepFrames(60);
 
-    uint64_t pre_reset_hash = 0;
-    legends_get_state_hash(engine_, &pre_reset_hash);
+    uint8_t pre_reset_hash[32] = {};
+    legends_get_state_hash(engine_, pre_reset_hash);
 
     legends_reset(engine_);
     stepFrames(60);
 
-    uint64_t post_reset_hash = 0;
-    legends_get_state_hash(engine_, &post_reset_hash);
+    uint8_t post_reset_hash[32] = {};
+    legends_get_state_hash(engine_, post_reset_hash);
 
     // After reset, hash should differ from pre-reset
     // (though in deterministic mode, it may match the initial boot hash)
-    EXPECT_NE(post_reset_hash, 0u);
+    {
+        uint8_t zero[32] = {};
+        EXPECT_NE(memcmp(post_reset_hash, zero, 32), 0);
+    }
 }
 
 TEST_F(FullLifecycleTest, RapidCreateDestroy) {

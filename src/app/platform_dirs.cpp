@@ -118,4 +118,14 @@ std::string getCacheDir() {
 
 #endif
 
+std::string getLogDir() {
+    std::string cache = getCacheDir();
+    if (cache.empty()) return {};
+#if defined(_WIN32)
+    return cache + "\\logs";
+#else
+    return cache + "/logs";
+#endif
+}
+
 } // namespace legends

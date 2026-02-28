@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2024-2025 Charles Hoskinson and Contributors
+//
+// Lock-free crash breadcrumb ring buffer.
+
+#pragma once
+
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <vector>
+
+namespace legends {
+
+enum class BreadcrumbCategory : uint8_t {
+    General = 0,
+    Engine  = 1,
+    IO      = 2,
+    Render  = 3,
+    Audio   = 4,
+};
+
+struct BreadcrumbEntry {
+    static constexpr size_t kMaxMessageLen = 128;
+
+    uint64_t timestamp_us = 0;
+    char     message[kMaxMessageLen] = {};
+    uint32_t thread_id = 0;
+    uint8_t  category  = 0;
+
+    void clear() {
+        timestamp_us = 0;
+        message[0]   = '\0';
+        thread_id    = 0;
+        category     = 0;
+    }
+};
+
+class CrashBreadcrumb {
+public:
+    static constexpr size_t kCapacity = 64;
+
+    CrashBreadcrumb();
+    ~CrashBreadcrumb();
+
+    void add(const char* message,
+             BreadcrumbCategory category = BreadcrumbCategory::General);
+
+    std::vector<BreadcrumbEntry> read() const;
+    size_t readInto(BreadcrumbEntry* out, size_t max_entries) const;
+    void   clear();
+
+    uint64_t totalCount() const {
+        return write_index_.load(std::memory_order_acquire);
+    }
+
+private:
+    BreadcrumbEntry          entries_[kCapacity];
+    std::atomic<uint64_t>    write_index_{0};
+
+    static uint32_t currentThreadId();
+    static uint64_t currentTimestampUs();
+};
+
+CrashBreadcrumb& globalBreadcrumb();
+
+#define LEGENDS_BREADCRUMB(msg) ::legends::globalBreadcrumb().add(msg)
+
+} // namespace legends

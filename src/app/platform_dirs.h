@@ -28,4 +28,10 @@ std::string getDataDir();
 /// macOS:    ~/Library/Caches/ProjectLegends
 std::string getCacheDir();
 
+/// Get the platform-specific log directory.
+/// Windows:  %LOCALAPPDATA%\ProjectLegends\logs
+/// Linux:    $XDG_CACHE_HOME/projectlegends/logs (fallback ~/.cache/projectlegends/logs)
+/// macOS:    ~/Library/Caches/ProjectLegends/logs
+std::string getLogDir();
+
 } // namespace legends

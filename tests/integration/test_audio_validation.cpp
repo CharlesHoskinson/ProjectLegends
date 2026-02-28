@@ -6,12 +6,14 @@
 // Tests PC speaker spectral analysis, buffer underflow detection,
 // mute/silence verification, volume scaling, and format checks.
 
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 #include <gtest/gtest.h>
 #include <legends/legends_embed.h>
 #include <pal/platform.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 #include <numeric>
 #include <vector>

@@ -1191,4 +1191,8 @@ endif()
 # ─────────────────────────────────────────────────────────────────────────────
 # Packaging (CPack — must come last)
 # ─────────────────────────────────────────────────────────────────────────────
-include(cmake/packaging.cmake)
+if(EXISTS "${CMAKE_SOURCE_DIR}/COPYING")
+    include(cmake/packaging.cmake)
+else()
+    message(STATUS "Skipping CPack — COPYING file not found (create COPYING, LICENSE, NOTICE for packaging)")
+endif()
