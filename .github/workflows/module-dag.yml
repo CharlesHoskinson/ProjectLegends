@@ -64,16 +64,17 @@ jobs:
 
       - name: Verify No ../src/ in Public Headers
         run: |
-          echo "Checking for ../src/ includes in public headers..."
+          echo "Checking for ../src/ #include directives in public headers..."
 
           # Check engine public headers (dosbox/, aibox/)
-          if grep -rn '../src/' engine/include/dosbox/ engine/include/aibox/ 2>/dev/null; then
+          # Only match actual #include directives, not comments
+          if grep -rn '#include.*\.\./src/' engine/include/dosbox/ engine/include/aibox/ 2>/dev/null; then
             echo "::error::Found ../src/ includes in engine public headers!"
             exit 1
           fi
 
           # Check legends public headers
-          if grep -rn '../src/' include/legends/ include/pal/ 2>/dev/null; then
+          if grep -rn '#include.*\.\./src/' include/legends/ include/pal/ 2>/dev/null; then
             echo "::error::Found ../src/ includes in legends public headers!"
             exit 1
           fi

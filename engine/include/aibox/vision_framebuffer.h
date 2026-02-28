@@ -9,6 +9,7 @@
 #pragma once
 
 #include <gsl-lite/gsl-lite.hpp>
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <span>

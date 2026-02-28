@@ -226,6 +226,21 @@ public:
         return window_;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // Clipboard
+    // ═══════════════════════════════════════════════════════════════════════
+
+    std::string getClipboardText() const override {
+        char* text = SDL_GetClipboardText();
+        if (!text || text[0] == '\0') {
+            if (text) SDL_free(text);
+            return {};
+        }
+        std::string result(text);
+        SDL_free(text);
+        return result;
+    }
+
 private:
     SDL_Window* window_ = nullptr;
     uint32_t width_ = 0;

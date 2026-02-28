@@ -55,9 +55,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build g++-13
+
       - name: Configure build
         run: >
           cmake -B build -G Ninja
+          -DCMAKE_CXX_COMPILER=g++-13
           -DLEGENDS_BUILD_TESTS=ON
           -DLEGENDS_HEADLESS=ON
           -DLEGENDS_LIBRARY_MODE=ON
@@ -70,4 +76,4 @@ jobs:
         run: ./build/legends_unit_tests --gtest_filter="MultiInstance*:Sprint2*:GslContract*:ContractGates*"
 
       - name: Run full test suite
-        run: ./build/legends_unit_tests --gtest_filter="-CompatShimTest.CurrentThrowsWhenNoContext"
+        run: ./build/legends_unit_tests

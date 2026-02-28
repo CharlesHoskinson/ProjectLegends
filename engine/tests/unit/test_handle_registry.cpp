@@ -4,7 +4,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 #include <aibox/handle_registry.h>
 #include <thread>
 #include <vector>
@@ -121,12 +121,12 @@ TEST_F(HandleRegistryTest, AllocateAndValidate) {
 TEST_F(HandleRegistryTest, AllocateNullObject) {
     // After gsl-lite migration, null pointer is a contract violation
     int* null_ptr = nullptr;
-    EXPECT_THROW(registry.allocate(null_ptr, HandleType::Emulator), gsl_lite::fail_fast);
+    EXPECT_THROW(registry.allocate(null_ptr, HandleType::Emulator), legends::gsl::fail_fast);
 }
 
 TEST_F(HandleRegistryTest, AllocateInvalidType) {
     // After gsl-lite migration, invalid type is a contract violation
-    EXPECT_THROW(registry.allocate(&test_object, HandleType::Invalid), gsl_lite::fail_fast);
+    EXPECT_THROW(registry.allocate(&test_object, HandleType::Invalid), legends::gsl::fail_fast);
 }
 
 TEST_F(HandleRegistryTest, GetObject) {

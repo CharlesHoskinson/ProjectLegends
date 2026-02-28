@@ -46,9 +46,9 @@ jobs:
             cxx: g++-13
             pkg: gcc-13 g++-13
           - compiler: clang
-            cc: clang-16
-            cxx: clang++-16
-            pkg: clang-16
+            cc: clang-18
+            cxx: clang++-18
+            pkg: clang-18
 
     steps:
       - uses: actions/checkout@v4
@@ -89,9 +89,9 @@ jobs:
             cxx: g++-13
             pkg: gcc-13 g++-13
           - compiler: clang
-            cc: clang-16
-            cxx: clang++-16
-            pkg: clang-16
+            cc: clang-18
+            cxx: clang++-18
+            pkg: clang-18
 
     steps:
       - uses: actions/checkout@v4
@@ -257,7 +257,7 @@ jobs:
             flags: "-fsanitize=thread -fno-omit-frame-pointer"
             env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1"
           # MSan requires all code (including libc++) to be instrumented.
-          # Uses clang-16 with instrumented libc++ for full coverage.
+          # Uses clang-18 with libc++ for full coverage.
           - sanitizer: memory
             flags: "-fsanitize=memory -fPIE -pie -stdlib=libc++ -fno-omit-frame-pointer"
             env: "MSAN_OPTIONS=halt_on_error=1"
@@ -268,11 +268,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build
+          sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev
 
       - name: Configure
         run: |
           cmake -B build -G Ninja \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
             -DCMAKE_C_FLAGS="${{ matrix.flags }}" \
@@ -332,13 +334,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build clang-16 clang-tidy-16
+          sudo apt-get install -y cmake ninja-build clang-18 clang-tidy-18
 
       - name: Configure (generate compile_commands.json)
         run: |
           cmake -B build -G Ninja \
-            -DCMAKE_C_COMPILER=clang-16 \
-            -DCMAKE_CXX_COMPILER=clang++-16 \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DLEGENDS_BUILD_TESTS=ON \
@@ -348,7 +350,7 @@ jobs:
         run: |
           echo "Running clang-tidy on engine and legends source files..."
           find engine/src src/legends -name '*.cpp' -print0 | \
-            xargs -0 -r clang-tidy-16 -p build \
+            xargs -0 -r clang-tidy-18 -p build \
               --checks='modernize-*,bugprone-*,performance-*,-modernize-use-trailing-return-type' \
               2>&1 | tee clang-tidy-output.txt
 
@@ -375,13 +377,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build clang-16
+          sudo apt-get install -y cmake ninja-build clang-18
 
       - name: Configure
         run: |
           cmake -B build -G Ninja \
-            -DCMAKE_C_COMPILER=clang-16 \
-            -DCMAKE_CXX_COMPILER=clang++-16 \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_FUZZING=ON \
             -DENABLE_ASAN=ON \

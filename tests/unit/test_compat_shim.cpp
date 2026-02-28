@@ -8,7 +8,7 @@
 #endif
 
 #include <gtest/gtest.h>
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 #include <legends/machine_context.h>
 #include <legends/exceptions.h>
 
@@ -292,5 +292,5 @@ TEST_F(CompatShimTest, ContextGuardWithSameContext) {
 // After gsl-lite migration, null-context fires gsl_Assert -> gsl_lite::fail_fast
 TEST_F(CompatShimTest, CurrentThrowsWhenNoContext) {
     compat::set_current_context(nullptr);
-    EXPECT_THROW((void)compat::current(), gsl_lite::fail_fast);
+    EXPECT_THROW((void)compat::current(), legends::gsl::fail_fast);
 }

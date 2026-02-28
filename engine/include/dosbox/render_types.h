@@ -21,13 +21,13 @@
  * @brief Public render/scaler type definitions
  *
  * This header provides the minimal public API types for the render system.
- * The full scaler implementation is in engine/src/gui/render_scalers.h (private).
+ * The full scaler implementation is in the private engine source (private).
  *
  * Module: aibox_core (public API)
  *
  * REFACTORING NOTE (Sprint 3):
- * Extracted from engine/src/gui/render_scalers.h to provide clean module boundaries.
- * render.h now includes this public header instead of ../src/gui/render_scalers.h.
+ * Extracted to provide clean module boundaries.
+ * render.h now includes this public header instead of the private source.
  */
 
 #ifndef DOSBOX_RENDER_TYPES_H

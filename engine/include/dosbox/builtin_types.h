@@ -22,7 +22,7 @@
  *
  * This header provides the BuiltinFileBlob struct definition as part of
  * the engine's public API. The actual blob data is defined in private
- * source files (engine/src/builtin/*.cpp).
+ * source files (engine builtin directory).
  *
  * Module: aibox_core (public API)
  */

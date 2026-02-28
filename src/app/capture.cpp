@@ -4,10 +4,13 @@
 // Screenshot capture implementation.
 
 // stb_image_write generates static helper functions that may not all be
-// referenced — suppress MSVC C4505 (unreferenced function removed).
+// referenced — suppress the corresponding unused-function warnings.
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable: 4505)
+#elif defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -15,6 +18,8 @@
 
 #if defined(_MSC_VER)
 #pragma warning(pop)
+#elif defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
 #endif
 
 #include "app/capture.h"

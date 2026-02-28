@@ -1065,8 +1065,15 @@ if(PAL_BACKEND_SDL3)
             legends_core
             legends_pal
             SDL3::SDL3-shared
+            gsl::gsl-lite-v1
         )
     endif()
+
+    target_compile_definitions(project_legends PRIVATE
+        gsl_CONFIG_DEFAULTS_VERSION=1
+        gsl_CONFIG_CONTRACT_CHECKING_ON
+        gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
+    )
 
     # Phase 3: Optional feature-gated library linking
     if(LEGENDS_ENABLE_AI AND CURL_FOUND)

@@ -21,13 +21,13 @@
  * @brief Public CD-ROM interface types for BIOS disk emulation
  *
  * This header provides the minimal public API for CD-ROM interfaces.
- * The full CDROM implementation is in engine/src/dos/cdrom.h (private).
+ * The full CDROM implementation is in the private engine source (private).
  *
  * Module: aibox_core (public API)
  *
  * REFACTORING NOTE (Sprint 3):
- * Extracted from engine/src/dos/cdrom.h to provide clean module boundaries.
- * bios_disk.h now includes this public header instead of ../src/dos/cdrom.h.
+ * Extracted to provide clean module boundaries.
+ * bios_disk.h now includes this public header instead of the private source.
  */
 
 #ifndef DOSBOX_CDROM_INTERFACE_H

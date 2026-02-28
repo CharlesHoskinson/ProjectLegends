@@ -7,6 +7,7 @@
 
 #include "pal/types.h"
 #include <cstdint>
+#include <string>
 
 namespace pal {
 
@@ -103,6 +104,13 @@ public:
     /// Get native window handle (SDL_Window*, HWND, etc.)
     /// @return Non-null if created, nullptr otherwise
     virtual void* getNativeHandle() const = 0;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Clipboard
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// Get current clipboard text (empty string if unavailable)
+    virtual std::string getClipboardText() const { return {}; }
 };
 
 } // namespace pal

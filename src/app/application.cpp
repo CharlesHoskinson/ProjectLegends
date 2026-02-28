@@ -22,11 +22,6 @@
 #include <cstring>
 #include <filesystem>
 
-// SDL3 clipboard — only needed for ClipboardPaste
-#if __has_include(<SDL3/SDL_clipboard.h>)
-#include <SDL3/SDL_clipboard.h>
-#endif
-
 namespace legends {
 
 Application::Application() = default;
@@ -717,15 +712,14 @@ void Application::registerActionHandlers() {
         }
     });
 
-    // Clipboard paste
+    // Clipboard paste (via PAL abstraction)
     action_bus_.registerHandler(Action::ClipboardPaste, [this](int) {
-#if __has_include(<SDL3/SDL_clipboard.h>)
-        char* text = SDL_GetClipboardText();
-        if (text && text[0] != '\0' && engine_) {
-            legends_text_input(engine_, text);
+        if (window_ && engine_) {
+            std::string text = window_->getClipboardText();
+            if (!text.empty()) {
+                legends_text_input(engine_, text.c_str());
+            }
         }
-        if (text) SDL_free(text);
-#endif
     });
 
     // Volume up

@@ -73,10 +73,18 @@ protected:
 };
 
 TEST_F(SoakEnduranceTest, EnduranceRunMonitorsHealth) {
+    // Soak tests are long-running (default 1 hour) and must be opted in.
+    // Set LEGENDS_SOAK_ENABLED=1 or LEGENDS_SOAK_SHORT=1 to run.
+    const char* soak_enabled = std::getenv("LEGENDS_SOAK_ENABLED");
+    const char* short_soak = std::getenv("LEGENDS_SOAK_SHORT");
+    if ((!soak_enabled || std::strcmp(soak_enabled, "1") != 0) &&
+        (!short_soak || std::strcmp(short_soak, "1") != 0)) {
+        GTEST_SKIP() << "Soak test skipped (set LEGENDS_SOAK_ENABLED=1 to run)";
+    }
+
     int duration_seconds = getSoakDurationSeconds();
 
     // For CI, if not labeled as soak, use 10 seconds
-    const char* short_soak = std::getenv("LEGENDS_SOAK_SHORT");
     if (short_soak && std::strcmp(short_soak, "1") == 0) {
         duration_seconds = 10;
     }
