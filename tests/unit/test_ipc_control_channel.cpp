@@ -123,7 +123,8 @@ TEST(IpcControlChannelTest, SequentialMessages) {
             EXPECT_EQ(msg->header.sequence_id, i);
 
             std::array<uint8_t, 4> resp{};
-            server->send(MsgType::StepMsResp, i, resp);
+            auto send_result = server->send(MsgType::StepMsResp, i, resp);
+            ASSERT_TRUE(send_result.has_value());
         }
     });
 
@@ -134,7 +135,8 @@ TEST(IpcControlChannelTest, SequentialMessages) {
 
     for (uint32_t i = 1; i <= 5; ++i) {
         std::array<uint8_t, 4> payload{};
-        client->send(MsgType::StepMsReq, i, payload);
+        auto send_result = client->send(MsgType::StepMsReq, i, payload);
+        ASSERT_TRUE(send_result.has_value());
         auto msg = client->recv(2000);
         ASSERT_TRUE(msg.has_value());
         EXPECT_EQ(msg->header.sequence_id, i);

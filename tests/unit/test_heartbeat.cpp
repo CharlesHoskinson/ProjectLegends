@@ -9,7 +9,21 @@
 #include <functional>
 #include <thread>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 using namespace legends_ipc;
+
+static uint32_t current_pid() {
+#ifdef _WIN32
+    return static_cast<uint32_t>(::GetCurrentProcessId());
+#else
+    return static_cast<uint32_t>(::getpid());
+#endif
+}
 
 // Minimal HeartbeatMonitor reimplementation for test isolation.
 // Mirrors the production code in src/legends_proxy/heartbeat.h/.cpp.
@@ -61,7 +75,7 @@ private:
             hb.serialize(buf);
 
             if (channel_)
-                channel_->send(MsgType::Heartbeat, 0, buf);
+                (void)channel_->send(MsgType::Heartbeat, 0, buf);
 
             ack_pending_.store(true);
             auto last_send = std::chrono::steady_clock::now();
@@ -219,13 +233,7 @@ TEST_F(HeartbeatTest, MultipleStartStopCycles) {
 TEST_F(HeartbeatTest, SendsOnControlChannel) {
     // Create a server/client pair
     auto pipe_name = ControlChannel::make_pipe_name(
-        static_cast<uint32_t>(
-#ifdef _WIN32
-            GetCurrentProcessId()
-#else
-            getpid()
-#endif
-        )) + "_hb_test";
+        current_pid()) + "_hb_test";
 
     auto server = ControlChannel::create_server(pipe_name);
     if (!server) {
@@ -235,14 +243,13 @@ TEST_F(HeartbeatTest, SendsOnControlChannel) {
 
     // Connect client in a thread
     std::thread client_thread([&]() {
-        auto client = ControlChannel::connect_client(
-            pipe_name, std::chrono::milliseconds(2000));
+        auto client = ControlChannel::connect_client(pipe_name, 2000);
         if (!client) return;
 
         // Read the heartbeat message
-        auto msg = client->recv(std::chrono::milliseconds(2000));
+        auto msg = client->recv(2000);
         if (msg) {
-            EXPECT_EQ(msg->header.msg_type, static_cast<uint16_t>(MsgType::Heartbeat));
+            EXPECT_EQ(msg->header.msg_type, MsgType::Heartbeat);
         }
     });
 
@@ -250,7 +257,7 @@ TEST_F(HeartbeatTest, SendsOnControlChannel) {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     test_heartbeat::HeartbeatMonitor monitor;
-    monitor.start(server.get(), [this]() {
+    monitor.start(&server.value(), [this]() {
         timeout_fired_.store(true);
     },
     std::chrono::milliseconds(100),

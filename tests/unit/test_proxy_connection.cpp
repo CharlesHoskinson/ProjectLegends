@@ -42,7 +42,8 @@ TEST(ProxyConnectionTest, ConnectRoundTrip) {
         ack.error_code = 0;
         std::array<uint8_t, msg::HandshakeAck::serialized_size> buf{};
         ack.serialize(buf);
-        client->send(MsgType::HandshakeAck, 0, buf);
+        auto send_ack = client->send(MsgType::HandshakeAck, 0, buf);
+        ASSERT_TRUE(send_ack.has_value());
 
         // Wait for a request and respond
         auto req = client->recv(5000);
@@ -51,7 +52,8 @@ TEST(ProxyConnectionTest, ConnectRoundTrip) {
             resp.error_code = 0;
             std::array<uint8_t, msg::CreateResp::serialized_size> rbuf{};
             resp.serialize(rbuf);
-            client->send(MsgType::CreateResp, req->header.sequence_id, rbuf);
+            auto send_resp = client->send(MsgType::CreateResp, req->header.sequence_id, rbuf);
+            ASSERT_TRUE(send_resp.has_value());
         }
     });
 
@@ -69,7 +71,8 @@ TEST(ProxyConnectionTest, ConnectRoundTrip) {
     req.deterministic = 1;
     std::array<uint8_t, msg::CreateReq::serialized_size> reqbuf{};
     req.serialize(reqbuf);
-    server->send(MsgType::CreateReq, 1, reqbuf);
+    auto send_req = server->send(MsgType::CreateReq, 1, reqbuf);
+    ASSERT_TRUE(send_req.has_value());
 
     // Receive response
     auto resp = server->recv(5000);
@@ -98,7 +101,8 @@ TEST(ProxyConnectionTest, SequenceIdMatching) {
             if (!req) break;
             // Echo back with same sequence ID
             std::array<uint8_t, 4> resp{};
-            client->send(MsgType::StepMsResp, req->header.sequence_id, resp);
+            auto send_resp = client->send(MsgType::StepMsResp, req->header.sequence_id, resp);
+            ASSERT_TRUE(send_resp.has_value());
         }
     });
 
@@ -107,7 +111,8 @@ TEST(ProxyConnectionTest, SequenceIdMatching) {
 
     for (uint32_t seq = 1; seq <= 3; ++seq) {
         std::array<uint8_t, 4> payload{};
-        server->send(MsgType::StepMsReq, seq, payload);
+        auto send_req = server->send(MsgType::StepMsReq, seq, payload);
+        ASSERT_TRUE(send_req.has_value());
         auto resp = server->recv(2000);
         ASSERT_TRUE(resp.has_value());
         EXPECT_EQ(resp->header.sequence_id, seq);

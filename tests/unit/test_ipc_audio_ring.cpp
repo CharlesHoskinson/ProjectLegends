@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT
 #include <gtest/gtest.h>
 #include <legends_ipc/audio_ring.h>
+#include <atomic>
 #include <cstring>
 #include <string>
 #include <thread>
 #include <vector>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #else
 #include <unistd.h>
@@ -132,31 +136,44 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
 
     constexpr int total_frames = 100000;
     std::atomic<int> total_popped{0};
+    AudioRingBuffer* ring_ptr = &ring.value();
 
-    // Producer thread
-    std::thread producer([&ring, total_frames]() {
-        std::vector<int16_t> chunk(64); // 32 frames at a time
-        int frames_pushed = 0;
-        while (frames_pushed < total_frames) {
-            int to_push = std::min(32, total_frames - frames_pushed);
-            for (int i = 0; i < to_push * 2; ++i)
-                chunk[i] = static_cast<int16_t>((frames_pushed + i / 2) & 0x7FFF);
-            ring->push(std::span<const int16_t>(chunk.data(), to_push * 2));
-            frames_pushed += to_push;
-        }
-    });
+    struct ProducerTask {
+        AudioRingBuffer* ring;
+        int total_frames;
 
-    // Consumer thread
-    std::thread consumer([&ring, &total_popped, total_frames]() {
-        std::vector<int16_t> buf(64);
-        int popped = 0;
-        while (popped < total_frames) {
-            uint32_t n = ring->pop(buf);
-            popped += n;
-            if (n == 0) std::this_thread::yield();
+        void operator()() const {
+            std::vector<int16_t> chunk(64); // 32 frames at a time
+            int frames_pushed = 0;
+            while (frames_pushed < total_frames) {
+                int to_push = std::min(32, total_frames - frames_pushed);
+                for (int i = 0; i < to_push * 2; ++i)
+                    chunk[i] = static_cast<int16_t>((frames_pushed + i / 2) & 0x7FFF);
+                ring->push(std::span<const int16_t>(chunk.data(), to_push * 2));
+                frames_pushed += to_push;
+            }
         }
-        total_popped.store(popped);
-    });
+    };
+
+    struct ConsumerTask {
+        AudioRingBuffer* ring;
+        std::atomic<int>* total_popped;
+        int total_frames;
+
+        void operator()() const {
+            std::vector<int16_t> buf(64);
+            int popped = 0;
+            while (popped < total_frames) {
+                uint32_t n = ring->pop(buf);
+                popped += static_cast<int>(n);
+                if (n == 0) std::this_thread::yield();
+            }
+            total_popped->store(popped);
+        }
+    };
+
+    std::thread producer(ProducerTask{ring_ptr, total_frames});
+    std::thread consumer(ConsumerTask{ring_ptr, &total_popped, total_frames});
 
     producer.join();
     consumer.join();

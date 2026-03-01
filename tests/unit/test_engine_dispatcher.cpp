@@ -58,7 +58,8 @@ TEST_F(EngineDispatcherTest, DispatchShutdown) {
     create_req.deterministic = 1;
     std::vector<uint8_t> cpayload(CreateReq::serialized_size);
     create_req.serialize(cpayload);
-    dispatch(MsgType::CreateReq, cpayload);
+    auto create_result = dispatch(MsgType::CreateReq, cpayload);
+    ASSERT_TRUE(create_result.has_value());
 
     // Shutdown
     ShutdownMsg shutdown;
@@ -87,7 +88,8 @@ TEST_F(EngineDispatcherTest, DispatchStepMsAfterCreate) {
     create_req.deterministic = 1;
     std::vector<uint8_t> cpayload(CreateReq::serialized_size);
     create_req.serialize(cpayload);
-    dispatch(MsgType::CreateReq, cpayload);
+    auto create_result = dispatch(MsgType::CreateReq, cpayload);
+    ASSERT_TRUE(create_result.has_value());
 
     // Step
     StepMsReq step_req;
