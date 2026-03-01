@@ -86,7 +86,7 @@ SharedMemoryRegion::create(const std::string& name, size_t size) {
     region.size_ = size;
     region.handle_ = h;
     region.mapping_ = ptr;
-    return std::move(region);
+    return std::expected<SharedMemoryRegion, IpcError>{std::in_place, std::move(region)};
 }
 
 std::expected<SharedMemoryRegion, IpcError>
@@ -112,7 +112,7 @@ SharedMemoryRegion::open(const std::string& name, size_t size) {
     region.size_ = size;
     region.handle_ = h;
     region.mapping_ = ptr;
-    return std::move(region);
+    return std::expected<SharedMemoryRegion, IpcError>{std::in_place, std::move(region)};
 }
 
 } // namespace legends_ipc

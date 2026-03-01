@@ -88,7 +88,7 @@ EngineSpawner::spawn(const SpawnConfig& config) {
     EngineProcess proc;
     proc.pid_ = pi.dwProcessId;
     proc.process_handle_ = pi.hProcess;
-    return std::move(proc);
+    return std::expected<EngineProcess, IpcError>{std::in_place, std::move(proc)};
 }
 
 } // namespace legends_ipc

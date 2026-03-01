@@ -35,7 +35,7 @@ FramebufferShm::create(const std::string& name, uint32_t max_width, uint32_t max
     fb.header_->current_height = 0;
     fb.map_pointers();
 
-    return std::move(fb);
+    return std::expected<FramebufferShm, IpcError>{std::in_place, std::move(fb)};
 }
 
 std::expected<FramebufferShm, IpcError>
@@ -51,7 +51,7 @@ FramebufferShm::open(const std::string& name, uint32_t max_width, uint32_t max_h
     FramebufferShm fb;
     fb.region_ = std::move(*region);
     fb.map_pointers();
-    return std::move(fb);
+    return std::expected<FramebufferShm, IpcError>{std::in_place, std::move(fb)};
 }
 
 std::span<uint8_t> FramebufferShm::begin_write() {

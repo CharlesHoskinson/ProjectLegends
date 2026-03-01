@@ -36,7 +36,7 @@ AudioRingBuffer::create(const std::string& name, uint32_t capacity_frames,
     ring.header_->read_index.store(0, std::memory_order_relaxed);
     ring.map_pointers();
 
-    return std::move(ring);
+    return std::expected<AudioRingBuffer, IpcError>{std::in_place, std::move(ring)};
 }
 
 std::expected<AudioRingBuffer, IpcError>
@@ -60,7 +60,7 @@ AudioRingBuffer::open(const std::string& name, uint32_t capacity_frames,
         return std::unexpected(IpcError::VersionMismatch);
     }
 
-    return std::move(ring);
+    return std::expected<AudioRingBuffer, IpcError>{std::in_place, std::move(ring)};
 }
 
 uint32_t AudioRingBuffer::push(std::span<const int16_t> samples) {

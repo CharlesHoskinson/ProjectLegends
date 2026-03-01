@@ -91,7 +91,7 @@ EngineSpawner::spawn(const SpawnConfig& config) {
 
     EngineProcess proc;
     proc.pid_ = static_cast<uint32_t>(child_pid);
-    return std::move(proc);
+    return std::expected<EngineProcess, IpcError>{std::in_place, std::move(proc)};
 }
 
 } // namespace legends_ipc
