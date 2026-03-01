@@ -126,7 +126,7 @@ jobs:
             libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev \
             libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
             libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev \
-            libxss-dev
+            libxss-dev libxtst-dev
 
       - uses: actions/cache@v4
         with:

@@ -71,12 +71,13 @@ jobs:
             libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev \
             libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
             libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev \
-            libxss-dev
+            libxss-dev libxtst-dev
 
       - name: Build SDL3 from source
         run: |
           git clone --depth 1 https://github.com/libsdl-org/SDL.git -b main SDL3-src
-          cmake -B SDL3-src/build -S SDL3-src -DCMAKE_BUILD_TYPE=Release -DSDL_X11_XSCRNSAVER=OFF
+          cmake -B SDL3-src/build -S SDL3-src -DCMAKE_BUILD_TYPE=Release \
+            -DSDL_X11_XSCRNSAVER=OFF -DSDL_X11_XTEST=OFF
           cmake --build SDL3-src/build -j$(nproc)
           sudo cmake --install SDL3-src/build
 
