@@ -39,7 +39,7 @@ AudioRingBuffer::create(const std::string& name, uint32_t capacity_frames,
 
 std::expected<AudioRingBuffer, IpcError>
 AudioRingBuffer::open(const std::string& name, uint32_t capacity_frames,
-                       uint32_t channels, uint32_t sample_rate) {
+                       uint32_t channels, uint32_t /*sample_rate*/) {
     if (capacity_frames == 0 || channels == 0)
         return std::unexpected(IpcError::InvalidArgument);
 

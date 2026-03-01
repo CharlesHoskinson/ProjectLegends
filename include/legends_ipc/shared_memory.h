@@ -34,8 +34,10 @@ public:
     size_t size() const { return size_; }
     const std::string& name() const { return name_; }
 
-private:
+    // Default-constructs an empty (unmapped) region.
     SharedMemoryRegion() = default;
+
+private:
 
     std::string name_;
     uint8_t* data_ = nullptr;

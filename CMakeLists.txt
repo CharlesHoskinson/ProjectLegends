@@ -326,9 +326,9 @@ target_include_directories(legends_ipc
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(legends_ipc PRIVATE gsl::gsl-lite-v1)
+target_link_libraries(legends_ipc PUBLIC gsl::gsl-lite-v1)
 
-target_compile_definitions(legends_ipc PRIVATE
+target_compile_definitions(legends_ipc PUBLIC
     gsl_CONFIG_DEFAULTS_VERSION=1
     gsl_CONFIG_CONTRACT_CHECKING_ON
     gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
@@ -405,6 +405,7 @@ if(LEGENDS_USE_IPC)
     target_compile_definitions(legends_proxy
         PUBLIC
             LEGENDS_USE_IPC=1
+            LEGENDS_STATIC=1
     )
 endif()
 
@@ -414,12 +415,7 @@ endif()
 # When LEGENDS_USE_IPC is ON, the application shell links legends_proxy
 # instead of legends_core, removing all GPL object code from the binary.
 # This is the core mechanism for GPL v2 process isolation.
-#
-# if(LEGENDS_USE_IPC)
-#     target_link_libraries(project_legends PRIVATE legends_proxy legends_pal)
-# else()
-#     target_link_libraries(project_legends PRIVATE legends_core legends_pal)
-# endif()
+# The actual switch is inside the PAL_BACKEND_SDL2 block (Main Executable section).
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Wasm/WASI Target (Wasmtime Sandbox)
