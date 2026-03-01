@@ -4,11 +4,25 @@
 #include <cstring>
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 using namespace legends_ipc;
+
+static uint32_t current_pid() {
+#ifdef _WIN32
+    return static_cast<uint32_t>(::GetCurrentProcessId());
+#else
+    return static_cast<uint32_t>(::getpid());
+#endif
+}
 
 static std::string unique_name(const char* base) {
     static int counter = 0;
-    return std::string(base) + "_" + std::to_string(::GetCurrentProcessId()) +
+    return std::string(base) + "_" + std::to_string(current_pid()) +
            "_" + std::to_string(counter++);
 }
 
