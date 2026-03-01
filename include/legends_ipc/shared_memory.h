@@ -37,10 +37,12 @@ public:
     size_t size() const { return size_; }
     const std::string& name() const { return name_; }
 
+    // Default-constructs an empty (unmapped) region.
 private:
     friend class AudioRingBuffer;
     friend class FramebufferShm;
 
+    // Default-constructs an empty (unmapped) region.
     SharedMemoryRegion() = default;
 
     std::string name_;

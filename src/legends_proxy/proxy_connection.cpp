@@ -57,9 +57,9 @@ void ProxyConnection::disconnect() {
         shutdown.reason = 0;
         std::array<uint8_t, 4> buf{};
         shutdown.serialize(buf);
-        channel_->send(MsgType::Shutdown, 0, buf);
+        (void)channel_->send(MsgType::Shutdown, 0, buf);
         // Wait briefly for ack
-        channel_->recv(1000);
+        (void)channel_->recv(1000);
     }
     channel_.reset();
     fb_.reset();

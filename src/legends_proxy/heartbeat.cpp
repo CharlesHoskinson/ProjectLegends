@@ -46,7 +46,7 @@ void HeartbeatMonitor::heartbeat_loop() {
         hb.serialize(buf);
 
         if (channel_)
-            channel_->send(MsgType::Heartbeat, 0, buf);
+            (void)channel_->send(MsgType::Heartbeat, 0, buf);
 
         ack_pending_.store(true);
         last_send_ = std::chrono::steady_clock::now();
