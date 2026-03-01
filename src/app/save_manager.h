@@ -28,6 +28,7 @@ static_assert(sizeof(SaveStateHeader) == 18, "SaveStateHeader must be packed");
 class SaveManager {
 public:
     static constexpr int kMaxSlots = 9;
+    static constexpr int kAutosaveSlot = 0;  // REQ-UX-010: slot 0 reserved for crash autosave
     static constexpr size_t kMaxSaveSize = 256 * 1024 * 1024; // 256 MB limit
     static constexpr uint16_t kHeaderVersion = 1;
 
@@ -57,6 +58,12 @@ public:
 
     /// Compute CRC-32 of a data buffer (uses zlib crc32).
     static uint32_t computeCRC32(const void* data, size_t size);
+
+    /// REQ-UX-010: Check if a crash autosave exists.
+    bool hasAutosave() const { return isSlotOccupied(kAutosaveSlot); }
+
+    /// REQ-UX-010: Load the crash autosave and delete the file.
+    bool recoverAutosave(legends_handle engine);
 
 private:
     std::string last_error_;

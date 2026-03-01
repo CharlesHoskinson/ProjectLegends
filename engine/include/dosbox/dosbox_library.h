@@ -678,6 +678,43 @@ dosbox_lib_error_t dosbox_lib_get_cursor_info(
     dosbox_lib_cursor_info_t* info_out
 );
 
+/* =========================================================================
+ * DRIVE MOUNT/UNMOUNT API (REQ-API-004)
+ * ========================================================================= */
+
+/**
+ * @brief Mount a host directory as a DOS drive.
+ *
+ * Creates a localDrive for the given host path and installs it at the
+ * specified drive index (0=A, 1=B, ..., 25=Z).
+ *
+ * @param handle Valid handle
+ * @param drive_index Drive index 0-25 (A-Z)
+ * @param host_path Canonical host directory path
+ * @param readonly 1 to mount read-only, 0 for read-write
+ * @return DOSBOX_LIB_OK on success
+ */
+dosbox_lib_error_t dosbox_lib_mount_local(
+    dosbox_lib_handle_t handle,
+    int drive_index,
+    const char* host_path,
+    int readonly
+);
+
+/**
+ * @brief Unmount a DOS drive.
+ *
+ * Destroys the drive object at the given index and sets the slot to NULL.
+ *
+ * @param handle Valid handle
+ * @param drive_index Drive index 0-25 (A-Z)
+ * @return DOSBOX_LIB_OK on success, DOSBOX_LIB_ERR_INVALID_STATE if no drive mounted
+ */
+dosbox_lib_error_t dosbox_lib_unmount_drive(
+    dosbox_lib_handle_t handle,
+    int drive_index
+);
+
 #ifdef __cplusplus
 }
 #endif

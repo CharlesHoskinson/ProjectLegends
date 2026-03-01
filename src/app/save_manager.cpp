@@ -94,7 +94,7 @@ uint32_t SaveManager::computeCRC32(const void* data, size_t size) {
 
 bool SaveManager::saveToSlot(legends_handle engine, int slot,
                              const uint8_t* rgb_thumb, uint16_t w, uint16_t h) {
-    if (!engine || slot < 1 || slot > kMaxSlots) {
+    if (!engine || slot < 0 || slot > kMaxSlots) {
         last_error_ = "Invalid engine handle or slot number";
         return false;
     }
@@ -157,7 +157,7 @@ bool SaveManager::saveToSlot(legends_handle engine, int slot,
 }
 
 bool SaveManager::loadFromSlot(legends_handle engine, int slot) {
-    if (!engine || slot < 1 || slot > kMaxSlots) {
+    if (!engine || slot < 0 || slot > kMaxSlots) {
         last_error_ = "Invalid engine handle or slot number";
         return false;
     }
@@ -248,8 +248,19 @@ bool SaveManager::loadFromSlot(legends_handle engine, int slot) {
 }
 
 bool SaveManager::isSlotOccupied(int slot) const {
-    if (slot < 1 || slot > kMaxSlots) return false;
+    if (slot < 0 || slot > kMaxSlots) return false;
     return std::filesystem::exists(slotPath(slot));
+}
+
+bool SaveManager::recoverAutosave(legends_handle engine) {
+    if (!loadFromSlot(engine, kAutosaveSlot)) {
+        return false;
+    }
+    // Delete the autosave file after successful recovery
+    std::string path = slotPath(kAutosaveSlot);
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    return true;
 }
 
 bool SaveManager::atomicWrite(const std::string& path, const void* data, size_t size) {

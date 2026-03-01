@@ -32,6 +32,7 @@
 #include "app/crash_breadcrumb.h"
 #include "app/crash_reporter.h"
 #include "app/update_checker.h"
+#include "app/perf_overlay.h"
 
 #include <pal/platform.h>
 #include <legends/legends_embed.h>
@@ -163,6 +164,7 @@ private:
     FileLogger      file_logger_;
     ErrorReporter   error_reporter_;
     std::unique_ptr<UpdateChecker> update_checker_;
+    PerfOverlay     perf_overlay_;  // REQ-UX-005
 
     void registerActionHandlers();
     void updateWindowTitle();

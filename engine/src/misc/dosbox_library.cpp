@@ -16,6 +16,9 @@
 #include "dosbox/state_hash.h"
 #include "aibox/headless_stub.h"
 
+// Drive types for mount API (REQ-API-004)
+#include "../dos/drives.h"
+
 #include <cstring>
 #include <algorithm>
 
@@ -1780,6 +1783,93 @@ dosbox_lib_error_t dosbox_lib_get_cursor_info(
     info_out->start_line = cursor_start & 0x1F;
     info_out->end_line = cursor_end;
 
+    return DOSBOX_LIB_OK;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Drive Mount/Unmount API (REQ-API-004)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+dosbox_lib_error_t dosbox_lib_mount_local(
+    dosbox_lib_handle_t handle,
+    int drive_index,
+    const char* host_path,
+    int readonly
+) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(host_path != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+    LIB_REQUIRE(drive_index >= 0 && drive_index < 26, DOSBOX_LIB_ERR_INVALID_CONFIG);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    auto& fs = g_context->dos_filesystem;
+
+    // Fail if drive slot is already occupied
+    if (fs.drives[drive_index] != nullptr) {
+        LIB_LOG_ERROR("Drive slot already occupied");
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+
+    // Ensure path ends with path separator
+    std::string path(host_path);
+    if (!path.empty() && path.back() != '/' && path.back() != '\\') {
+        path += '/';
+    }
+
+    // Create localDrive with standard floppy/HDD geometry
+    // A/B are floppy geometry, C-Z are HDD geometry
+    uint16_t bytes_sector, total_clusters, free_clusters;
+    uint8_t sectors_cluster, mediaid;
+
+    if (drive_index < 2) {
+        // Floppy geometry: 512 bytes/sector, 1 sector/cluster, 2880 total, 2880 free
+        bytes_sector = 512;
+        sectors_cluster = 1;
+        total_clusters = 2880;
+        free_clusters = 2880;
+        mediaid = 0xF0;
+    } else {
+        // HDD geometry: 512 bytes/sector, 32 sectors/cluster, 32765 total, 32765 free
+        bytes_sector = 512;
+        sectors_cluster = 32;
+        total_clusters = 32765;
+        free_clusters = 32765;
+        mediaid = 0xF8;
+    }
+
+    std::vector<std::string> options;
+    auto* drive = new localDrive(path.c_str(), bytes_sector, sectors_cluster,
+                                  total_clusters, free_clusters, mediaid, options);
+    drive->readonly = (readonly != 0);
+
+    fs.drives[drive_index] = drive;
+
+    LIB_LOG_INFO("Drive mounted successfully");
+    return DOSBOX_LIB_OK;
+}
+
+dosbox_lib_error_t dosbox_lib_unmount_drive(
+    dosbox_lib_handle_t handle,
+    int drive_index
+) {
+    LIB_VALIDATE_HANDLE(handle);
+    LIB_CHECK_THREAD();
+    LIB_REQUIRE(drive_index >= 0 && drive_index < 26, DOSBOX_LIB_ERR_INVALID_CONFIG);
+    LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
+    LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
+
+    auto& fs = g_context->dos_filesystem;
+
+    if (fs.drives[drive_index] == nullptr) {
+        LIB_LOG_ERROR("No drive mounted at this index");
+        return DOSBOX_LIB_ERR_INVALID_STATE;
+    }
+
+    delete fs.drives[drive_index];
+    fs.drives[drive_index] = nullptr;
+
+    LIB_LOG_INFO("Drive unmounted successfully");
     return DOSBOX_LIB_OK;
 }
 

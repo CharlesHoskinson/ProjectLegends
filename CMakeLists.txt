@@ -802,6 +802,7 @@ if(LEGENDS_BUILD_TESTS)
         # Phase 2: Mounting + Video Capture
         tests/integration/test_mount_lifecycle.cpp
         tests/integration/test_video_capture_lifecycle.cpp
+        tests/integration/test_event_callbacks.cpp
     )
 
     legends_set_strict_cxx_standard(legends_integration_tests)
