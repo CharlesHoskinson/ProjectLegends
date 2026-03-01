@@ -98,7 +98,7 @@ ControlChannel::create_server(const std::string& pipe_name, uint32_t timeout_ms)
     ch.name_ = full_name;
     ch.is_server_ = true;
     ch.handle_ = h;
-    return ch;
+    return std::move(ch);
 }
 
 std::expected<ControlChannel, IpcError>
@@ -140,7 +140,7 @@ ControlChannel::connect_client(const std::string& pipe_name, uint32_t timeout_ms
     ch.name_ = full_name;
     ch.is_server_ = false;
     ch.handle_ = h;
-    return ch;
+    return std::move(ch);
 }
 
 std::expected<void, IpcError>

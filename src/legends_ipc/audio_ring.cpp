@@ -2,6 +2,7 @@
 #include <legends_ipc/audio_ring.h>
 #include <algorithm>
 #include <cstring>
+#include <utility>
 
 namespace legends_ipc {
 
@@ -26,15 +27,16 @@ AudioRingBuffer::create(const std::string& name, uint32_t capacity_frames,
 
     AudioRingBuffer ring;
     ring.region_ = std::move(*region);
-    ring.map_pointers();
-
+    auto d = ring.region_.data();
+    ring.header_ = reinterpret_cast<AudioRingHeader*>(d.data());
     ring.header_->capacity_frames = capacity_frames;
     ring.header_->channels        = channels;
     ring.header_->sample_rate     = sample_rate;
     ring.header_->write_index.store(0, std::memory_order_relaxed);
     ring.header_->read_index.store(0, std::memory_order_relaxed);
+    ring.map_pointers();
 
-    return ring;
+    return std::move(ring);
 }
 
 std::expected<AudioRingBuffer, IpcError>
@@ -51,7 +53,14 @@ AudioRingBuffer::open(const std::string& name, uint32_t capacity_frames,
     AudioRingBuffer ring;
     ring.region_ = std::move(*region);
     ring.map_pointers();
-    return ring;
+
+    if (ring.header_->capacity_frames != capacity_frames ||
+        ring.header_->channels != channels ||
+        ring.header_->sample_rate != sample_rate) {
+        return std::unexpected(IpcError::VersionMismatch);
+    }
+
+    return std::move(ring);
 }
 
 uint32_t AudioRingBuffer::push(std::span<const int16_t> samples) {

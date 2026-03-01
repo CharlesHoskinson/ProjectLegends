@@ -10,6 +10,9 @@
 
 namespace legends_ipc {
 
+class AudioRingBuffer;
+class FramebufferShm;
+
 // RAII, move-only shared memory region.
 // Platform-specific create/open in platform/{windows,posix}/.
 class SharedMemoryRegion {
@@ -35,6 +38,9 @@ public:
     const std::string& name() const { return name_; }
 
 private:
+    friend class AudioRingBuffer;
+    friend class FramebufferShm;
+
     SharedMemoryRegion() = default;
 
     std::string name_;

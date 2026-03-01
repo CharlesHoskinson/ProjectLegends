@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include <legends_ipc/framebuffer_shm.h>
 #include <cstring>
+#include <utility>
 
 namespace legends_ipc {
 
@@ -24,16 +25,17 @@ FramebufferShm::create(const std::string& name, uint32_t max_width, uint32_t max
 
     FramebufferShm fb;
     fb.region_ = std::move(*region);
-    fb.map_pointers();
-
+    auto d = fb.region_.data();
+    fb.header_ = reinterpret_cast<FramebufferHeader*>(d.data());
     fb.header_->max_width  = max_width;
     fb.header_->max_height = max_height;
     fb.header_->frame_index.store(0, std::memory_order_relaxed);
     fb.header_->active_buffer.store(0, std::memory_order_relaxed);
     fb.header_->current_width  = 0;
     fb.header_->current_height = 0;
+    fb.map_pointers();
 
-    return fb;
+    return std::move(fb);
 }
 
 std::expected<FramebufferShm, IpcError>
@@ -49,7 +51,7 @@ FramebufferShm::open(const std::string& name, uint32_t max_width, uint32_t max_h
     FramebufferShm fb;
     fb.region_ = std::move(*region);
     fb.map_pointers();
-    return fb;
+    return std::move(fb);
 }
 
 std::span<uint8_t> FramebufferShm::begin_write() {

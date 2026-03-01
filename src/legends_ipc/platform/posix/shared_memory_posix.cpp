@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <cstring>
+#include <utility>
 
 namespace legends_ipc {
 
@@ -80,7 +81,7 @@ SharedMemoryRegion::create(const std::string& name, size_t size) {
     region.data_ = static_cast<uint8_t*>(ptr);
     region.size_ = size;
     region.fd_ = fd;
-    return region;
+    return std::move(region);
 }
 
 std::expected<SharedMemoryRegion, IpcError>
@@ -105,7 +106,7 @@ SharedMemoryRegion::open(const std::string& name, size_t size) {
     region.data_ = static_cast<uint8_t*>(ptr);
     region.size_ = size;
     region.fd_ = fd;
-    return region;
+    return std::move(region);
 }
 
 } // namespace legends_ipc

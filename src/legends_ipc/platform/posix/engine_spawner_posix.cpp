@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <cstring>
+#include <utility>
 #include <vector>
 
 extern char** environ;
@@ -90,7 +91,7 @@ EngineSpawner::spawn(const SpawnConfig& config) {
 
     EngineProcess proc;
     proc.pid_ = static_cast<uint32_t>(child_pid);
-    return proc;
+    return std::move(proc);
 }
 
 } // namespace legends_ipc

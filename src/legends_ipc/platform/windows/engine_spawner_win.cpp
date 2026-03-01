@@ -7,6 +7,7 @@
 #endif
 #include <windows.h>
 #include <string>
+#include <utility>
 
 namespace legends_ipc {
 
@@ -87,7 +88,7 @@ EngineSpawner::spawn(const SpawnConfig& config) {
     EngineProcess proc;
     proc.pid_ = pi.dwProcessId;
     proc.process_handle_ = pi.hProcess;
-    return proc;
+    return std::move(proc);
 }
 
 } // namespace legends_ipc

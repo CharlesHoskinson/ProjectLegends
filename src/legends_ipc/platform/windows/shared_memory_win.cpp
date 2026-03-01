@@ -7,6 +7,7 @@
 #endif
 #include <windows.h>
 #include <string>
+#include <utility>
 
 namespace legends_ipc {
 
@@ -85,7 +86,7 @@ SharedMemoryRegion::create(const std::string& name, size_t size) {
     region.size_ = size;
     region.handle_ = h;
     region.mapping_ = ptr;
-    return region;
+    return std::move(region);
 }
 
 std::expected<SharedMemoryRegion, IpcError>
@@ -111,7 +112,7 @@ SharedMemoryRegion::open(const std::string& name, size_t size) {
     region.size_ = size;
     region.handle_ = h;
     region.mapping_ = ptr;
-    return region;
+    return std::move(region);
 }
 
 } // namespace legends_ipc
