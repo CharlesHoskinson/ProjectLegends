@@ -34,56 +34,65 @@ enum class InputEventType {
 /// @note host_timestamp_us is from IHostClock, NOT emulated time!
 ///       Event timestamps should NOT be used for emulation timing.
 struct InputEvent {
+    struct KeyEventData {
+        uint16_t scancode;   // Hardware scancode
+        uint16_t keycode;    // Logical key code
+        bool repeat;         // True if auto-repeated
+        bool _pad[3];
+    };
+
+    struct MouseMotionData {
+        int32_t x, y;        // Absolute position in window
+        int32_t dx, dy;      // Relative motion since last event
+    };
+
+    struct MouseButtonData {
+        uint8_t button;      // 1=left, 2=middle, 3=right, 4/5=extra
+        uint8_t clicks;      // 1=single, 2=double click
+        uint8_t _pad[2];
+        int32_t x, y;        // Position at click
+    };
+
+    struct MouseWheelData {
+        int32_t dx, dy;      // Scroll amount (positive = up/right)
+    };
+
+    struct JoystickAxisData {
+        uint8_t id;          // Joystick ID
+        uint8_t _pad;
+        int16_t axis;        // Axis index
+        int16_t value;       // -32768 to 32767
+    };
+
+    struct JoystickButtonData {
+        uint8_t id;          // Joystick ID
+        uint8_t button;      // Button index
+        bool pressed;        // True if pressed
+        uint8_t _pad;
+    };
+
+    struct WindowResizeData {
+        uint32_t width;      // New window width
+        uint32_t height;     // New window height
+    };
+
+    struct WindowFocusData {
+        bool focused;        // True if gained focus
+        uint8_t _pad[3];
+    };
+
     InputEventType type = InputEventType::None;
     uint64_t host_timestamp_us = 0;  // Host clock timestamp
 
     union {
-        struct {
-            uint16_t scancode;   // Hardware scancode
-            uint16_t keycode;    // Logical key code
-            bool repeat;         // True if auto-repeated
-            bool _pad[3];
-        } key;
-
-        struct {
-            int32_t x, y;        // Absolute position in window
-            int32_t dx, dy;      // Relative motion since last event
-        } mouse_motion;
-
-        struct {
-            uint8_t button;      // 1=left, 2=middle, 3=right, 4/5=extra
-            uint8_t clicks;      // 1=single, 2=double click
-            uint8_t _pad[2];
-            int32_t x, y;        // Position at click
-        } mouse_button;
-
-        struct {
-            int32_t dx, dy;      // Scroll amount (positive = up/right)
-        } mouse_wheel;
-
-        struct {
-            uint8_t id;          // Joystick ID
-            uint8_t _pad;
-            int16_t axis;        // Axis index
-            int16_t value;       // -32768 to 32767
-        } joy_axis;
-
-        struct {
-            uint8_t id;          // Joystick ID
-            uint8_t button;      // Button index
-            bool pressed;        // True if pressed
-            uint8_t _pad;
-        } joy_button;
-
-        struct {
-            uint32_t width;      // New window width
-            uint32_t height;     // New window height
-        } window_resize;
-
-        struct {
-            bool focused;        // True if gained focus
-            uint8_t _pad[3];
-        } window_focus;
+        KeyEventData key;
+        MouseMotionData mouse_motion;
+        MouseButtonData mouse_button;
+        MouseWheelData mouse_wheel;
+        JoystickAxisData joy_axis;
+        JoystickButtonData joy_button;
+        WindowResizeData window_resize;
+        WindowFocusData window_focus;
     };
 
     /// Default constructor - creates None event
