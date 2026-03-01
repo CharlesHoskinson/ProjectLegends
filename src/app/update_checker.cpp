@@ -3,8 +3,10 @@
 
 #include "app/update_checker.h"
 
+#include <algorithm>
 #include <charconv>
 #include <sstream>
+#include <vector>
 
 namespace legends {
 
