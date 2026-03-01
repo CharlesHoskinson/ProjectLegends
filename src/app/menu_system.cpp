@@ -263,6 +263,21 @@ bool MenuSystem::handleMouseClick(int32_t x, int32_t y) {
     }
 
     const auto& menu = menus_[static_cast<size_t>(selected_menu_)];
+    int max_label = 0;
+    for (const auto& item : menu.items) {
+        if (!item.separator) {
+            int len = static_cast<int>(item.label.size());
+            if (len > max_label) max_label = len;
+        }
+    }
+    int drop_w = (max_label + kItemPadX * 2) * kCharW;
+    if (drop_w < 80) drop_w = 80;
+
+    if (x < drop_x || x >= drop_x + drop_w) {
+        close();
+        return true;
+    }
+
     int drop_y = kMenuBarH;
     for (size_t i = 0; i < menu.items.size(); ++i) {
         int item_h = kCharH;
