@@ -28,15 +28,44 @@ set(LEGENDS_MODULE_ENGINE_PRIVATE_INCLUDE "engine/include;engine/src")
 set(LEGENDS_MODULE_ENGINE_TARGET "aibox_core")
 
 #------------------------------------------------------------------------------
+# Module: ipc (IPC Library — MIT-licensed)
+# Purpose: Message serialization, shared memory, named pipe transport
+#------------------------------------------------------------------------------
+set(LEGENDS_MODULE_IPC_PUBLIC_INCLUDE "include/legends_ipc")
+set(LEGENDS_MODULE_IPC_PRIVATE_INCLUDE "src/legends_ipc")
+set(LEGENDS_MODULE_IPC_TARGET "legends_ipc")
+
+#------------------------------------------------------------------------------
+# Module: proxy (Proxy Library — MIT-licensed)
+# Purpose: IPC frontend implementing legends_embed.h C API
+#------------------------------------------------------------------------------
+set(LEGENDS_MODULE_PROXY_PUBLIC_INCLUDE "include/legends_ipc")
+set(LEGENDS_MODULE_PROXY_PRIVATE_INCLUDE "src/legends_proxy")
+set(LEGENDS_MODULE_PROXY_TARGET "legends_proxy")
+
+#------------------------------------------------------------------------------
+# Module: engine_host (Engine Host — GPL-2.0)
+# Purpose: Runs DOSBox-X engine in separate process via IPC
+#------------------------------------------------------------------------------
+set(LEGENDS_MODULE_ENGINE_HOST_PRIVATE_INCLUDE "src/engine_host")
+set(LEGENDS_MODULE_ENGINE_HOST_TARGET "legends_engine_host")
+
+#------------------------------------------------------------------------------
 # Dependency Graph (DAG)
 #
-# legends_core --> aibox_core (legends depends on engine)
-# legends_pal --> (nothing, leaf node)
-# aibox_core --> (nothing, leaf node)
+# legends_core       --> aibox_core     (legends depends on engine)
+# legends_pal        --> (leaf)
+# aibox_core         --> (leaf)
+# legends_ipc        --> (leaf, MIT — no GPL deps)
+# legends_proxy      --> legends_ipc    (MIT only)
+# legends_engine_host --> legends_core;legends_ipc (GPL + IPC)
 #------------------------------------------------------------------------------
 set(LEGENDS_DAG_legends_core "aibox_core")
 set(LEGENDS_DAG_legends_pal "")
 set(LEGENDS_DAG_aibox_core "")
+set(LEGENDS_DAG_legends_ipc "")
+set(LEGENDS_DAG_legends_proxy "legends_ipc")
+set(LEGENDS_DAG_legends_engine_host "legends_core;legends_ipc")
 
 #------------------------------------------------------------------------------
 # Public Header Allowlists
@@ -45,6 +74,7 @@ set(LEGENDS_DAG_aibox_core "")
 set(LEGENDS_PUBLIC_HEADERS
     "include/legends"
     "include/pal"
+    "include/legends_ipc"
     "engine/include/dosbox"
     "engine/include/aibox"
 )

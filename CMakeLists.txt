@@ -306,6 +306,16 @@ endif()
 
 add_library(legends_ipc STATIC
     src/legends_ipc/protocol.cpp
+    src/legends_ipc/messages.cpp
+    src/legends_ipc/message_codec.cpp
+    src/legends_ipc/framebuffer_shm.cpp
+    src/legends_ipc/audio_ring.cpp
+    $<$<PLATFORM_ID:Windows>:src/legends_ipc/platform/windows/shared_memory_win.cpp>
+    $<$<NOT:$<PLATFORM_ID:Windows>>:src/legends_ipc/platform/posix/shared_memory_posix.cpp>
+    $<$<PLATFORM_ID:Windows>:src/legends_ipc/platform/windows/control_channel_win.cpp>
+    $<$<NOT:$<PLATFORM_ID:Windows>>:src/legends_ipc/platform/posix/control_channel_posix.cpp>
+    $<$<PLATFORM_ID:Windows>:src/legends_ipc/platform/windows/engine_spawner_win.cpp>
+    $<$<NOT:$<PLATFORM_ID:Windows>>:src/legends_ipc/platform/posix/engine_spawner_posix.cpp>
 )
 
 legends_set_strict_cxx_standard(legends_ipc)
@@ -314,6 +324,14 @@ target_include_directories(legends_ipc
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+target_link_libraries(legends_ipc PRIVATE gsl::gsl-lite-v1)
+
+target_compile_definitions(legends_ipc PRIVATE
+    gsl_CONFIG_DEFAULTS_VERSION=1
+    gsl_CONFIG_CONTRACT_CHECKING_ON
+    gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
 )
 
 # IMPORTANT: legends_ipc must NOT link any GPL-licensed targets.
@@ -330,6 +348,9 @@ target_include_directories(legends_ipc
 if(LEGENDS_USE_IPC)
     add_executable(legends_engine_host
         src/engine_host/main.cpp
+        src/engine_host/cli_parser.cpp
+        src/engine_host/engine_dispatcher.cpp
+        src/engine_host/version_info.cpp
     )
 
     legends_set_strict_cxx_standard(legends_engine_host)
@@ -337,6 +358,10 @@ if(LEGENDS_USE_IPC)
     target_link_libraries(legends_engine_host PRIVATE
         legends_core
         legends_ipc
+    )
+
+    target_include_directories(legends_engine_host PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/engine_host
     )
 
     target_compile_definitions(legends_engine_host PRIVATE
@@ -355,6 +380,9 @@ endif()
 if(LEGENDS_USE_IPC)
     add_library(legends_proxy STATIC
         src/legends_proxy/proxy_api.cpp
+        src/legends_proxy/proxy_connection.cpp
+        src/legends_proxy/crash_handler.cpp
+        src/legends_proxy/heartbeat.cpp
     )
 
     legends_set_strict_cxx_standard(legends_proxy)
@@ -363,6 +391,8 @@ if(LEGENDS_USE_IPC)
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/legends_proxy
     )
 
     # IMPORTANT: legends_proxy must NOT link any GPL-licensed targets.
@@ -377,6 +407,19 @@ if(LEGENDS_USE_IPC)
             LEGENDS_USE_IPC=1
     )
 endif()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Backend Switch: IPC mode vs monolithic
+# ─────────────────────────────────────────────────────────────────────────────
+# When LEGENDS_USE_IPC is ON, the application shell links legends_proxy
+# instead of legends_core, removing all GPL object code from the binary.
+# This is the core mechanism for GPL v2 process isolation.
+#
+# if(LEGENDS_USE_IPC)
+#     target_link_libraries(project_legends PRIVATE legends_proxy legends_pal)
+# else()
+#     target_link_libraries(project_legends PRIVATE legends_core legends_pal)
+# endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Wasm/WASI Target (Wasmtime Sandbox)
@@ -578,6 +621,22 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_portable_mode.cpp
         # Phase 4 Sprint 7: Update checker
         tests/unit/test_update_checker.cpp
+        # IPC Process Isolation
+        tests/unit/test_ipc_wire_format.cpp
+        tests/unit/test_ipc_message_header.cpp
+        tests/unit/test_ipc_messages.cpp
+        tests/unit/test_ipc_message_codec.cpp
+        tests/unit/test_ipc_shared_memory.cpp
+        tests/unit/test_ipc_framebuffer_shm.cpp
+        tests/unit/test_ipc_audio_ring.cpp
+        tests/unit/test_ipc_control_channel.cpp
+        tests/unit/test_engine_host_cli.cpp
+        tests/unit/test_engine_dispatcher.cpp
+        tests/unit/test_proxy_connection.cpp
+        tests/unit/test_proxy_api.cpp
+        tests/unit/test_engine_spawner.cpp
+        tests/unit/test_crash_handler.cpp
+        tests/unit/test_heartbeat.cpp
     )
 
     # Apply C++23 standard (Tier A - tests should be strict too)
@@ -586,6 +645,7 @@ if(LEGENDS_BUILD_TESTS)
     target_link_libraries(legends_unit_tests PRIVATE
         legends_core
         legends_pal
+        legends_ipc
         GTest::gtest_main
         GTest::gmock
         gsl::gsl-lite-v1  # Tests may use gsl-lite directly for testing
@@ -641,6 +701,9 @@ if(LEGENDS_BUILD_TESTS)
         engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture tests
         engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
         src/app/application.cpp              # Application lifecycle tests
+        # Engine host sources for IPC dispatcher tests
+        src/engine_host/cli_parser.cpp
+        src/engine_host/engine_dispatcher.cpp
         # Platform-specific update checker (needed by application.cpp)
         $<$<PLATFORM_ID:Windows>:src/app/update_checker_win.cpp>
         $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
@@ -650,6 +713,7 @@ if(LEGENDS_BUILD_TESTS)
     target_include_directories(legends_unit_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/legends  # F6: internal FFI headers
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/engine_host  # Engine host dispatcher tests
         ${CMAKE_CURRENT_SOURCE_DIR}/external
         ${CMAKE_CURRENT_SOURCE_DIR}/external/glad  # glad GL loader
         ${CMAKE_CURRENT_SOURCE_DIR}/engine/src/libs  # ZMBV codec headers
@@ -679,6 +743,36 @@ if(LEGENDS_BUILD_TESTS)
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         PROPERTIES LABELS "unit"
     )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # IPC Integration Tests (requires LEGENDS_USE_IPC and engine host)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    if(LEGENDS_USE_IPC)
+        add_executable(legends_ipc_integration_tests
+            tests/integration/test_ipc_integration.cpp
+        )
+
+        legends_set_strict_cxx_standard(legends_ipc_integration_tests)
+
+        target_link_libraries(legends_ipc_integration_tests PRIVATE
+            legends_ipc
+            GTest::gtest_main
+        )
+
+        target_compile_definitions(legends_ipc_integration_tests PRIVATE
+            gsl_CONFIG_DEFAULTS_VERSION=1
+            gsl_CONFIG_CONTRACT_CHECKING_ON
+            gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
+        )
+
+        add_dependencies(legends_ipc_integration_tests legends_engine_host)
+
+        gtest_discover_tests(legends_ipc_integration_tests
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            PROPERTIES LABELS "integration;ipc"
+        )
+    endif()
 
     # ─────────────────────────────────────────────────────────────────────────
     # ABI Test (Pure C)
@@ -949,6 +1043,25 @@ if(LEGENDS_BUILD_BENCHMARKS)
 
     target_compile_definitions(emulation_benchmarks PRIVATE
         LEGENDS_LIBRARY_MODE=1
+    )
+
+    # IPC performance benchmarks (Sprint 8: Process Isolation)
+    add_executable(legends_ipc_benchmarks
+        benchmarks/bench_ipc_overhead.cpp
+    )
+
+    legends_set_strict_cxx_standard(legends_ipc_benchmarks)
+
+    target_link_libraries(legends_ipc_benchmarks PRIVATE
+        legends_ipc
+        benchmark::benchmark
+        benchmark::benchmark_main
+    )
+
+    target_compile_definitions(legends_ipc_benchmarks PRIVATE
+        gsl_CONFIG_DEFAULTS_VERSION=1
+        gsl_CONFIG_CONTRACT_CHECKING_ON
+        gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
     )
 endif()
 
