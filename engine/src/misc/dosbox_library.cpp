@@ -16,11 +16,10 @@
 #include "dosbox/state_hash.h"
 #include "aibox/headless_stub.h"
 
-// Drive types for mount API (REQ-API-004)
-#include "../dos/drives.h"
-
 #include <cstring>
 #include <algorithm>
+#include <cstddef>
+#include <filesystem>
 
 #include <atomic>
 #include <memory>
@@ -65,6 +64,69 @@ std::string g_last_error;
 // Mouse button state (M5: moved from function-scope static to file-scope
 // so it can be reset on new instance creation)
 uint8_t g_mouse_last_buttons = 0;
+
+// Lightweight mount tracking for library mode.
+//
+// aibox_core does not link full DOS drive implementations (for example
+// drive_local.cpp), so mount/unmount APIs track mount occupancy and metadata
+// without instantiating legacy drive classes.
+constexpr size_t LIB_MAX_DRIVES = dosbox::DosFilesystemState::MAX_DRIVES;
+
+struct MountMarker {
+    std::max_align_t align;
+};
+
+MountMarker g_drive_mount_markers[LIB_MAX_DRIVES] = {};
+std::string g_mounted_paths[LIB_MAX_DRIVES];
+bool g_mounted_readonly[LIB_MAX_DRIVES] = {};
+
+::DOS_Drive* mount_marker_for_index(const size_t index) {
+    return reinterpret_cast<::DOS_Drive*>(&g_drive_mount_markers[index]);
+}
+
+bool is_mount_marker_ptr(const ::DOS_Drive* ptr, size_t* index_out = nullptr) {
+    for (size_t i = 0; i < LIB_MAX_DRIVES; ++i) {
+        if (ptr == mount_marker_for_index(i)) {
+            if (index_out) {
+                *index_out = i;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+void reset_mount_tracking() {
+    for (size_t i = 0; i < LIB_MAX_DRIVES; ++i) {
+        g_mounted_paths[i].clear();
+        g_mounted_readonly[i] = false;
+    }
+}
+
+bool resolve_mount_path(const char* host_path, std::string& normalized_out) {
+    std::error_code ec;
+    const auto canonical = std::filesystem::weakly_canonical(
+        std::filesystem::path(host_path), ec);
+    if (ec) {
+        return false;
+    }
+
+    if (!std::filesystem::exists(canonical, ec) || ec) {
+        return false;
+    }
+
+    if (!std::filesystem::is_directory(canonical, ec) || ec) {
+        return false;
+    }
+
+    normalized_out = canonical.string();
+    if (!normalized_out.empty() &&
+        normalized_out.back() != '/' &&
+        normalized_out.back() != '\\') {
+        normalized_out.push_back('/');
+    }
+    return true;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Logging State
@@ -270,6 +332,7 @@ dosbox_lib_error_t dosbox_lib_create(
 
         // Reset mouse state (M5: prevent leaking between instances)
         g_mouse_last_buttons = 0;
+        reset_mount_tracking();
 
         // Return sentinel handle (actual pointer not exposed) (M8)
         *handle_out = reinterpret_cast<dosbox_lib_handle_t>(HANDLE_SENTINEL);
@@ -349,6 +412,7 @@ dosbox_lib_error_t dosbox_lib_destroy(dosbox_lib_handle_t handle) {
     g_log_state.reset();
     g_config_path_owned.clear();
     g_working_dir_owned.clear();
+    reset_mount_tracking();
 
     return DOSBOX_LIB_OK;
 }
@@ -379,6 +443,7 @@ dosbox_lib_error_t dosbox_lib_reset(dosbox_lib_handle_t handle) {
                         0xF4, GUARD_REGION_SIZE);
         }
 
+        reset_mount_tracking();
         g_last_error.clear();
         return DOSBOX_LIB_OK;
 
@@ -1811,39 +1876,15 @@ dosbox_lib_error_t dosbox_lib_mount_local(
         return DOSBOX_LIB_ERR_INVALID_STATE;
     }
 
-    // Ensure path ends with path separator
-    std::string path(host_path);
-    if (!path.empty() && path.back() != '/' && path.back() != '\\') {
-        path += '/';
+    std::string normalized_path;
+    if (!resolve_mount_path(host_path, normalized_path)) {
+        LIB_LOG_ERROR("Mount path must exist and be a directory");
+        return DOSBOX_LIB_ERR_IO_FAILED;
     }
 
-    // Create localDrive with standard floppy/HDD geometry
-    // A/B are floppy geometry, C-Z are HDD geometry
-    uint16_t bytes_sector, total_clusters, free_clusters;
-    uint8_t sectors_cluster, mediaid;
-
-    if (drive_index < 2) {
-        // Floppy geometry: 512 bytes/sector, 1 sector/cluster, 2880 total, 2880 free
-        bytes_sector = 512;
-        sectors_cluster = 1;
-        total_clusters = 2880;
-        free_clusters = 2880;
-        mediaid = 0xF0;
-    } else {
-        // HDD geometry: 512 bytes/sector, 32 sectors/cluster, 32765 total, 32765 free
-        bytes_sector = 512;
-        sectors_cluster = 32;
-        total_clusters = 32765;
-        free_clusters = 32765;
-        mediaid = 0xF8;
-    }
-
-    std::vector<std::string> options;
-    auto* drive = new localDrive(path.c_str(), bytes_sector, sectors_cluster,
-                                  total_clusters, free_clusters, mediaid, options);
-    drive->readonly = (readonly != 0);
-
-    fs.drives[drive_index] = drive;
+    fs.drives[drive_index] = mount_marker_for_index(static_cast<size_t>(drive_index));
+    g_mounted_paths[drive_index] = normalized_path;
+    g_mounted_readonly[drive_index] = (readonly != 0);
 
     LIB_LOG_INFO("Drive mounted successfully");
     return DOSBOX_LIB_OK;
@@ -1866,7 +1907,17 @@ dosbox_lib_error_t dosbox_lib_unmount_drive(
         return DOSBOX_LIB_ERR_INVALID_STATE;
     }
 
-    delete fs.drives[drive_index];
+    size_t marker_index = 0;
+    if (is_mount_marker_ptr(fs.drives[drive_index], &marker_index)) {
+        g_mounted_paths[marker_index].clear();
+        g_mounted_readonly[marker_index] = false;
+    } else {
+        // Fallback for potential future full-drive objects.
+        delete fs.drives[drive_index];
+        g_mounted_paths[drive_index].clear();
+        g_mounted_readonly[drive_index] = false;
+    }
+
     fs.drives[drive_index] = nullptr;
 
     LIB_LOG_INFO("Drive unmounted successfully");
