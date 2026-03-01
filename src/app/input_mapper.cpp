@@ -10,6 +10,27 @@
 #include <sstream>
 
 namespace legends {
+namespace {
+
+bool parseHexUint16(const std::string& token, uint16_t& value) {
+    size_t parsed = 0;
+    unsigned long raw = 0;
+
+    try {
+        raw = std::stoul(token, &parsed, 16);
+    } catch (...) {
+        return false;
+    }
+
+    if (parsed != token.size() || raw > 0xFFFFUL) {
+        return false;
+    }
+
+    value = static_cast<uint16_t>(raw);
+    return true;
+}
+
+} // namespace
 
 bool InputMapper::loadFromFile(const std::string& path) {
     std::ifstream file(path);
@@ -25,18 +46,13 @@ bool InputMapper::loadFromFile(const std::string& path) {
         std::string from_str, to_str;
         if (!(iss >> from_str >> to_str)) continue;
 
-        // Parse hex values (with or without 0x prefix)
-        unsigned long from_val = 0, to_val = 0;
-        try {
-            from_val = std::stoul(from_str, nullptr, 16);
-            to_val = std::stoul(to_str, nullptr, 16);
-        } catch (...) {
+        uint16_t from_val = 0;
+        uint16_t to_val = 0;
+        if (!parseHexUint16(from_str, from_val) || !parseHexUint16(to_str, to_val)) {
             continue; // Skip malformed lines
         }
 
-        if (from_val <= 0xFFFF && to_val <= 0xFFFF) {
-            remaps_[static_cast<uint16_t>(from_val)] = static_cast<uint16_t>(to_val);
-        }
+        remaps_[from_val] = to_val;
     }
 
     return true;

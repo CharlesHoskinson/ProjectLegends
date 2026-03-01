@@ -955,22 +955,84 @@ endif()
 # Main Executable
 # ─────────────────────────────────────────────────────────────────────────────
 
+set(LEGENDS_APP_EXEC_SOURCES
+    src/app/application.cpp
+    src/app/action_bus.cpp
+    src/app/capture.cpp
+    src/app/input_mapper.cpp
+    src/app/save_manager.cpp
+    src/app/menu_system.cpp
+    src/app/hotkey_dispatcher.cpp
+    src/app/cli_parser.cpp
+    src/app/config_parser.cpp
+    src/app/platform_dirs.cpp
+    src/app/scancode_map.cpp
+    src/app/mount_manager.cpp
+    src/app/image_validator.cpp
+    src/app/zmbv_codec.cpp
+    src/app/video_capture.cpp
+    src/app/mapper_ui.cpp
+    src/app/save_browser.cpp
+    # Phase 3: Enhanced Features
+    src/app/joystick_mapper.cpp
+    src/app/shader_renderer.cpp
+    src/app/shader_presets.cpp
+    src/app/ai_config.cpp
+    src/app/ai_http_client.cpp
+    src/app/ai_screen_context.cpp
+    src/app/ai_panel.cpp
+    src/app/audio_mixer.cpp
+    src/app/midi_config.cpp
+    src/app/printer_manager.cpp
+    src/app/ttf_renderer.cpp
+    src/app/ipx_config.cpp
+    src/app/glide_config.cpp
+    src/app/pc98_config.cpp
+    # Phase 4: Polish & Release
+    src/app/file_logger.cpp
+    src/app/error_reporter.cpp
+    src/app/crash_breadcrumb.cpp
+    src/app/crash_reporter.cpp
+    # Phase 4 Sprint 4: SSIM
+    src/app/ssim.cpp
+    # Phase 4 Sprint 6: Portable mode
+    src/app/portable_mode.cpp
+    # Phase 4 Sprint 7: Update checker (platform-conditional)
+    src/app/update_checker.cpp
+    $<$<PLATFORM_ID:Windows>:src/app/update_checker_win.cpp>
+    $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
+    $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
+    external/glad/glad.c
+    engine/src/libs/zmbv/zmbv.cpp
+    engine/src/libs/zmbv/zmbv_stubs.cpp  # ZMBV codec fallback when C_SSHOT is disabled
+)
+
 # Build the interactive emulator executable when SDL2 is available
 if(PAL_BACKEND_SDL2)
     add_executable(project_legends
         src/main.cpp
+        ${LEGENDS_APP_EXEC_SOURCES}
     )
 
     legends_set_strict_cxx_standard(project_legends)
 
     target_include_directories(project_legends PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/external
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/glad
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine/src/libs  # ZMBV codec headers
+        ${CMAKE_BINARY_DIR}/include
     )
 
-    target_link_directories(project_legends PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/lib
-    )
+    if(WIN32)
+        target_include_directories(project_legends PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/include
+        )
+        target_link_directories(project_legends PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/lib
+        )
+    endif()
 
     # In IPC mode, link the proxy (MIT) instead of legends_core (GPL).
     # In monolithic mode (default), link legends_core directly.
@@ -978,9 +1040,6 @@ if(PAL_BACKEND_SDL2)
         target_link_libraries(project_legends PRIVATE
             legends_proxy
             legends_pal
-            mingw32
-            SDL2main
-            SDL2
         )
         target_compile_definitions(project_legends PRIVATE
             LEGENDS_USE_IPC=1
@@ -989,18 +1048,48 @@ if(PAL_BACKEND_SDL2)
         target_link_libraries(project_legends PRIVATE
             legends_core
             legends_pal
+            gsl::gsl-lite-v1
+        )
+    endif()
+
+    if(WIN32)
+        target_link_libraries(project_legends PRIVATE
             mingw32
             SDL2main
             SDL2
         )
+    else()
+        target_link_libraries(project_legends PRIVATE SDL2::SDL2)
     endif()
 
-    # Copy SDL2.dll to output directory
-    add_custom_command(TARGET project_legends POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/bin/SDL2.dll"
-            "$<TARGET_FILE_DIR:project_legends>"
+    target_compile_definitions(project_legends PRIVATE
+        gsl_CONFIG_DEFAULTS_VERSION=1
+        gsl_CONFIG_CONTRACT_CHECKING_ON
+        gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
     )
+
+    # Phase 3: Optional feature-gated library linking
+    if(LEGENDS_ENABLE_AI AND CURL_FOUND)
+        target_link_libraries(project_legends PRIVATE CURL::libcurl)
+        target_compile_definitions(project_legends PRIVATE LEGENDS_HAS_CURL=1)
+    endif()
+    if(LEGENDS_ENABLE_FLUIDSYNTH AND FluidSynth_FOUND)
+        target_link_libraries(project_legends PRIVATE FluidSynth::FluidSynth)
+        target_compile_definitions(project_legends PRIVATE LEGENDS_HAS_FLUIDSYNTH=1)
+    endif()
+    if(LEGENDS_ENABLE_MT32 AND TARGET mt32emu)
+        target_link_libraries(project_legends PRIVATE mt32emu)
+        target_compile_definitions(project_legends PRIVATE LEGENDS_HAS_MT32=1)
+    endif()
+
+    # Copy SDL2.dll to output directory (vendored Windows layout)
+    if(WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/bin/SDL2.dll")
+        add_custom_command(TARGET project_legends POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/bin/SDL2.dll"
+                "$<TARGET_FILE_DIR:project_legends>"
+        )
+    endif()
 
     message(STATUS "Building project_legends executable with SDL2")
 endif()
@@ -1009,55 +1098,7 @@ endif()
 if(PAL_BACKEND_SDL3)
     add_executable(project_legends
         src/main.cpp
-        src/app/application.cpp
-        src/app/action_bus.cpp
-        src/app/capture.cpp
-        src/app/input_mapper.cpp
-        src/app/save_manager.cpp
-        src/app/menu_system.cpp
-        src/app/hotkey_dispatcher.cpp
-        src/app/cli_parser.cpp
-        src/app/config_parser.cpp
-        src/app/platform_dirs.cpp
-        src/app/scancode_map.cpp
-        src/app/mount_manager.cpp
-        src/app/image_validator.cpp
-        src/app/zmbv_codec.cpp
-        src/app/video_capture.cpp
-        src/app/mapper_ui.cpp
-        src/app/save_browser.cpp
-        # Phase 3: Enhanced Features
-        src/app/joystick_mapper.cpp
-        src/app/shader_renderer.cpp
-        src/app/shader_presets.cpp
-        src/app/ai_config.cpp
-        src/app/ai_http_client.cpp
-        src/app/ai_screen_context.cpp
-        src/app/ai_panel.cpp
-        src/app/audio_mixer.cpp
-        src/app/midi_config.cpp
-        src/app/printer_manager.cpp
-        src/app/ttf_renderer.cpp
-        src/app/ipx_config.cpp
-        src/app/glide_config.cpp
-        src/app/pc98_config.cpp
-        # Phase 4: Polish & Release
-        src/app/file_logger.cpp
-        src/app/error_reporter.cpp
-        src/app/crash_breadcrumb.cpp
-        src/app/crash_reporter.cpp
-        # Phase 4 Sprint 4: SSIM
-        src/app/ssim.cpp
-        # Phase 4 Sprint 6: Portable mode
-        src/app/portable_mode.cpp
-        # Phase 4 Sprint 7: Update checker (platform-conditional)
-        src/app/update_checker.cpp
-        $<$<PLATFORM_ID:Windows>:src/app/update_checker_win.cpp>
-        $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
-        $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
-        external/glad/glad.c
-        engine/src/libs/zmbv/zmbv.cpp
-        engine/src/libs/zmbv/zmbv_stubs.cpp  # ZMBV codec fallback when C_SSHOT is disabled
+        ${LEGENDS_APP_EXEC_SOURCES}
     )
 
     legends_set_strict_cxx_standard(project_legends)

@@ -45,10 +45,14 @@ static size_t getCurrentRSS() {
     // Linux: read /proc/self/statm
     std::FILE* f = std::fopen("/proc/self/statm", "r");
     if (!f) return 0;
-    long pages = 0;
-    if (std::fscanf(f, "%*ld %ld", &pages) != 1) pages = 0;
+    long total_pages = 0;
+    long resident_pages = 0;
+    if (std::fscanf(f, "%ld %ld", &total_pages, &resident_pages) != 2) {
+        resident_pages = 0;
+    }
+    (void)total_pages;
     std::fclose(f);
-    return static_cast<size_t>(pages) * 4096;
+    return static_cast<size_t>(resident_pages) * 4096;
 #endif
 }
 
@@ -242,16 +246,8 @@ TEST_F(SoakEnduranceTest, HashConsistencyOverTime) {
         legends_get_state_hash(engine_, hashes[i]);
     }
 
-    // At least some hashes should be different (engine is progressing)
-    bool all_same = true;
-    for (int i = 1; i < kSamples; ++i) {
-        if (memcmp(hashes[i], hashes[0], 32) != 0) {
-            all_same = false;
-            break;
-        }
-    }
-    // In deterministic mode the hash may or may not change depending on what the engine does
-    // but it should never be zero
+    // In deterministic mode the hash may or may not change depending on what
+    // the engine does, but it should never be zero.
     uint8_t zero[32] = {};
     for (int i = 0; i < kSamples; ++i) {
         EXPECT_NE(memcmp(hashes[i], zero, 32), 0) << "Hash should not be zero";

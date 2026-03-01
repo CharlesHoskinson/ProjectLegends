@@ -45,10 +45,14 @@ jobs:
             cc: gcc-13
             cxx: g++-13
             pkg: gcc-13 g++-13
+            cxx_flags: ""
+            linker_flags: ""
           - compiler: clang
             cc: clang-18
             cxx: clang++-18
-            pkg: clang-18 g++-13
+            pkg: clang-18 libc++-18-dev libc++abi-18-dev
+            cxx_flags: "-stdlib=libc++"
+            linker_flags: "-stdlib=libc++"
 
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +67,8 @@ jobs:
           cmake -B build -G Ninja \
             -DCMAKE_C_COMPILER=${{ matrix.cc }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}" \
+            -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.linker_flags }}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DLEGENDS_BUILD_TESTS=ON \
             -DLEGENDS_HEADLESS=ON
@@ -88,10 +94,14 @@ jobs:
             cc: gcc-13
             cxx: g++-13
             pkg: gcc-13 g++-13
+            cxx_flags: ""
+            linker_flags: ""
           - compiler: clang
             cc: clang-18
             cxx: clang++-18
-            pkg: clang-18 g++-13
+            pkg: clang-18 libc++-18-dev libc++abi-18-dev
+            cxx_flags: "-stdlib=libc++"
+            linker_flags: "-stdlib=libc++"
 
     steps:
       - uses: actions/checkout@v4
@@ -102,7 +112,8 @@ jobs:
           sudo apt-get install -y cmake ninja-build ${{ matrix.pkg }} \
             libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev \
             libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
-            libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev
+            libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev \
+            libxss-dev
 
       - uses: actions/cache@v4
         with:
@@ -114,6 +125,8 @@ jobs:
           cmake -B build -G Ninja \
             -DCMAKE_C_COMPILER=${{ matrix.cc }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_CXX_FLAGS="${{ matrix.cxx_flags }}" \
+            -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.linker_flags }}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DPAL_BACKEND_SDL3=ON \
             -DLEGENDS_BUILD_TESTS=ON \
@@ -259,7 +272,7 @@ jobs:
           # MSan requires all code (including libc++) to be instrumented.
           # Uses clang-18 with libc++ for full coverage.
           - sanitizer: memory
-            flags: "-fsanitize=memory -fPIE -pie -stdlib=libc++ -fno-omit-frame-pointer"
+            flags: "-fsanitize=memory -fPIE -pie -fno-omit-frame-pointer"
             env: "MSAN_OPTIONS=halt_on_error=1"
 
     steps:
@@ -276,9 +289,9 @@ jobs:
             -DCMAKE_C_COMPILER=clang-18 \
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++ ${{ matrix.flags }}" \
             -DCMAKE_C_FLAGS="${{ matrix.flags }}" \
-            -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.flags }}" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ ${{ matrix.flags }}" \
             -DLEGENDS_BUILD_TESTS=ON \
             -DLEGENDS_HEADLESS=ON
 
@@ -334,7 +347,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build clang-18 clang-tidy-18 g++-13
+          sudo apt-get install -y cmake ninja-build clang-18 clang-tidy-18 libc++-18-dev libc++abi-18-dev
 
       - name: Configure (generate compile_commands.json)
         run: |
@@ -342,6 +355,8 @@ jobs:
             -DCMAKE_C_COMPILER=clang-18 \
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             -DLEGENDS_BUILD_TESTS=ON \
             -DLEGENDS_HEADLESS=ON
@@ -377,7 +392,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build clang-18 g++-13
+          sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev
 
       - name: Configure
         run: |
@@ -385,6 +400,8 @@ jobs:
             -DCMAKE_C_COMPILER=clang-18 \
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" \
             -DENABLE_FUZZING=ON \
             -DENABLE_ASAN=ON \
             -DLEGENDS_BUILD_TESTS=ON \

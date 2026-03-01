@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 #include "dosbox/platform/headless.h"
+#include <cmath>
 #include <thread>
 #include <atomic>
 

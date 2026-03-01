@@ -22,11 +22,31 @@
 
 #include "programs.h"
 
-#include <SDL.h>
-#if SDL_VERSION_ATLEAST(2, 0, 0)
-#define SDL_STRING "SDL2"
+#if defined(C_HEADLESS) || defined(AIBOX_HEADLESS) || defined(LEGENDS_HEADLESS)
+#define SDL_STRING "Headless"
 #else
-#define SDL_STRING "SDL1"
+  #if defined(__has_include)
+    #if __has_include(<SDL3/SDL.h>)
+      #include <SDL3/SDL.h>
+      #define SDL_STRING "SDL3"
+    #elif __has_include(<SDL.h>)
+      #include <SDL.h>
+      #if SDL_VERSION_ATLEAST(2, 0, 0)
+        #define SDL_STRING "SDL2"
+      #else
+        #define SDL_STRING "SDL1"
+      #endif
+    #else
+      #define SDL_STRING "SDL"
+    #endif
+  #else
+    #include <SDL.h>
+    #if SDL_VERSION_ATLEAST(2, 0, 0)
+      #define SDL_STRING "SDL2"
+    #else
+      #define SDL_STRING "SDL1"
+    #endif
+  #endif
 #endif
 
 #define CMD_MAXLINE 4096
