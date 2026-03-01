@@ -100,7 +100,7 @@ TEST(IpcFramebufferShmTest, SmallerResolutionThanMax) {
     auto fb = FramebufferShm::create(name, 1920, 1080);
     ASSERT_TRUE(fb.has_value());
 
-    auto w = fb->begin_write();
+    (void)fb->begin_write();
     // Write only 640x480
     fb->end_write(640, 480);
 

@@ -1,19 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include <gtest/gtest.h>
-
-// Include the header directly since it's in src/engine_host/
-// Tests link against the engine_host sources
-namespace legends::engine_host {
-    struct CliArgs {
-        std::string pipe_name;
-        std::string shm_name;
-        bool version = false;
-    };
-    enum class CliError : uint8_t {
-        Ok, MissingPipe, MissingShm, UnknownFlag,
-    };
-    std::expected<CliArgs, CliError> parse_cli(int argc, const char* const* argv);
-}
+#include "engine_host/cli_parser.h"
 
 using namespace legends::engine_host;
 
