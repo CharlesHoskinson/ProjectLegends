@@ -242,11 +242,9 @@ TEST_F(SoakEnduranceTest, HashConsistencyOverTime) {
         legends_get_state_hash(engine_, hashes[i]);
     }
 
-    // At least some hashes should be different (engine is progressing)
-    bool all_same = true;
+    // Check if hashes differ (engine is progressing)
     for (int i = 1; i < kSamples; ++i) {
         if (memcmp(hashes[i], hashes[0], 32) != 0) {
-            all_same = false;
             break;
         }
     }

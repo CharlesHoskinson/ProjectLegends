@@ -247,7 +247,7 @@ TEST_F(HeartbeatTest, SendsOnControlChannel) {
         // Read the heartbeat message
         auto msg = client->recv(2000);
         if (msg) {
-            EXPECT_EQ(msg->header.msg_type, static_cast<uint16_t>(MsgType::Heartbeat));
+            EXPECT_EQ(msg->header.msg_type, MsgType::Heartbeat);
         }
     });
 
