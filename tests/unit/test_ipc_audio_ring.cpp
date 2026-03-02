@@ -127,15 +127,15 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
     auto ring = AudioRingBuffer::create(name, 256, 2, 44100);
     ASSERT_TRUE(ring.has_value());
 
-    static constexpr int total_frames = 100000;
+    constexpr int kTotalFrames = 100000;
     std::atomic<int> total_popped{0};
 
     // Producer thread
     std::thread producer([&ring]() {
         std::vector<int16_t> chunk(64); // 32 frames at a time
         int frames_pushed = 0;
-        while (frames_pushed < total_frames) {
-            int to_push = std::min(32, total_frames - frames_pushed);
+        while (frames_pushed < kTotalFrames) {
+            int to_push = std::min(32, kTotalFrames - frames_pushed);
             for (int i = 0; i < to_push * 2; ++i)
                 chunk[i] = static_cast<int16_t>((frames_pushed + i / 2) & 0x7FFF);
             ring->push(std::span<const int16_t>(chunk.data(), to_push * 2));
@@ -147,7 +147,7 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
     std::thread consumer([&ring, &total_popped]() {
         std::vector<int16_t> buf(64);
         int popped = 0;
-        while (popped < total_frames) {
+        while (popped < kTotalFrames) {
             uint32_t n = ring->pop(buf);
             popped += n;
             if (n == 0) std::this_thread::yield();
@@ -158,7 +158,7 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
     producer.join();
     consumer.join();
 
-    EXPECT_GE(total_popped.load(), total_frames);
+    EXPECT_GE(total_popped.load(), kTotalFrames);
 }
 
 TEST(IpcAudioRingTest, ZeroCapacityFails) {
