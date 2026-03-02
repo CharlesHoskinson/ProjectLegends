@@ -7,6 +7,7 @@
 #include <poll.h>
 #include <unistd.h>
 #include <sstream>
+#include <chrono>
 #include <cstring>
 
 namespace legends_ipc {

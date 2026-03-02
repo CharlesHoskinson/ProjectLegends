@@ -242,6 +242,12 @@ public:
     // General Purpose Registers (using anonymous unions for aliasing)
     // ─────────────────────────────────────────────────────────────────────────
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnested-anon-types"
+#pragma clang diagnostic ignored "-Wgnu-anonymous-struct"
+#endif
+
     union {
         uint32_t eax = 0;
         struct { uint16_t ax; uint16_t eax_hi_; };
@@ -294,6 +300,10 @@ public:
         uint32_t eip = 0;
         struct { uint16_t ip; uint16_t eip_hi_; };
     };
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
     CpuFlags flags;
 

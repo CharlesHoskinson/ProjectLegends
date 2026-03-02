@@ -173,6 +173,11 @@ struct InputEvent {
     InputEventType type;
     uint64_t timestamp = 0;  ///< Emulation cycle when event should be processed
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnested-anon-types"
+#endif
+
     union {
         struct {
             KeyCode code;
@@ -208,6 +213,10 @@ struct InputEvent {
             bool pressed;
         } joystick_button;
     };
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
     // ─────────────────────────────────────────────────────────────────────────
     // Factory methods for creating events

@@ -181,6 +181,10 @@ enum class InputEventType : uint8_t { Key = 0, Mouse = 1 };
 struct InputEvent {
     InputEventType type;
     uint64_t sequence;
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnested-anon-types"
+#endif
     union {
         struct {
             uint8_t scancode;
@@ -193,6 +197,9 @@ struct InputEvent {
             uint8_t buttons;
         } mouse;
     };
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 };
 
 struct InputState {

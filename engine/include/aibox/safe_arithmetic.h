@@ -51,7 +51,7 @@ safe_multiply_3(std::size_t a, std::size_t b, std::size_t c) noexcept {
  */
 #define SAFE_MULTIPLY_OR_ERROR(a, b, result_var) \
     do { \
-        if ((b) != 0 && (a) > SIZE_MAX / (b)) { \
+        if ((b) != 0 && static_cast<std::size_t>(a) > SIZE_MAX / (b)) { \
             DOSBOXX_ERROR(DOSBOXX_ERR_INVALID_STATE, \
                 "Integer overflow: " #a " * " #b); \
         } \
