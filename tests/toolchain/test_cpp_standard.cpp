@@ -114,7 +114,7 @@ TEST(CppStandard, SpanAvailable) {
     // Verify std::span works (C++20, but ensure library is complete)
     int arr[] = {1, 2, 3, 4, 5};
     std::span<int> s(arr);
-    EXPECT_EQ(s.size(), 5);
+    EXPECT_EQ(s.size(), 5u);
     EXPECT_EQ(s[0], 1);
     EXPECT_EQ(s[4], 5);
 }

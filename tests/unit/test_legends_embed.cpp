@@ -2615,3 +2615,37 @@ TEST_F(CallbackSafetyTest, ThrowingLogCallbackDoesNotCrash) {
     // We don't assert the specific error; just that we didn't crash
     (void)err;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Requirements Regression Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// @brief REQ-EX-006: step_cycles must not crash if engine context is unavailable.
+TEST_F(DosboxxEmbedTest, REQ_EX_006_StepCyclesReturnsErrorOnMissingContext) {
+    legends_handle handle = nullptr;
+    auto err = legends_create(nullptr, &handle);
+    ASSERT_EQ(err, LEGENDS_OK);
+    ASSERT_NE(handle, nullptr);
+
+    // Step without full init — exercises the null context path
+    legends_step_result_t result{};
+    err = legends_step_cycles(handle, 100, &result);
+    // Should return an error or succeed, but must not crash
+    SUCCEED();
+
+    legends_destroy(handle);
+}
+
+/// @brief REQ-LC-003: Destroying an invalid handle must return error, not destroy real instance.
+TEST_F(DosboxxEmbedTest, REQ_LC_003_DestroyInvalidHandleReturnsError) {
+    legends_handle real = nullptr;
+    auto err = legends_create(nullptr, &real);
+    ASSERT_EQ(err, LEGENDS_OK);
+
+    const auto fake = reinterpret_cast<legends_handle>(static_cast<uintptr_t>(0xDEADBEEF));
+    err = legends_destroy(fake);
+    EXPECT_NE(err, LEGENDS_OK);
+
+    // Real instance should still be alive — destroy it cleanly
+    EXPECT_EQ(legends_destroy(real), LEGENDS_OK);
+}

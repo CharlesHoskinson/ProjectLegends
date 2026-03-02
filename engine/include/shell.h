@@ -22,11 +22,17 @@
 
 #include "programs.h"
 
-#include <SDL.h>
-#if SDL_VERSION_ATLEAST(2, 0, 0)
-#define SDL_STRING "SDL2"
+// SDL firewall: headless builds must not pull in <SDL.h> transitively.
+// SDL_STRING is only used for version identification strings.
+#if defined(C_HEADLESS) || defined(AIBOX_HEADLESS)
+  #define SDL_STRING "SDL3"
 #else
-#define SDL_STRING "SDL1"
+  #include <SDL.h>
+  #if SDL_VERSION_ATLEAST(2, 0, 0)
+    #define SDL_STRING "SDL2"
+  #else
+    #define SDL_STRING "SDL1"
+  #endif
 #endif
 
 #define CMD_MAXLINE 4096

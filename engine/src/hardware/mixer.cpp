@@ -17,13 +17,25 @@
  */
 
 
-/* 
-    Remove the sdl code from here and have it handled in sdlmain.
-    That should call the mixer start from there or something.
-*/
+/**
+ * @file mixer.cpp
+ * @brief Audio mixer with thread-safe master volume and mute controls.
+ *
+ * Threading model:
+ *   - mastervol[2] and mute are std::atomic (relaxed ordering) — written by
+ *     the CPU/UI thread (MIXER_SetMaster, MENU_mute, MAPPER_VolumeUp/Down)
+ *     and read by the SDL audio callback thread (MIXER_CallBack).
+ *   - The channels linked list is guarded by mixer_channels_mutex — written
+ *     by MIXER_AddChannel/MIXER_DelChannel (CPU thread) and iterated by
+ *     MIXER_CallBack (audio thread).
+ *
+ * @copyright GPL-2.0-or-later
+ */
 
 #include <assert.h>
 #include <string.h>
+#include <atomic>
+#include <mutex>
 #include <sys/types.h>
 #define _USE_MATH_DEFINES // needed for M_PI in Visual Studio as documented [https://msdn.microsoft.com/en-us/library/4hwaceh6.aspx]
 #include <math.h>
@@ -84,11 +96,13 @@ struct mixedFraction {
     unsigned int        fn,fd;
 };
 
+static std::mutex mixer_channels_mutex;
+
 static struct {
     int32_t          work[MIXER_BUFSIZE][2];
     Bitu            work_in,work_out,work_wrap;
     Bitu            pos,done;
-    float           mastervol[2];
+    std::atomic<float> mastervol[2];
     float           recordvol[2];
     MixerChannel*   channels;
     uint32_t          freq;
@@ -101,14 +115,14 @@ static struct {
     bool            sampleaccurate;
     bool            prebuffer_wait;
     Bitu            prebuffer_samples;
-    bool            mute;
+    std::atomic<bool> mute;
 } mixer;
 
 uint32_t Mixer_MIXQ(void) {
 	return  ((uint32_t)mixer.freq) |
 		((uint32_t)2u/*channels*/ << (uint32_t)20u) |
 		(mixer.swapstereo ?      ((uint32_t)1u << (uint32_t)29u) : 0u) |
-		(mixer.mute       ?      ((uint32_t)1u << (uint32_t)30u) : 0u) |
+		(mixer.mute.load(std::memory_order_relaxed) ? ((uint32_t)1u << (uint32_t)30u) : 0u) |
 		(mixer.nosound    ? 0u : ((uint32_t)1u << (uint32_t)31u));
 }
 
@@ -128,8 +142,8 @@ inline void MixerChannel::updateSlew(void) {
 }
 
 void MIXER_SetMaster(float vol0, float vol1) {
-	mixer.mastervol[0] = vol0;
-	mixer.mastervol[1] = vol1;
+	mixer.mastervol[0].store(vol0, std::memory_order_relaxed);
+	mixer.mastervol[1].store(vol1, std::memory_order_relaxed);
 }
 
 MixerChannel * MIXER_AddChannel(MIXER_Handler handler,Bitu freq,const char * name) {
@@ -157,7 +171,6 @@ MixerChannel * MIXER_AddChannel(MIXER_Handler handler,Bitu freq,const char * nam
     chan->freq_d_orig = 1;
     chan->freq_f = 0;
     chan->SetFreq(freq);
-    chan->next=mixer.channels;
     chan->SetScale(1.0);
     chan->SetVolume(1,1);
     chan->enabled=false;
@@ -165,7 +178,11 @@ MixerChannel * MIXER_AddChannel(MIXER_Handler handler,Bitu freq,const char * nam
     chan->delta[0] = chan->delta[1] = 0;
     chan->current[0] = chan->current[1] = 0;
 
-    mixer.channels=chan;
+    {
+        std::lock_guard<std::mutex> lock(mixer_channels_mutex);
+        chan->next=mixer.channels;
+        mixer.channels=chan;
+    }
     return chan;
 }
 
@@ -183,6 +200,7 @@ MixerChannel * MIXER_FindChannel(const char * name) {
 }
 
 void MIXER_DelChannel(MixerChannel* delchan) {
+    std::lock_guard<std::mutex> lock(mixer_channels_mutex);
     MixerChannel * chan=mixer.channels;
     MixerChannel * * where=&mixer.channels;
     while (chan) {
@@ -779,13 +797,13 @@ static void MIXER_Mix(void) {
 
 static void SDLCALL MIXER_CallBack(void * userdata, Uint8 *stream, int len) {
     (void)userdata;//UNUSED
-    int32_t volscale1 = (int32_t)(mixer.mastervol[0] * (1 << MIXER_VOLSHIFT));
-    int32_t volscale2 = (int32_t)(mixer.mastervol[1] * (1 << MIXER_VOLSHIFT));
+    int32_t volscale1 = (int32_t)(mixer.mastervol[0].load(std::memory_order_relaxed) * (1 << MIXER_VOLSHIFT));
+    int32_t volscale2 = (int32_t)(mixer.mastervol[1].load(std::memory_order_relaxed) * (1 << MIXER_VOLSHIFT));
     Bitu need = (Bitu)len/MIXER_SSIZE;
     int16_t *output = (int16_t*)stream;
     int remains;
 
-    if (mixer.mute) {
+    if (mixer.mute.load(std::memory_order_relaxed)) {
         if ((CaptureState & (CAPTURE_WAVE|CAPTURE_VIDEO|CAPTURE_MULTITRACK_WAVE)) != 0)
             mixer.work_out = mixer.work_in;
         else
@@ -801,7 +819,7 @@ static void SDLCALL MIXER_CallBack(void * userdata, Uint8 *stream, int len) {
             mixer.prebuffer_wait = false;
     }
 
-    if (!mixer.prebuffer_wait && !mixer.mute) {
+    if (!mixer.prebuffer_wait && !mixer.mute.load(std::memory_order_relaxed)) {
         int32_t *in = &mixer.work[mixer.work_out][0];
         while (need > 0) {
             if (mixer.work_out == mixer.work_in) break;
@@ -848,9 +866,11 @@ static void SDLCALL MIXER_CallBack(void * userdata, Uint8 *stream, int len) {
 std::string mixerinfo() {
     std::string info="Channel  Main    Main(dB)\n";
     char str[100];
+    float mv0 = mixer.mastervol[0].load(std::memory_order_relaxed);
+    float mv1 = mixer.mastervol[1].load(std::memory_order_relaxed);
     sprintf(str, "%-8s %3.0f:%-3.0f  %+3.2f:%-+3.2f\n","MASTER",
-        (double)mixer.mastervol[0]*100,(double)mixer.mastervol[1]*100,
-        20*log(mixer.mastervol[0])/log(10.0f),20*log(mixer.mastervol[1])/log(10.0f)
+        (double)mv0*100,(double)mv1*100,
+        20*log(mv0)/log(10.0f),20*log(mv1)/log(10.0f)
     );
     info+=std::string(str);
     sprintf(str, "%-8s %3.0f:%-3.0f  %+3.2f:%-+3.2f\n","RECORD",
@@ -922,7 +942,11 @@ public:
             return;
         }
         if (cmd->FindString("MASTER",temp_line,false)) {
-            MakeVolume((char *)temp_line.c_str(),mixer.mastervol[0],mixer.mastervol[1]);
+            float v0 = mixer.mastervol[0].load(std::memory_order_relaxed);
+            float v1 = mixer.mastervol[1].load(std::memory_order_relaxed);
+            MakeVolume((char *)temp_line.c_str(),v0,v1);
+            mixer.mastervol[0].store(v0, std::memory_order_relaxed);
+            mixer.mastervol[1].store(v1, std::memory_order_relaxed);
         }
         if (cmd->FindString("RECORD",temp_line,false)) {
             MakeVolume((char *)temp_line.c_str(),mixer.recordvol[0],mixer.recordvol[1]);
@@ -973,12 +997,12 @@ MixerObject::~MixerObject(){
 }
 
 void MENU_mute(bool enabled) {
-    mixer.mute=enabled;
-    mainMenu.get_item("mixer_mute").check(mixer.mute).refresh_item(mainMenu);
+    mixer.mute.store(enabled, std::memory_order_relaxed);
+    mainMenu.get_item("mixer_mute").check(mixer.mute.load(std::memory_order_relaxed)).refresh_item(mainMenu);
 }
 
 bool MENU_get_mute(void) {
-    return mixer.mute;
+    return mixer.mute.load(std::memory_order_relaxed);
 }
 
 void MENU_swapstereo(bool enabled) {
@@ -993,11 +1017,12 @@ bool MENU_get_swapstereo(void) {
 void MAPPER_VolumeUp(bool pressed) {
     if (!pressed) return;
 
-    double newvol = (((double)mixer.mastervol[0] + mixer.mastervol[1]) / 0.7) * 0.5;
+    double newvol = (((double)mixer.mastervol[0].load(std::memory_order_relaxed) + mixer.mastervol[1].load(std::memory_order_relaxed)) / 0.7) * 0.5;
 
     if (newvol > 1) newvol = 1;
 
-    mixer.mastervol[0] = mixer.mastervol[1] = newvol;
+    mixer.mastervol[0].store(static_cast<float>(newvol), std::memory_order_relaxed);
+    mixer.mastervol[1].store(static_cast<float>(newvol), std::memory_order_relaxed);
 
     LOG(LOG_MISC,LOG_NORMAL)("Master volume UP to %.3f%%",newvol * 100);
 }
@@ -1005,12 +1030,13 @@ void MAPPER_VolumeUp(bool pressed) {
 void MAPPER_VolumeDown(bool pressed) {
     if (!pressed) return;
 
-    double newvol = ((double)mixer.mastervol[0] + mixer.mastervol[1]) * 0.7 * 0.5;
+    double newvol = ((double)mixer.mastervol[0].load(std::memory_order_relaxed) + mixer.mastervol[1].load(std::memory_order_relaxed)) * 0.7 * 0.5;
 
     if (fabs(newvol - 1.0) < 0.25)
         newvol = 1;
 
-    mixer.mastervol[0] = mixer.mastervol[1] = newvol;
+    mixer.mastervol[0].store(static_cast<float>(newvol), std::memory_order_relaxed);
+    mixer.mastervol[1].store(static_cast<float>(newvol), std::memory_order_relaxed);
 
     LOG(LOG_MISC,LOG_NORMAL)("Master volume DOWN to %.3f%%",newvol * 100);
 }
@@ -1071,7 +1097,7 @@ void MIXER_Init() {
     mixer.blocksize=(unsigned int)section->Get_int("blocksize");
     mixer.swapstereo=section->Get_bool("swapstereo");
     mixer.sampleaccurate=section->Get_bool("sample accurate");
-    mixer.mute=false;
+    mixer.mute.store(false, std::memory_order_relaxed);
     if (control->opt_silent) mixer.nosound = true;
 
     /* Initialize the internal stuff */
@@ -1081,8 +1107,8 @@ void MIXER_Init() {
     mixer.pos=0;
     mixer.done=0;
     memset(mixer.work,0,sizeof(mixer.work));
-    mixer.mastervol[0]=1.0f;
-    mixer.mastervol[1]=1.0f;
+    mixer.mastervol[0].store(1.0f, std::memory_order_relaxed);
+    mixer.mastervol[1].store(1.0f, std::memory_order_relaxed);
     mixer.recordvol[0]=1.0f;
     mixer.recordvol[1]=1.0f;
 

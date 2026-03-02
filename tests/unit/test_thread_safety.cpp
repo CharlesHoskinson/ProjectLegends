@@ -13,6 +13,7 @@
 #include <pal/platform.h>
 #include <thread>
 #include <atomic>
+#include <stdexcept>
 #include <vector>
 #include <chrono>
 
@@ -463,6 +464,29 @@ TEST_F(ThreadSafetyTest, ConcurrentDestroyAttempts) {
     EXPECT_EQ(ok_count.load(), 0);
 
     // Clean up from owner thread
+    legends_destroy(handle);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Requirements Regression Tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// @brief REQ-TH-003: User log callback that throws must not crash the API.
+TEST(ThreadSafetyRegression, REQ_TH_003_LogCallbackExceptionDoesNotPropagate) {
+    legends_handle handle = nullptr;
+    auto err = legends_create(nullptr, &handle);
+    ASSERT_EQ(err, LEGENDS_OK);
+
+    legends_set_log_callback(handle, [](int, const char*, void*) {
+        throw std::runtime_error("test exception from log callback");
+    }, nullptr);
+
+    // Trigger a log message by calling an API function
+    legends_step_result_t result{};
+    err = legends_step_cycles(handle, 100, &result);
+    // Should not throw — exception swallowed by LogState::log()
+    SUCCEED();
+
     legends_destroy(handle);
 }
 

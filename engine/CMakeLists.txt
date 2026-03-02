@@ -277,13 +277,17 @@ try_compile(HAS_CXX23_FEATURES
     SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/test_cxx23.cpp
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
+    CMAKE_FLAGS
+        "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
 )
 
 if(NOT HAS_CXX23_FEATURES)
     message(FATAL_ERROR
         "Compiler claims C++23 support but standard library is missing required features.\n"
         "Required: <expected>, <format>, <span>, <ranges>\n"
-        "Ensure your standard library (libstdc++/libc++) is up to date.")
+        "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\n"
+        "CXX_FLAGS: ${CMAKE_CXX_FLAGS}\n"
+        "Check that your standard library (libstdc++/libc++) supports C++23.")
 endif()
 
 message(STATUS "C++23 feature validation: PASSED")

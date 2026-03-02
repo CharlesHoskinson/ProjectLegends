@@ -814,6 +814,7 @@ if(LEGENDS_BUILD_TESTS)
 
     add_executable(legends_toolchain_tests
         tests/toolchain/test_cpp_standard.cpp
+        tests/toolchain/test_shell_h_headless.cpp
     )
 
     # Apply C++23 standard (this IS the gate test - must be strict)
@@ -825,6 +826,7 @@ if(LEGENDS_BUILD_TESTS)
 
     target_compile_definitions(legends_toolchain_tests PRIVATE
         LEGENDS_LIBRARY_MODE=1
+        AIBOX_HEADLESS=1
     )
 
     gtest_discover_tests(legends_toolchain_tests
