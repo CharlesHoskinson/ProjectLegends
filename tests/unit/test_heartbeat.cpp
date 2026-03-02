@@ -9,6 +9,12 @@
 #include <functional>
 #include <thread>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 using namespace legends_ipc;
 
 // Minimal HeartbeatMonitor reimplementation for test isolation.

@@ -48,7 +48,7 @@ jobs:
           - compiler: clang
             cc: clang-18
             cxx: clang++-18
-            pkg: clang-18 libstdc++-13-dev
+            pkg: clang-18 g++-13
 
     steps:
       - uses: actions/checkout@v4
@@ -104,7 +104,7 @@ jobs:
           - compiler: clang
             cc: clang-18
             cxx: clang++-18
-            pkg: clang-18 libstdc++-13-dev
+            pkg: clang-18 g++-13
 
     steps:
       - uses: actions/checkout@v4
@@ -307,7 +307,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev libstdc++-13-dev
+          sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev g++-13
 
       - name: Configure
         run: |

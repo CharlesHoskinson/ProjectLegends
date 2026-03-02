@@ -278,7 +278,8 @@ try_compile(HAS_CXX23_FEATURES
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CMAKE_FLAGS
-        "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
+        "-DCMAKE_CXX_FLAGS:STRING=${CMAKE_CXX_FLAGS}"
+    OUTPUT_VARIABLE CXX23_CHECK_OUTPUT
 )
 
 if(NOT HAS_CXX23_FEATURES)
@@ -287,7 +288,8 @@ if(NOT HAS_CXX23_FEATURES)
         "Required: <expected>, <format>, <span>, <ranges>\n"
         "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}\n"
         "CXX_FLAGS: ${CMAKE_CXX_FLAGS}\n"
-        "Check that your standard library (libstdc++/libc++) supports C++23.")
+        "Check that your standard library (libstdc++/libc++) supports C++23.\n"
+        "try_compile output:\n${CXX23_CHECK_OUTPUT}")
 endif()
 
 message(STATUS "C++23 feature validation: PASSED")

@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include <gtest/gtest.h>
+#include <cstdint>
+#include <expected>
+#include <string>
 
 // Include the header directly since it's in src/engine_host/
 // Tests link against the engine_host sources

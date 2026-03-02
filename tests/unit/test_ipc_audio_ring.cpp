@@ -6,11 +6,22 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 using namespace legends_ipc;
 
 static std::string ring_name(const char* base) {
     static int counter = 0;
-    return std::string(base) + "_" + std::to_string(::GetCurrentProcessId()) +
+#ifdef _WIN32
+    auto pid = static_cast<unsigned long>(GetCurrentProcessId());
+#else
+    auto pid = static_cast<unsigned long>(getpid());
+#endif
+    return std::string(base) + "_" + std::to_string(pid) +
            "_" + std::to_string(counter++);
 }
 
