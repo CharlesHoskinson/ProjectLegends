@@ -241,12 +241,11 @@ TEST_F(HeartbeatTest, SendsOnControlChannel) {
 
     // Connect client in a thread
     std::thread client_thread([&]() {
-        auto client = ControlChannel::connect_client(
-            pipe_name, std::chrono::milliseconds(2000));
+        auto client = ControlChannel::connect_client(pipe_name, 2000);
         if (!client) return;
 
         // Read the heartbeat message
-        auto msg = client->recv(std::chrono::milliseconds(2000));
+        auto msg = client->recv(2000);
         if (msg) {
             EXPECT_EQ(msg->header.msg_type, static_cast<uint16_t>(MsgType::Heartbeat));
         }
@@ -256,7 +255,7 @@ TEST_F(HeartbeatTest, SendsOnControlChannel) {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     test_heartbeat::HeartbeatMonitor monitor;
-    monitor.start(server.get(), [this]() {
+    monitor.start(&*server, [this]() {
         timeout_fired_.store(true);
     },
     std::chrono::milliseconds(100),

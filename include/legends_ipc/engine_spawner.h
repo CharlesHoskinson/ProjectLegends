@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <expected>
 #include <string>
+#include <vector>
 #include <legends_ipc/ipc_error.h>
 
 namespace legends_ipc {
@@ -13,6 +14,7 @@ struct SpawnConfig {
     std::string executable_path; // Path to legends_engine_host
     std::string pipe_name;
     std::string shm_name;
+    std::vector<std::string> arguments; // Extra command-line arguments
 };
 
 // Represents a spawned engine host process.

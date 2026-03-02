@@ -111,7 +111,6 @@ protected:
     static constexpr uint8_t kModShift  = kModLShift | kModRShift;
     static constexpr uint8_t kModLAlt   = 0x10;
     static constexpr uint8_t kModRAlt   = 0x20;
-    static constexpr uint8_t kModAlt    = kModLAlt | kModRAlt;
 
     void applyModifier(uint16_t scancode, bool down) {
         if (scancode == 0xE0) {
