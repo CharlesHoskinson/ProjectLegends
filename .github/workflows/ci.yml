@@ -292,18 +292,23 @@ jobs:
       matrix:
         sanitizer: [address, undefined, thread, memory]
         include:
+          # Note: -stdlib=libc++ is CXX-only; c_flags omit it to avoid -Wunused-command-line-argument
           - sanitizer: address
             flags: "-stdlib=libc++ -fsanitize=address -fno-omit-frame-pointer"
+            c_flags: "-fsanitize=address -fno-omit-frame-pointer"
             env: "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1"
           - sanitizer: undefined
             flags: "-stdlib=libc++ -fsanitize=undefined -fno-omit-frame-pointer"
+            c_flags: "-fsanitize=undefined -fno-omit-frame-pointer"
             env: "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"
           - sanitizer: thread
             flags: "-stdlib=libc++ -fsanitize=thread -fno-omit-frame-pointer"
+            c_flags: "-fsanitize=thread -fno-omit-frame-pointer"
             env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1"
           # MSan requires all code (including libc++) to be instrumented.
           - sanitizer: memory
             flags: "-stdlib=libc++ -fsanitize=memory -fPIE -fno-omit-frame-pointer"
+            c_flags: "-fsanitize=memory -fPIE -fno-omit-frame-pointer"
             linker_flags: "-pie"
             env: "MSAN_OPTIONS=halt_on_error=1"
 
@@ -322,7 +327,7 @@ jobs:
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
-            -DCMAKE_C_FLAGS="${{ matrix.flags }}" \
+            -DCMAKE_C_FLAGS="${{ matrix.c_flags }}" \
             -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.flags }} ${{ matrix.linker_flags }}" \
             -DLEGENDS_BUILD_TESTS=ON \
             -DLEGENDS_HEADLESS=ON

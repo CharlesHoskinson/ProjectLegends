@@ -1864,6 +1864,11 @@ dosbox_lib_error_t dosbox_lib_unmount_drive(
     dosbox_lib_handle_t handle,
     int drive_index
 ) {
+#if defined(AIBOX_HEADLESS)
+    (void)handle; (void)drive_index;
+    LIB_LOG_ERROR("Drive unmounting not available in headless mode");
+    return DOSBOX_LIB_ERR_NOT_SUPPORTED;
+#else
     LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(drive_index >= 0 && drive_index < 26, DOSBOX_LIB_ERR_INVALID_CONFIG);
@@ -1882,6 +1887,7 @@ dosbox_lib_error_t dosbox_lib_unmount_drive(
 
     LIB_LOG_INFO("Drive unmounted successfully");
     return DOSBOX_LIB_OK;
+#endif
 }
 
 } // extern "C"
