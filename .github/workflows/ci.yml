@@ -287,6 +287,7 @@ jobs:
     name: ${{ matrix.sanitizer }} Sanitizer
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    continue-on-error: ${{ matrix.allow_failure == true }}
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'schedule'
     strategy:
       matrix:
@@ -306,11 +307,15 @@ jobs:
             c_flags: "-fsanitize=thread -fno-omit-frame-pointer"
             env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1"
           # MSan requires all code (including libc++) to be instrumented.
+          # CI uses stock libc++ which is NOT MSan-instrumented, so test
+          # executables crash on startup. Mark as allow-failure until we
+          # build an instrumented libc++ or switch to a pre-built one.
           - sanitizer: memory
             flags: "-stdlib=libc++ -fsanitize=memory -fPIE -fno-omit-frame-pointer"
             c_flags: "-fsanitize=memory -fPIE -fno-omit-frame-pointer"
             linker_flags: "-pie"
             env: "MSAN_OPTIONS=halt_on_error=1"
+            allow_failure: true
 
     steps:
       - uses: actions/checkout@v4
