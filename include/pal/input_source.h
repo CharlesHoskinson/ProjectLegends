@@ -37,6 +37,11 @@ struct InputEvent {
     InputEventType type = InputEventType::None;
     uint64_t host_timestamp_us = 0;  // Host clock timestamp
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnested-anon-types"
+#pragma clang diagnostic ignored "-Wgnu-anonymous-struct"
+#endif
     union {
         struct {
             uint16_t scancode;   // Hardware scancode
@@ -85,6 +90,9 @@ struct InputEvent {
             uint8_t _pad[3];
         } window_focus;
     };
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
     /// Default constructor - creates None event
     InputEvent() : type(InputEventType::None), host_timestamp_us(0) {
