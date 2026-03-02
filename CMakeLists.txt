@@ -1115,6 +1115,7 @@ if(PAL_BACKEND_SDL3)
         src/app/mount_manager.cpp
         src/app/image_validator.cpp
         src/app/video_capture.cpp
+        src/app/zmbv_codec.cpp
         src/app/mapper_ui.cpp
         src/app/save_browser.cpp
         # Phase 3: Enhanced Features

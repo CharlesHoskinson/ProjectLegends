@@ -17,7 +17,10 @@
 #include "aibox/headless_stub.h"
 
 // Drive types for mount API (REQ-API-004)
+// localDrive requires drive_local.cpp which is not part of aibox_core in headless builds.
+#if !defined(AIBOX_HEADLESS)
 #include "../dos/drives.h"
+#endif
 
 #include <cstring>
 #include <algorithm>
@@ -1796,6 +1799,13 @@ dosbox_lib_error_t dosbox_lib_mount_local(
     const char* host_path,
     int readonly
 ) {
+#if defined(AIBOX_HEADLESS)
+    // In headless mode, drive_local.cpp is not compiled into aibox_core.
+    // Drive mounting requires the full DOS filesystem which is not available.
+    (void)handle; (void)drive_index; (void)host_path; (void)readonly;
+    LIB_LOG_ERROR("Drive mounting not available in headless mode");
+    return DOSBOX_LIB_ERR_NOT_SUPPORTED;
+#else
     LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(host_path != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
@@ -1847,6 +1857,7 @@ dosbox_lib_error_t dosbox_lib_mount_local(
 
     LIB_LOG_INFO("Drive mounted successfully");
     return DOSBOX_LIB_OK;
+#endif
 }
 
 dosbox_lib_error_t dosbox_lib_unmount_drive(

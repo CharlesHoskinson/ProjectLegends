@@ -17,17 +17,18 @@
 // C++23 Standard Verification
 // ═══════════════════════════════════════════════════════════════════════════
 
-// C++23 defines __cplusplus as 202302L
-// MSVC uses _MSVC_LANG instead of __cplusplus for standard version
+// C++23 defines __cplusplus as 202302L, but GCC 13 uses 202100L (C++2b draft)
+// even when invoked with -std=c++23. GCC 14+ uses the official 202302L value.
+// MSVC uses _MSVC_LANG instead of __cplusplus for standard version.
 #if defined(_MSVC_LANG)
     static_assert(_MSVC_LANG >= 202302L,
         "MSVC is not compiling in C++23 mode. "
         "Expected _MSVC_LANG >= 202302L (C++23). "
         "Check that /std:c++23preview is set.");
 #else
-    static_assert(__cplusplus >= 202302L,
+    static_assert(__cplusplus >= 202100L,
         "Not compiling in C++23 mode. "
-        "Expected __cplusplus >= 202302L (C++23). "
+        "Expected __cplusplus >= 202100L (C++23 or C++2b draft). "
         "Check CMAKE_CXX_STANDARD and compiler flags.");
 #endif
 
@@ -85,7 +86,7 @@ TEST(CppStandard, VersionMacro) {
     // Log the actual value for debugging
     std::cout << "_MSVC_LANG = " << _MSVC_LANG << std::endl;
 #else
-    EXPECT_GE(__cplusplus, 202302L) << "Not in C++23 mode";
+    EXPECT_GE(__cplusplus, 202100L) << "Not in C++23 mode";
     std::cout << "__cplusplus = " << __cplusplus << std::endl;
 #endif
 }

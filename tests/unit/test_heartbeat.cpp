@@ -67,7 +67,7 @@ private:
             hb.serialize(buf);
 
             if (channel_)
-                channel_->send(MsgType::Heartbeat, 0, buf);
+                (void)channel_->send(MsgType::Heartbeat, 0, buf);
 
             ack_pending_.store(true);
             auto last_send = std::chrono::steady_clock::now();

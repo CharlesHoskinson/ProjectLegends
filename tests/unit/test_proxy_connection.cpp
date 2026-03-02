@@ -42,7 +42,7 @@ TEST(ProxyConnectionTest, ConnectRoundTrip) {
         ack.error_code = 0;
         std::array<uint8_t, msg::HandshakeAck::serialized_size> buf{};
         ack.serialize(buf);
-        client->send(MsgType::HandshakeAck, 0, buf);
+        (void)client->send(MsgType::HandshakeAck, 0, buf);
 
         // Wait for a request and respond
         auto req = client->recv(5000);
@@ -51,7 +51,7 @@ TEST(ProxyConnectionTest, ConnectRoundTrip) {
             resp.error_code = 0;
             std::array<uint8_t, msg::CreateResp::serialized_size> rbuf{};
             resp.serialize(rbuf);
-            client->send(MsgType::CreateResp, req->header.sequence_id, rbuf);
+            (void)client->send(MsgType::CreateResp, req->header.sequence_id, rbuf);
         }
     });
 
@@ -69,7 +69,7 @@ TEST(ProxyConnectionTest, ConnectRoundTrip) {
     req.deterministic = 1;
     std::array<uint8_t, msg::CreateReq::serialized_size> reqbuf{};
     req.serialize(reqbuf);
-    server->send(MsgType::CreateReq, 1, reqbuf);
+    (void)server->send(MsgType::CreateReq, 1, reqbuf);
 
     // Receive response
     auto resp = server->recv(5000);
@@ -98,7 +98,7 @@ TEST(ProxyConnectionTest, SequenceIdMatching) {
             if (!req) break;
             // Echo back with same sequence ID
             std::array<uint8_t, 4> resp{};
-            client->send(MsgType::StepMsResp, req->header.sequence_id, resp);
+            (void)client->send(MsgType::StepMsResp, req->header.sequence_id, resp);
         }
     });
 
@@ -107,7 +107,7 @@ TEST(ProxyConnectionTest, SequenceIdMatching) {
 
     for (uint32_t seq = 1; seq <= 3; ++seq) {
         std::array<uint8_t, 4> payload{};
-        server->send(MsgType::StepMsReq, seq, payload);
+        (void)server->send(MsgType::StepMsReq, seq, payload);
         auto resp = server->recv(2000);
         ASSERT_TRUE(resp.has_value());
         EXPECT_EQ(resp->header.sequence_id, seq);

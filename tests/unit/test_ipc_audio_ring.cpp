@@ -127,11 +127,11 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
     auto ring = AudioRingBuffer::create(name, 256, 2, 44100);
     ASSERT_TRUE(ring.has_value());
 
-    constexpr int total_frames = 100000;
+    static constexpr int total_frames = 100000;
     std::atomic<int> total_popped{0};
 
     // Producer thread
-    std::thread producer([&ring, total_frames]() {
+    std::thread producer([&ring]() {
         std::vector<int16_t> chunk(64); // 32 frames at a time
         int frames_pushed = 0;
         while (frames_pushed < total_frames) {
@@ -144,7 +144,7 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
     });
 
     // Consumer thread
-    std::thread consumer([&ring, &total_popped, total_frames]() {
+    std::thread consumer([&ring, &total_popped]() {
         std::vector<int16_t> buf(64);
         int popped = 0;
         while (popped < total_frames) {
