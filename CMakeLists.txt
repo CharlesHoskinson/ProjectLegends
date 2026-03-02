@@ -1148,7 +1148,8 @@ if(PAL_BACKEND_SDL3)
         $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
         $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
         external/glad/glad.c
-        engine/src/libs/zmbv/zmbv.cpp  # ZMBV codec for video capture
+        engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture
+        engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
     )
 
     legends_set_strict_cxx_standard(project_legends)
