@@ -28,8 +28,11 @@ bool InputMapper::loadFromFile(const std::string& path) {
         // Parse hex values (with or without 0x prefix)
         unsigned long from_val = 0, to_val = 0;
         try {
-            from_val = std::stoul(from_str, nullptr, 16);
-            to_val = std::stoul(to_str, nullptr, 16);
+            std::size_t from_pos = 0, to_pos = 0;
+            from_val = std::stoul(from_str, &from_pos, 16);
+            to_val = std::stoul(to_str, &to_pos, 16);
+            // Reject if not all characters were consumed
+            if (from_pos != from_str.size() || to_pos != to_str.size()) continue;
         } catch (...) {
             continue; // Skip malformed lines
         }

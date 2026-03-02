@@ -26,13 +26,17 @@ AudioRingBuffer::create(const std::string& name, uint32_t capacity_frames,
 
     AudioRingBuffer ring;
     ring.region_ = std::move(*region);
-    ring.map_pointers();
 
-    ring.header_->capacity_frames = capacity_frames;
-    ring.header_->channels        = channels;
-    ring.header_->sample_rate     = sample_rate;
-    ring.header_->write_index.store(0, std::memory_order_relaxed);
-    ring.header_->read_index.store(0, std::memory_order_relaxed);
+    // Set header fields BEFORE map_pointers() so cached members get correct values
+    auto d = ring.region_.data();
+    auto* hdr = reinterpret_cast<AudioRingHeader*>(d.data());
+    hdr->capacity_frames = capacity_frames;
+    hdr->channels        = channels;
+    hdr->sample_rate     = sample_rate;
+    hdr->write_index.store(0, std::memory_order_relaxed);
+    hdr->read_index.store(0, std::memory_order_relaxed);
+
+    ring.map_pointers();
 
     return ring;
 }
