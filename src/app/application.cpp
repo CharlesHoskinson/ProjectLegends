@@ -866,14 +866,14 @@ void Application::registerActionHandlers() {
 
     // ── Phase 2: Mounting ─────────────────────────────────────────────────
 
-    action_bus_.registerHandler(Action::MountDrive, [this](int param) {
+    action_bus_.registerHandler(Action::MountDrive, [](int param) {
         // param 0 = mount directory, param 1 = mount image
         // TODO: Open file dialog for path selection (requires SDL3 file dialog)
         (void)param;
         std::fprintf(stderr, "Mount drive: file dialog not yet implemented\n");
     });
 
-    action_bus_.registerHandler(Action::UnmountDrive, [this](int) {
+    action_bus_.registerHandler(Action::UnmountDrive, [](int) {
         // TODO: Open drive letter selection dialog
         std::fprintf(stderr, "Unmount drive: drive selector not yet implemented\n");
     });
@@ -968,7 +968,7 @@ void Application::registerActionHandlers() {
             req.user_message = history.back().text;
         }
         req.max_tokens = ai_config_.max_tokens;
-        ai_http_client_.submitRequest(req, [this](const AIResponse& resp) {
+        ai_http_client_.submitRequest(req, [](const AIResponse& resp) {
             // Response will be polled in processEvents
             (void)resp;
         });

@@ -5,6 +5,7 @@
 
 #include <charconv>
 #include <sstream>
+#include <vector>
 
 namespace legends {
 
