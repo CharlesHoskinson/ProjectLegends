@@ -1477,10 +1477,14 @@ struct DosState {
 // DOS Filesystem State (Sprint 2 Phase 9)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Forward declarations for DOS filesystem types
+} // namespace dosbox (temporarily close to forward-declare global types)
+
+// Forward declarations for DOS filesystem types (global namespace, from dos_system.h)
 class DOS_File;
 class DOS_Drive;
 class DOS_Device;
+
+namespace dosbox { // reopen
 
 /**
  * @brief DOS filesystem state for multi-instance support.
@@ -1506,12 +1510,12 @@ struct DosFilesystemState {
     static constexpr size_t MAX_DEVICES = 45;
     static constexpr size_t DEFAULT_FILES = 127;
 
-    DOS_File** files = nullptr;
+    ::DOS_File** files = nullptr;
     uint32_t files_count = DEFAULT_FILES;
 
-    DOS_Drive* drives[MAX_DRIVES] = {};
+    ::DOS_Drive* drives[MAX_DRIVES] = {};
 
-    DOS_Device* devices[MAX_DEVICES] = {};
+    ::DOS_Device* devices[MAX_DEVICES] = {};
 
     bool force_sfn = false;
     int32_t sdrive = 0;
