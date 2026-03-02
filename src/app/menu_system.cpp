@@ -256,8 +256,8 @@ bool MenuSystem::handleMouseClick(int32_t x, int32_t y) {
     }
 
     // Check dropdown item clicks
-    // Compute dropdown position
-    int drop_x = 0;
+    // Compute dropdown position (drop_x reserved for future X hit-testing)
+    [[maybe_unused]] int drop_x = 0;
     for (int i = 0; i < selected_menu_; ++i) {
         drop_x += static_cast<int>(menus_[static_cast<size_t>(i)].title.size() + 2) * kCharW;
     }
