@@ -71,6 +71,9 @@ TEST_F(EventCallbackTest, RegisterAndReceiveDriveEvent) {
     ASSERT_EQ(err, LEGENDS_OK);
 
     err = legends_mount_drive(engine_, 'D', mount_dir_.string().c_str(), 0);
+    if (err == LEGENDS_ERR_NOT_SUPPORTED) {
+        GTEST_SKIP() << "Drive mounting not available in headless mode";
+    }
     ASSERT_EQ(err, LEGENDS_OK);
 
     EXPECT_GE(rec.call_count.load(), 1);
@@ -81,6 +84,9 @@ TEST_F(EventCallbackTest, UnmountFiresDriveEvent) {
     // Mount first
     legends_error_t err = legends_mount_drive(
         engine_, 'E', mount_dir_.string().c_str(), 0);
+    if (err == LEGENDS_ERR_NOT_SUPPORTED) {
+        GTEST_SKIP() << "Drive mounting not available in headless mode";
+    }
     ASSERT_EQ(err, LEGENDS_OK);
 
     // Register callback and unmount

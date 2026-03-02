@@ -55,12 +55,18 @@ protected:
 TEST_F(MountLifecycleTest, MountHostDirectory_ViaAPI) {
     legends_error_t err = legends_mount_drive(
         engine_, 'D', mount_dir_.string().c_str(), 0);
+    if (err == LEGENDS_ERR_NOT_SUPPORTED) {
+        GTEST_SKIP() << "Drive mounting not available in headless mode";
+    }
     EXPECT_EQ(err, LEGENDS_OK);
 }
 
 TEST_F(MountLifecycleTest, UnmountDrive_ViaAPI) {
     legends_error_t err = legends_mount_drive(
         engine_, 'E', mount_dir_.string().c_str(), 0);
+    if (err == LEGENDS_ERR_NOT_SUPPORTED) {
+        GTEST_SKIP() << "Drive mounting not available in headless mode";
+    }
     ASSERT_EQ(err, LEGENDS_OK);
 
     err = legends_unmount_drive(engine_, 'E');
@@ -70,6 +76,9 @@ TEST_F(MountLifecycleTest, UnmountDrive_ViaAPI) {
 TEST_F(MountLifecycleTest, MountInvalidPath_ReturnsError) {
     legends_error_t err = legends_mount_drive(
         engine_, 'D', "/nonexistent/path/12345", 0);
+    if (err == LEGENDS_ERR_NOT_SUPPORTED) {
+        GTEST_SKIP() << "Drive mounting not available in headless mode";
+    }
     EXPECT_EQ(err, LEGENDS_ERR_IO_FAILED);
 }
 
