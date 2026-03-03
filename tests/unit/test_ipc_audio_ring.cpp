@@ -14,6 +14,8 @@
 
 using namespace legends_ipc;
 
+static constexpr int kTotalFrames = 100000;
+
 static std::string ring_name(const char* base) {
     static int counter = 0;
 #ifdef _WIN32
@@ -127,7 +129,6 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
     auto ring = AudioRingBuffer::create(name, 256, 2, 44100);
     ASSERT_TRUE(ring.has_value());
 
-    constexpr int kTotalFrames = 100000;
     std::atomic<int> total_popped{0};
 
     // Producer thread

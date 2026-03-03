@@ -155,13 +155,26 @@ ControlChannel::recv(uint32_t timeout_ms) {
     auto msg = codec_.try_decode();
     if (msg.has_value()) return msg;
 
-    uint8_t buf[8192];
-    auto n = raw_read(buf, timeout_ms);
-    if (!n.has_value()) return std::unexpected(n.error());
-    if (*n == 0) return std::unexpected(IpcError::Timeout);
+    // Loop: read and accumulate until a complete message is decoded or timeout
+    auto start = std::chrono::steady_clock::now();
+    while (true) {
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        if (elapsed >= timeout_ms)
+            return std::unexpected(IpcError::Timeout);
 
-    codec_.feed(std::span<const uint8_t>(buf, *n));
-    return codec_.try_decode();
+        uint32_t remaining = timeout_ms - static_cast<uint32_t>(elapsed);
+        uint8_t buf[8192];
+        auto n = raw_read(buf, remaining);
+        if (!n.has_value()) return std::unexpected(n.error());
+        if (*n == 0) return std::unexpected(IpcError::Timeout);
+
+        codec_.feed(std::span<const uint8_t>(buf, *n));
+        msg = codec_.try_decode();
+        if (msg.has_value()) return msg;
+        if (msg.error() != IpcError::BufferTooSmall)
+            return std::unexpected(msg.error());
+    }
 }
 
 bool ControlChannel::is_connected() const {

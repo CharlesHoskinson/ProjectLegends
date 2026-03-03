@@ -130,8 +130,8 @@ TEST_F(CrashHandlerTest, NoCallbackWhenStopped) {
     // Spawn a long-running process
 #ifdef _WIN32
     legends_ipc::SpawnConfig config;
-    config.executable_path = "cmd.exe";
-    config.arguments = {"/c", "timeout", "/t", "30", "/nobreak"};
+    config.executable_path = "ping";
+    config.arguments = {"-n", "31", "127.0.0.1"};
 #else
     legends_ipc::SpawnConfig config;
     config.executable_path = "/bin/sleep";
@@ -176,8 +176,8 @@ TEST_F(CrashHandlerTest, RestartWithInvalidConfigFails) {
 TEST_F(CrashHandlerTest, DestructorStopsCleanly) {
 #ifdef _WIN32
     legends_ipc::SpawnConfig config;
-    config.executable_path = "cmd.exe";
-    config.arguments = {"/c", "timeout", "/t", "30", "/nobreak"};
+    config.executable_path = "ping";
+    config.arguments = {"-n", "31", "127.0.0.1"};
 #else
     legends_ipc::SpawnConfig config;
     config.executable_path = "/bin/sleep";
@@ -208,8 +208,8 @@ TEST_F(CrashHandlerTest, DestructorStopsCleanly) {
 TEST_F(CrashHandlerTest, MultipleStartStopCycles) {
 #ifdef _WIN32
     legends_ipc::SpawnConfig config;
-    config.executable_path = "cmd.exe";
-    config.arguments = {"/c", "timeout", "/t", "30", "/nobreak"};
+    config.executable_path = "ping";
+    config.arguments = {"-n", "31", "127.0.0.1"};
 #else
     legends_ipc::SpawnConfig config;
     config.executable_path = "/bin/sleep";
@@ -229,7 +229,7 @@ TEST_F(CrashHandlerTest, MultipleStartStopCycles) {
         handler.start(&process, [this]() {
             callback_fired_.store(true);
         });
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
         handler.stop();
     }
 
