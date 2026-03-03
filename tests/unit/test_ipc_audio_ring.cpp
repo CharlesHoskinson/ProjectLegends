@@ -143,10 +143,10 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
         GTEST_SKIP() << "Shared memory not available (CI environment limitation)";
     }
 
-    std::atomic<int> total_popped{0};
+    std::atomic<int> total_popped(0);
 
-    // Producer thread
-    std::thread producer([&ring]() {
+    // Define lambdas separately to avoid MSVC parser confusion (C3409)
+    auto producer_fn = [&ring]() {
         std::vector<int16_t> chunk(64); // 32 frames at a time
         int frames_pushed = 0;
         while (frames_pushed < kTotalFrames) {
@@ -156,10 +156,9 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
             ring->push(std::span<const int16_t>(chunk.data(), to_push * 2));
             frames_pushed += to_push;
         }
-    });
+    };
 
-    // Consumer thread
-    std::thread consumer([&ring, &total_popped]() {
+    auto consumer_fn = [&ring, &total_popped]() {
         std::vector<int16_t> buf(64);
         int popped = 0;
         while (popped < kTotalFrames) {
@@ -168,7 +167,10 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
             if (n == 0) std::this_thread::yield();
         }
         total_popped.store(popped);
-    });
+    };
+
+    std::thread producer(producer_fn);
+    std::thread consumer(consumer_fn);
 
     producer.join();
     consumer.join();
