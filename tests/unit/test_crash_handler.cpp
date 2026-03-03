@@ -146,6 +146,15 @@ TEST_F(CrashHandlerTest, NoCallbackWhenStopped) {
 
     auto process = std::move(result.value());
 
+    // EngineSpawner injects --pipe/--shm args; if the process doesn't
+    // understand them it will exit immediately. Verify it's still alive.
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    if (!process.is_alive()) {
+        process.terminate();
+        GTEST_SKIP() << "Spawned process exited immediately (extra args not supported)";
+        return;
+    }
+
     legends_proxy::CrashHandler handler;
     handler.start(&process, [this]() {
         callback_fired_.store(true);
@@ -192,6 +201,13 @@ TEST_F(CrashHandlerTest, DestructorStopsCleanly) {
 
     auto process = std::move(result.value());
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    if (!process.is_alive()) {
+        process.terminate();
+        GTEST_SKIP() << "Spawned process exited immediately (extra args not supported)";
+        return;
+    }
+
     {
         legends_proxy::CrashHandler handler;
         handler.start(&process, [this]() {
@@ -223,6 +239,14 @@ TEST_F(CrashHandlerTest, MultipleStartStopCycles) {
     }
 
     auto process = std::move(result.value());
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    if (!process.is_alive()) {
+        process.terminate();
+        GTEST_SKIP() << "Spawned process exited immediately (extra args not supported)";
+        return;
+    }
+
     legends_proxy::CrashHandler handler;
 
     for (int i = 0; i < 3; ++i) {

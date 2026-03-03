@@ -2800,6 +2800,10 @@ legends_error_t legends_mount_drive(
 
     auto err = dosbox_lib_mount_local(inst->engine_handle, drive_idx,
                                        resolved.c_str(), readonly ? 1 : 0);
+    if (err == DOSBOX_LIB_ERR_NOT_SUPPORTED) {
+        inst->last_error = "Drive mounting not available in this build mode";
+        return LEGENDS_ERR_NOT_SUPPORTED;
+    }
     if (err != DOSBOX_LIB_OK) {
         inst->last_error = "Engine mount failed";
         fire_event(inst, LEGENDS_EVENT_ERROR);
@@ -2828,6 +2832,10 @@ legends_error_t legends_unmount_drive(
     // REQ-API-004: Wire to engine drive system.
     int drive_idx = norm - 'A';
     auto err = dosbox_lib_unmount_drive(inst->engine_handle, drive_idx);
+    if (err == DOSBOX_LIB_ERR_NOT_SUPPORTED) {
+        inst->last_error = "Drive unmounting not available in this build mode";
+        return LEGENDS_ERR_NOT_SUPPORTED;
+    }
     if (err != DOSBOX_LIB_OK) {
         inst->last_error = "Engine unmount failed (no drive at this index)";
         fire_event(inst, LEGENDS_EVENT_ERROR);
