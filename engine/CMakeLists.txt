@@ -204,9 +204,31 @@ if(AIBOX_HEADLESS)
     message(STATUS "Headless mode: SDL stubs enabled")
 endif()
 
+# Phase 3: VGA bridge (separate OBJECT library to avoid vga.h C7626 under C++23)
+# vga.h uses default member initializers in unnamed typedef structs (legacy DOSBox-X style).
+# C++23 makes this a hard error (C7626). Compile as C++17 to avoid.
+add_library(aibox_vga_bridge OBJECT
+    src/misc/vga_bridge.cpp
+)
+target_include_directories(aibox_vga_bridge PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/cpu
+)
+set_target_properties(aibox_vga_bridge PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+)
+target_compile_definitions(aibox_vga_bridge PRIVATE
+    $<$<BOOL:${AIBOX_HEADLESS}>:AIBOX_HEADLESS=1>
+    $<$<BOOL:${AIBOX_LIBRARY_MODE}>:AIBOX_LIBRARY_MODE=1>
+)
+if(MSVC)
+    target_compile_options(aibox_vga_bridge PRIVATE /std:c++17 /permissive)
+endif()
+
 # Build as shared or static library
 if(AIBOX_BUILD_SHARED)
-    add_library(aibox_core SHARED ${AIBOX_CORE_SOURCES})
+    add_library(aibox_core SHARED ${AIBOX_CORE_SOURCES} $<TARGET_OBJECTS:aibox_vga_bridge>)
     set_target_properties(aibox_core PROPERTIES
         POSITION_INDEPENDENT_CODE ON
         WINDOWS_EXPORT_ALL_SYMBOLS ON
@@ -214,7 +236,7 @@ if(AIBOX_BUILD_SHARED)
     target_compile_definitions(aibox_core PRIVATE AIBOX_BUILD_DLL)
     message(STATUS "Building SHARED library")
 else()
-    add_library(aibox_core STATIC ${AIBOX_CORE_SOURCES})
+    add_library(aibox_core STATIC ${AIBOX_CORE_SOURCES} $<TARGET_OBJECTS:aibox_vga_bridge>)
     message(STATUS "Building STATIC library")
 endif()
 

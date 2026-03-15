@@ -11,6 +11,7 @@
 
 #include "dosbox/cpu_bridge.h"
 #include "dosbox/dosbox_context.h"
+#include "dosbox/engine_state.h"
 #include "cpu.h"
 #include "pic.h"
 #include "callback.h"
@@ -139,5 +140,38 @@ CpuExecuteResult execute_ms(DOSBoxContext* ctx, uint32_t ms, uint32_t cycles_per
 
     return result;
 }
+
+void snapshot_cpu_gprs(
+    uint32_t gpr[8], uint32_t& eip, uint32_t& eflags,
+    uint16_t seg_val[6], uint32_t seg_phys[6], uint32_t seg_limit[6])
+{
+    for (int i = 0; i < 8; ++i)
+        gpr[i] = cpu_regs.regs[i].dword[DW_INDEX];
+    eip = cpu_regs.ip.dword[DW_INDEX];
+    eflags = static_cast<uint32_t>(cpu_regs.flags);
+    for (int i = 0; i < 6; ++i) {
+        seg_val[i] = static_cast<uint16_t>(Segs.val[i]);
+        seg_phys[i] = static_cast<uint32_t>(Segs.phys[i]);
+        seg_limit[i] = static_cast<uint32_t>(Segs.limit[i]);
+    }
+}
+
+void restore_cpu_gprs(
+    const uint32_t gpr[8], uint32_t eip, uint32_t eflags,
+    const uint16_t seg_val[6], const uint32_t seg_phys[6], const uint32_t seg_limit[6])
+{
+    for (int i = 0; i < 8; ++i)
+        cpu_regs.regs[i].dword[DW_INDEX] = gpr[i];
+    cpu_regs.ip.dword[DW_INDEX] = eip;
+    cpu_regs.flags = static_cast<Bitu>(eflags);
+    for (int i = 0; i < 6; ++i) {
+        Segs.val[i] = static_cast<Bitu>(seg_val[i]);
+        Segs.phys[i] = static_cast<PhysPt>(seg_phys[i]);
+        Segs.limit[i] = static_cast<PhysPt>(seg_limit[i]);
+    }
+}
+
+// VGA snapshot/restore and helper functions are in vga_bridge.cpp
+// (separate TU to avoid vga.h C7626 error under /permissive-)
 
 } // namespace dosbox

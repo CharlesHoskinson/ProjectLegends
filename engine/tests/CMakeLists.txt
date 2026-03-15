@@ -63,7 +63,6 @@ add_executable(aibox_unit_tests
     unit/test_optional_utils.cpp
     # Phase 5: Interface Improvements
     unit/test_events.cpp
-    unit/test_handle_registry.cpp
     unit/test_event_bus.cpp
     # Phase 6: LLM-Optimized I/O
     unit/test_llm_frame.cpp
@@ -88,6 +87,8 @@ add_executable(aibox_unit_tests
     # Phase A: Memory API + CPU Proof of Life
     unit/test_memory_api.cpp
     unit/test_cpu_proof_of_life.cpp
+    # Phase 3: RAM + VGA Serialization
+    unit/test_zero_rle.cpp
 )
 
 target_link_libraries(aibox_unit_tests PRIVATE

@@ -103,6 +103,85 @@ bool is_cpu_bridge_ready();
  */
 void reset_cpu_bridge();
 
+/**
+ * @brief Snapshot CPU GPRs, EIP, EFLAGS, and segment registers.
+ *
+ * Reads from the cpu_regs and Segs globals and packs into fixed-width
+ * fields for serialization. Used by V5 engine state save (REQ-SR-002).
+ *
+ * @param gpr      Output array of 8 uint32_t (AX,CX,DX,BX,SP,BP,SI,DI)
+ * @param eip      Output EIP value
+ * @param eflags   Output EFLAGS value
+ * @param seg_val  Output array of 6 uint16_t segment selectors (ES,CS,SS,DS,FS,GS)
+ * @param seg_phys Output array of 6 uint32_t segment physical bases
+ * @param seg_limit Output array of 6 uint32_t segment limits
+ */
+void snapshot_cpu_gprs(
+    uint32_t gpr[8], uint32_t& eip, uint32_t& eflags,
+    uint16_t seg_val[6], uint32_t seg_phys[6], uint32_t seg_limit[6]);
+
+/**
+ * @brief Restore CPU GPRs, EIP, EFLAGS, and segment registers.
+ *
+ * Writes to the cpu_regs and Segs globals from fixed-width fields.
+ * Used by V5 engine state load (REQ-SR-002).
+ */
+void restore_cpu_gprs(
+    const uint32_t gpr[8], uint32_t eip, uint32_t eflags,
+    const uint16_t seg_val[6], const uint32_t seg_phys[6], const uint32_t seg_limit[6]);
+
+// Forward declaration
+struct EngineStateVgaRegisters;
+
+/**
+ * @brief Check if VGA hardware is available (mem.linear != nullptr).
+ */
+bool vga_hw_available();
+
+/**
+ * @brief Get pointer to VGA linear memory (VRAM).
+ * @return Pointer to VRAM, or nullptr if not available.
+ */
+uint8_t* vga_mem_linear();
+
+/**
+ * @brief Get size of VGA memory in bytes.
+ */
+uint32_t vga_mem_size();
+
+/**
+ * @brief Recompute derived VGA state after register restore.
+ *
+ * Calls VGA_DetermineMode() + VGA_SetupHandlers().
+ */
+void vga_post_restore();
+
+/**
+ * @brief Snapshot VGA hardware registers into serialization struct.
+ *
+ * Reads from the vga global (VGA_Type) and packs into fixed-width fields
+ * for serialization. Captures seq, attr, crtc, gfx, DAC, latch, config
+ * subset, SVGA bank state, and memory metadata.
+ *
+ * Used by V5 engine state save (REQ-SR-003).
+ *
+ * @param out Output struct to fill
+ */
+void snapshot_vga_registers(EngineStateVgaRegisters& out);
+
+/**
+ * @brief Restore VGA hardware registers from serialization struct.
+ *
+ * Writes to the vga global (VGA_Type) from fixed-width fields.
+ * After calling, invoke VGA_DetermineMode() + VGA_SetupHandlers()
+ * to recompute derived rendering state.
+ *
+ * Used by V5 engine state load (REQ-SR-003).
+ *
+ * @param in Input struct to restore from
+ */
+void restore_vga_registers(const EngineStateVgaRegisters& in);
+
 } // namespace dosbox
 
 #endif // DOSBOX_CPU_BRIDGE_H

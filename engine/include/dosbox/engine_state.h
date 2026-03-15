@@ -35,8 +35,8 @@ namespace dosbox {
 constexpr uint32_t ENGINE_STATE_MAGIC = 0x45584244;
 
 /// Current engine state format version
-/// V4: full PIC controllers, mixer, VGA, DOS serialization
-constexpr uint32_t ENGINE_STATE_VERSION = 4;
+/// V5: CPU GPR serialization (REQ-SR-002)
+constexpr uint32_t ENGINE_STATE_VERSION = 5;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Engine State Header
@@ -365,6 +365,243 @@ struct EngineStateDos {
 static_assert(sizeof(EngineStateDos) == 20, "EngineStateDos must be 20 bytes");
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// CPU GPR State Section [V5] (REQ-SR-002)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * @brief V5 extension header, appended after V4 data at offset ENGINE_STATE_SIZE_V4.
+ *
+ * V4 loaders reject V5 data via version check. V5 loaders read V4 data
+ * normally, then read this extension header at offset 680.
+ */
+struct EngineStateV5ExtHeader {
+    uint32_t ext_magic;          ///< ENGINE_STATE_V5_EXT_MAGIC
+    uint32_t ext_size;           ///< Total extension size (header + payload)
+};
+static_assert(sizeof(EngineStateV5ExtHeader) == 8, "EngineStateV5ExtHeader must be 8 bytes");
+
+/// V5 extension magic: "V5EX" in little-endian
+constexpr uint32_t ENGINE_STATE_V5_EXT_MAGIC = 0x58455635;
+
+/**
+ * @brief Serialized CPU general-purpose register state.
+ *
+ * Captures the full x86 register file: 8 GPRs, EIP, EFLAGS,
+ * and 6 segment registers (val/phys/limit) for ES, CS, SS, DS, FS, GS.
+ * Stored as fixed-width uint32_t/uint16_t for cross-platform portability.
+ */
+struct EngineStateCpuGpr {
+    uint32_t gpr[8];             ///< EAX(0), ECX(1), EDX(2), EBX(3), ESP(4), EBP(5), ESI(6), EDI(7)
+    uint32_t eip;                ///< Instruction pointer
+    uint32_t eflags;             ///< Flags register
+    uint16_t seg_val[6];         ///< Segment selectors: ES(0), CS(1), SS(2), DS(3), FS(4), GS(5)
+    uint16_t _pad1;              ///< Alignment padding
+    uint16_t _pad2;              ///< Alignment padding
+    uint32_t seg_phys[6];        ///< Segment physical bases
+    uint32_t seg_limit[6];       ///< Segment limits
+};
+static_assert(sizeof(EngineStateCpuGpr) == 104, "EngineStateCpuGpr must be 104 bytes");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// V5 Sub-Block Directory [Phase 3: RAM + VGA Serialization]
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Sub-block directory magic: "V5BD" in little-endian
+constexpr uint32_t V5_DIR_MAGIC = 0x44423556;
+
+/// Sub-block tags for the V5 directory
+constexpr uint16_t V5_SUBTAG_RAM     = 2;  ///< Guest RAM contents (zero-RLE compressed)
+constexpr uint16_t V5_SUBTAG_VGA_REG = 3;  ///< VGA hardware registers (flat struct)
+constexpr uint16_t V5_SUBTAG_VRAM    = 4;  ///< VGA VRAM contents (zero-RLE compressed)
+
+/// Flags for V5DirEntry
+constexpr uint16_t V5_BLOCK_FLAG_COMPRESSED = 0x0001;  ///< Block is zero-RLE compressed
+
+/**
+ * @brief V5 sub-block directory header, placed at offset 792 (after CpuGpr).
+ *
+ * Contains magic and entry count. Unknown tags are skipped via offset+size.
+ */
+struct V5SubBlockDir {
+    uint32_t dir_magic;    ///< V5_DIR_MAGIC
+    uint16_t entry_count;  ///< Number of V5DirEntry records following
+    uint16_t _pad;
+};
+static_assert(sizeof(V5SubBlockDir) == 8, "V5SubBlockDir must be 8 bytes");
+
+/**
+ * @brief Single entry in the V5 sub-block directory.
+ *
+ * Points to a data blob at a given offset with known size.
+ * Unknown tags can be skipped by advancing offset+size.
+ */
+struct V5DirEntry {
+    uint16_t tag;          ///< V5_SUBTAG_* identifier
+    uint16_t flags;        ///< V5_BLOCK_FLAG_* flags
+    uint32_t offset;       ///< Byte offset from start of state buffer
+    uint32_t size;         ///< Compressed/stored size in bytes
+    uint32_t orig_size;    ///< Original uncompressed size in bytes
+};
+static_assert(sizeof(V5DirEntry) == 16, "V5DirEntry must be 16 bytes");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VGA Hardware Register State [Phase 3] (REQ-SR-003)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * @brief Serialized VGA hardware register state.
+ *
+ * Captures the full VGA register file: sequencer, attribute controller,
+ * CRTC, graphics controller, DAC (palette + translation tables), latch,
+ * VGA config subset, SVGA bank state, and memory metadata.
+ *
+ * All platform-dependent Bitu fields are stored as fixed-width uint32_t.
+ * Stored uncompressed in the V5 sub-block directory.
+ *
+ * After loading, call VGA_DetermineMode() + VGA_SetupHandlers() to
+ * recompute derived rendering state.
+ */
+struct EngineStateVgaRegisters {
+    // ── Misc output register (3C2h/3CCh) ────────────────────────────────
+    uint8_t misc_output;           ///< Miscellaneous output register
+    uint8_t internal_attrindex;    ///< VGA_Internal::attrindex
+    uint8_t _pad0[2];
+
+    // ── Sequencer (VGA_Seq: 6 registers) ────────────────────────────────
+    uint8_t seq_index;
+    uint8_t seq_reset;
+    uint8_t seq_clocking_mode;
+    uint8_t seq_map_mask;
+    uint8_t seq_character_map_select;
+    uint8_t seq_memory_mode;
+    uint8_t _pad_seq[2];
+
+    // ── Attribute controller (VGA_Attr: 23 bytes) ───────────────────────
+    uint8_t attr_palette[16];
+    uint8_t attr_mode_control;
+    uint8_t attr_horizontal_pel_panning;
+    uint8_t attr_overscan_color;
+    uint8_t attr_color_plane_enable;
+    uint8_t attr_color_select;
+    uint8_t attr_index;
+    uint8_t attr_disabled;
+    uint8_t _pad_attr;
+
+    // ── CRTC (VGA_Crtc: 25 named registers + index + read_only) ────────
+    uint8_t crtc_horizontal_total;
+    uint8_t crtc_horizontal_display_end;
+    uint8_t crtc_start_horizontal_blanking;
+    uint8_t crtc_end_horizontal_blanking;
+    uint8_t crtc_start_horizontal_retrace;
+    uint8_t crtc_end_horizontal_retrace;
+    uint8_t crtc_vertical_total;
+    uint8_t crtc_overflow;
+    uint8_t crtc_preset_row_scan;
+    uint8_t crtc_maximum_scan_line;
+    uint8_t crtc_cursor_start;
+    uint8_t crtc_cursor_end;
+    uint8_t crtc_start_address_high;
+    uint8_t crtc_start_address_low;
+    uint8_t crtc_cursor_location_high;
+    uint8_t crtc_cursor_location_low;
+    uint8_t crtc_vertical_retrace_start;
+    uint8_t crtc_vertical_retrace_end;
+    uint8_t crtc_vertical_display_end;
+    uint8_t crtc_offset;
+    uint8_t crtc_underline_location;
+    uint8_t crtc_start_vertical_blanking;
+    uint8_t crtc_end_vertical_blanking;
+    uint8_t crtc_mode_control;
+    uint8_t crtc_line_compare;
+    uint8_t crtc_index;
+    uint8_t crtc_read_only;
+    uint8_t _pad_crtc;
+
+    // ── Graphics controller (VGA_Gfx: 10 registers) ────────────────────
+    uint8_t gfx_index;
+    uint8_t gfx_set_reset;
+    uint8_t gfx_enable_set_reset;
+    uint8_t gfx_color_compare;
+    uint8_t gfx_data_rotate;
+    uint8_t gfx_read_map_select;
+    uint8_t gfx_mode;
+    uint8_t gfx_miscellaneous;
+    uint8_t gfx_color_dont_care;
+    uint8_t gfx_bit_mask;
+    uint8_t _pad_gfx[2];
+
+    // ── DAC (VGA_Dac) ───────────────────────────────────────────────────
+    uint8_t  dac_bits;
+    uint8_t  dac_pel_mask;
+    uint8_t  dac_pel_index;
+    uint8_t  dac_state;
+    uint8_t  dac_write_index;
+    uint8_t  dac_read_index;
+    uint8_t  dac_hidac_counter;
+    uint8_t  dac_reg02;
+    uint32_t dac_first_changed;    ///< Bitu → uint32_t
+    uint8_t  dac_combine[16];
+    uint8_t  dac_rgb[768];         ///< RGBEntry[256] as R,G,B triplets
+    uint16_t dac_xlat16[256];      ///< 16-bit translation table
+    uint32_t dac_xlat32[256];      ///< 32-bit translation table
+
+    // ── VGA latch ───────────────────────────────────────────────────────
+    uint32_t latch;
+
+    // ── VGA_Config (display-critical fields, Bitu → uint32_t) ──────────
+    uint32_t config_display_start;
+    uint32_t config_real_start;
+    uint32_t config_scan_len;
+    uint32_t config_cursor_start;
+    uint32_t config_line_compare;
+    uint32_t config_full_bit_mask;
+    uint32_t config_full_map_mask;
+    uint32_t config_full_not_map_mask;
+    uint32_t config_full_set_reset;
+    uint32_t config_full_not_enable_set_reset;
+    uint32_t config_full_enable_set_reset;
+    uint32_t config_full_enable_and_set_reset;
+    uint8_t  config_retrace;
+    uint8_t  config_chained;
+    uint8_t  config_compatible_chain4;
+    uint8_t  config_pel_panning;
+    uint8_t  config_hlines_skip;
+    uint8_t  config_bytes_skip;
+    uint8_t  config_addr_shift;
+    uint8_t  config_read_mode;
+    uint8_t  config_write_mode;
+    uint8_t  config_read_map_select;
+    uint8_t  config_color_dont_care;
+    uint8_t  config_color_compare;
+    uint8_t  config_data_rotate;
+    uint8_t  config_raster_op;
+    uint8_t  _pad_config[2];
+
+    // ── SVGA bank state (VGA_SVGA, Bitu → uint32_t) ────────────────────
+    uint32_t svga_read_start;
+    uint32_t svga_write_start;
+    uint32_t svga_bank_mask_full;  ///< bankMask (Bitu → uint32_t)
+    uint32_t svga_bank_read_full;
+    uint32_t svga_bank_write_full;
+    uint8_t  svga_bank_read;
+    uint8_t  svga_bank_write;
+    uint16_t svga_bank_mask;
+    uint32_t svga_bank_size;
+
+    // ── VGA memory metadata (not VRAM data) ─────────────────────────────
+    uint32_t mem_memsize;
+    uint32_t mem_memmask;
+    uint32_t mem_memmask_crtc;
+    uint32_t mem_memsize_original;
+    uint32_t mem_vbe_memsize;
+
+    // ── End padding ─────────────────────────────────────────────────────
+    uint8_t  _pad_end[4];
+};
+static_assert(sizeof(EngineStateVgaRegisters) == 2528,
+    "EngineStateVgaRegisters must be 2528 bytes");
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Total Size Calculation
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -380,9 +617,9 @@ constexpr size_t ENGINE_STATE_SIZE_V3 =
 static_assert(ENGINE_STATE_SIZE_V3 == 544, "V3 size must be 544 bytes");
 
 /**
- * @brief Total size needed for V4 engine state.
+ * @brief Total size for V4 engine state (backward compat baseline).
  */
-constexpr size_t ENGINE_STATE_SIZE =
+constexpr size_t ENGINE_STATE_SIZE_V4 =
     sizeof(EngineStateHeader) +
     sizeof(EngineStateTiming) +
     sizeof(EngineStatePic) +
@@ -393,7 +630,24 @@ constexpr size_t ENGINE_STATE_SIZE =
     sizeof(EngineStateVga) +
     sizeof(EngineStateDos);
 
-static_assert(ENGINE_STATE_SIZE == 680, "ENGINE_STATE_SIZE should be 680 bytes");
+static_assert(ENGINE_STATE_SIZE_V4 == 680, "ENGINE_STATE_SIZE_V4 must be 680 bytes");
+
+/**
+ * @brief Minimum V5 state size (V4 + GPR extension, no sub-block blobs).
+ *
+ * Old V5 states without RAM/VGA blobs are exactly this size.
+ * With Phase 3 blobs, actual size is dynamic (queried via nullptr call).
+ */
+constexpr size_t ENGINE_STATE_SIZE_V5_BASE =
+    ENGINE_STATE_SIZE_V4 +
+    sizeof(EngineStateV5ExtHeader) +
+    sizeof(EngineStateCpuGpr);
+
+static_assert(ENGINE_STATE_SIZE_V5_BASE == 792, "ENGINE_STATE_SIZE_V5_BASE must be 792 bytes");
+
+/// @deprecated Use ENGINE_STATE_SIZE_V5_BASE for compile-time minimum.
+/// Actual V5 size is dynamic — query via dosbox_lib_save_state(nullptr).
+constexpr size_t ENGINE_STATE_SIZE = ENGINE_STATE_SIZE_V5_BASE;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CRC32 Helper
