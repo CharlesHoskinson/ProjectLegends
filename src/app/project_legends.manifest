@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- REQ-QA-015: Windows DPI awareness manifest for crisp rendering on HiDPI displays. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0"
+          xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
+  <assemblyIdentity
+    type="win32"
+    name="com.projectlegends.ProjectLegends"
+    version="1.0.0.0"
+  />
+  <asmv3:application>
+    <asmv3:windowsSettings>
+      <!-- Windows Vista+ per-monitor DPI awareness (legacy API) -->
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">True/PM</dpiAware>
+      <!-- Windows 10 1703+ per-monitor v2 DPI awareness -->
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2,PerMonitor</dpiAwareness>
+    </asmv3:windowsSettings>
+  </asmv3:application>
+</assembly>

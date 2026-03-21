@@ -1051,6 +1051,8 @@ endif()
 if(PAL_BACKEND_SDL2)
     add_executable(project_legends
         src/main.cpp
+        # REQ-QA-015: Windows DPI awareness manifest
+        $<$<PLATFORM_ID:Windows>:src/app/project_legends.manifest>
     )
 
     legends_set_strict_cxx_standard(project_legends)
@@ -1150,6 +1152,8 @@ if(PAL_BACKEND_SDL3)
         external/glad/glad.c
         engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture
         engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
+        # REQ-QA-015: Windows DPI awareness manifest
+        $<$<PLATFORM_ID:Windows>:src/app/project_legends.manifest>
     )
 
     legends_set_strict_cxx_standard(project_legends)
