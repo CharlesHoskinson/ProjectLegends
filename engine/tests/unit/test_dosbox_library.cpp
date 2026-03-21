@@ -722,7 +722,8 @@ TEST_F(DOSBoxLibraryEngineStateTest, SaveStateReturnsCorrectSize) {
     auto err = dosbox_lib_save_state(handle_, nullptr, 0, &size);
 
     EXPECT_EQ(err, DOSBOX_LIB_OK);
-    EXPECT_EQ(size, dosbox::ENGINE_STATE_SIZE);
+    // Dynamic size is at least V5 base, may include RAM/VGA blobs
+    EXPECT_GE(size, dosbox::ENGINE_STATE_SIZE_V5_BASE);
 }
 
 TEST_F(DOSBoxLibraryEngineStateTest, SaveStateWritesValidMagic) {
@@ -756,7 +757,9 @@ TEST_F(DOSBoxLibraryEngineStateTest, SaveStateWritesCorrectTotalSize) {
     dosbox_lib_save_state(handle_, buffer.data(), size, &size);
 
     auto* header = reinterpret_cast<const dosbox::EngineStateHeader*>(buffer.data());
-    EXPECT_EQ(header->total_size, dosbox::ENGINE_STATE_SIZE);
+    // total_size in header matches actual written size
+    EXPECT_EQ(header->total_size, static_cast<uint32_t>(size));
+    EXPECT_GE(header->total_size, static_cast<uint32_t>(dosbox::ENGINE_STATE_SIZE_V5_BASE));
 }
 
 TEST_F(DOSBoxLibraryEngineStateTest, SaveStateWritesValidChecksum) {
@@ -971,7 +974,9 @@ TEST_F(DOSBoxLibraryEngineStateTest, MultipleRoundTripsPreserveState) {
     uint8_t original_hash[32] = {0};
     dosbox_lib_get_state_hash(handle_, original_hash);
 
-    std::vector<uint8_t> buffer(dosbox::ENGINE_STATE_SIZE);
+    size_t buf_size = 0;
+    dosbox_lib_save_state(handle_, nullptr, 0, &buf_size);
+    std::vector<uint8_t> buffer(buf_size);
     size_t size;
 
     for (int i = 0; i < 5; ++i) {
@@ -1059,12 +1064,12 @@ TEST_F(DOSBoxLibraryEngineStateTest, LoadRejectsOffsetBeyondTotal) {
         << "Should reject offset > total_size";
 }
 
-TEST_F(DOSBoxLibraryEngineStateTest, SavedSizeEqualsEngineStateSize) {
+TEST_F(DOSBoxLibraryEngineStateTest, SavedSizeAtLeastV5Base) {
     size_t size = 0;
     auto err = dosbox_lib_save_state(handle_, nullptr, 0, &size);
     EXPECT_EQ(err, DOSBOX_LIB_OK);
-    EXPECT_EQ(size, dosbox::ENGINE_STATE_SIZE)
-        << "Saved size must equal ENGINE_STATE_SIZE constant";
+    EXPECT_GE(size, dosbox::ENGINE_STATE_SIZE_V5_BASE)
+        << "Saved size must be at least ENGINE_STATE_SIZE_V5_BASE";
 }
 
 TEST_F(DOSBoxLibraryEngineStateTest, SavedCrcMatchesData) {

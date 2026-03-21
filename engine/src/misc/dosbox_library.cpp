@@ -14,6 +14,7 @@
 #include "dosbox/engine_state.h"
 #include "dosbox/error_model.h"
 #include "dosbox/state_hash.h"
+#include "dosbox/zero_rle.h"
 #include "aibox/headless_stub.h"
 
 // Drive types for mount API (REQ-API-004)
@@ -562,8 +563,29 @@ dosbox_lib_error_t dosbox_lib_save_state(
     LIB_REQUIRE(g_instance_exists.load(), DOSBOX_LIB_ERR_NOT_INITIALIZED);
     LIB_REQUIRE(g_context != nullptr, DOSBOX_LIB_ERR_NOT_INITIALIZED);
 
-    // Calculate total size needed
-    *size_out = dosbox::ENGINE_STATE_SIZE;
+    auto* ctx_for_size = g_context.get();
+
+    // Count sub-blocks to determine dynamic size
+    uint16_t sub_block_count = 0;
+    bool has_ram = (ctx_for_size->memory.base != nullptr && ctx_for_size->memory.size > 0);
+    bool has_vga_hw = dosbox::vga_hw_available();
+    if (has_ram)    ++sub_block_count;
+    if (has_vga_hw) sub_block_count += 2;  // VGA_REG + VRAM
+
+    // Calculate total size needed (dynamic)
+    size_t total = dosbox::ENGINE_STATE_SIZE_V5_BASE;  // 792 base
+
+    if (sub_block_count > 0) {
+        total += sizeof(dosbox::V5SubBlockDir);                         // 8
+        total += static_cast<size_t>(sub_block_count) * sizeof(dosbox::V5DirEntry); // N×16
+        if (has_ram)
+            total += dosbox::zero_rle_bound(ctx_for_size->memory.size);
+        if (has_vga_hw) {
+            total += sizeof(dosbox::EngineStateVgaRegisters);           // ~2528
+            total += dosbox::zero_rle_bound(dosbox::vga_mem_size());
+        }
+    }
+    *size_out = total;
 
     if (buffer == nullptr) {
         return DOSBOX_LIB_OK;  // Query size only
@@ -740,21 +762,24 @@ dosbox_lib_error_t dosbox_lib_save_state(
     mem.a20_controlport = ctx->memory.a20.controlport;
     std::memcpy(ptr + header.memory_offset, &mem, sizeof(mem));
 
-    // Serialize Mixer state [V4]
-    dosbox::EngineStateMixer mixer{};
-    mixer.freq = ctx->mixer.freq;
-    mixer.blocksize = ctx->mixer.blocksize;
-    mixer.master_vol[0] = ctx->mixer.mastervol[0];
-    mixer.master_vol[1] = ctx->mixer.mastervol[1];
-    mixer.record_vol[0] = ctx->mixer.recordvol[0];
-    mixer.record_vol[1] = ctx->mixer.recordvol[1];
-    mixer.samples = ctx->mixer.prebuffer_samples;
-    mixer.enabled = ctx->mixer.enabled ? 1 : 0;
-    mixer.nosound = ctx->mixer.nosound ? 1 : 0;
-    mixer.swapstereo = ctx->mixer.swapstereo ? 1 : 0;
-    mixer.mute = ctx->mixer.mute ? 1 : 0;
-    mixer.sampleaccurate = ctx->mixer.sampleaccurate ? 1 : 0;
-    std::memcpy(ptr + header.mixer_offset, &mixer, sizeof(mixer));
+    // Serialize Mixer state [V4] — acquire mutex for consistent snapshot (REQ-TH-004)
+    {
+        std::lock_guard<std::mutex> lock(ctx->mixer.mixer_mutex);
+        dosbox::EngineStateMixer mixer{};
+        mixer.freq = ctx->mixer.freq;
+        mixer.blocksize = ctx->mixer.blocksize;
+        mixer.master_vol[0] = ctx->mixer.mastervol[0];
+        mixer.master_vol[1] = ctx->mixer.mastervol[1];
+        mixer.record_vol[0] = ctx->mixer.recordvol[0];
+        mixer.record_vol[1] = ctx->mixer.recordvol[1];
+        mixer.samples = ctx->mixer.prebuffer_samples;
+        mixer.enabled = ctx->mixer.enabled ? 1 : 0;
+        mixer.nosound = ctx->mixer.nosound ? 1 : 0;
+        mixer.swapstereo = ctx->mixer.swapstereo ? 1 : 0;
+        mixer.mute = ctx->mixer.mute ? 1 : 0;
+        mixer.sampleaccurate = ctx->mixer.sampleaccurate ? 1 : 0;
+        std::memcpy(ptr + header.mixer_offset, &mixer, sizeof(mixer));
+    }
 
     // Serialize VGA state [V4]
     dosbox::EngineStateVga vga{};
@@ -798,12 +823,108 @@ dosbox_lib_error_t dosbox_lib_save_state(
     dos.kernel_running = ctx->dos.kernel_running ? 1 : 0;
     std::memcpy(ptr + header.dos_offset, &dos, sizeof(dos));
 
+    // Serialize CPU GPR state [V5] (REQ-SR-002)
+    // Extension block appended after V4 data at offset ENGINE_STATE_SIZE_V4
+    {
+        dosbox::EngineStateCpuGpr gpr{};
+        dosbox::snapshot_cpu_gprs(
+            gpr.gpr, gpr.eip, gpr.eflags,
+            gpr.seg_val, gpr.seg_phys, gpr.seg_limit);
+        std::memcpy(ptr + dosbox::ENGINE_STATE_SIZE_V4 + sizeof(dosbox::EngineStateV5ExtHeader),
+                    &gpr, sizeof(gpr));
+    }
+
+    // ─── Phase 3: Serialize RAM + VGA sub-blocks ────────────────────────
+    size_t actual_total = dosbox::ENGINE_STATE_SIZE_V5_BASE;  // 792
+
+    if (sub_block_count > 0) {
+        // Cursor for blob data (after directory)
+        size_t dir_offset = dosbox::ENGINE_STATE_SIZE_V5_BASE;
+        size_t dir_header_size = sizeof(dosbox::V5SubBlockDir);
+        size_t dir_entries_size = static_cast<size_t>(sub_block_count) * sizeof(dosbox::V5DirEntry);
+        size_t blob_cursor = dir_offset + dir_header_size + dir_entries_size;
+
+        // Temporary storage for directory entries
+        dosbox::V5DirEntry entries[3] = {};
+        uint16_t entry_idx = 0;
+
+        // ── RAM blob ────────────────────────────────────────────────────
+        if (has_ram) {
+            size_t ram_cap = dosbox::zero_rle_bound(ctx->memory.size);
+            size_t ram_enc = dosbox::zero_rle_encode(
+                ctx->memory.base, ctx->memory.size,
+                ptr + blob_cursor, ram_cap);
+
+            entries[entry_idx].tag = dosbox::V5_SUBTAG_RAM;
+            entries[entry_idx].flags = dosbox::V5_BLOCK_FLAG_COMPRESSED;
+            entries[entry_idx].offset = static_cast<uint32_t>(blob_cursor);
+            entries[entry_idx].size = static_cast<uint32_t>(ram_enc);
+            entries[entry_idx].orig_size = static_cast<uint32_t>(ctx->memory.size);
+            blob_cursor += ram_enc;
+            ++entry_idx;
+        }
+
+        // ── VGA register blob ───────────────────────────────────────────
+        if (has_vga_hw) {
+            dosbox::EngineStateVgaRegisters vga_regs{};
+            dosbox::snapshot_vga_registers(vga_regs);
+            std::memcpy(ptr + blob_cursor, &vga_regs, sizeof(vga_regs));
+
+            entries[entry_idx].tag = dosbox::V5_SUBTAG_VGA_REG;
+            entries[entry_idx].flags = 0;  // Uncompressed
+            entries[entry_idx].offset = static_cast<uint32_t>(blob_cursor);
+            entries[entry_idx].size = static_cast<uint32_t>(sizeof(vga_regs));
+            entries[entry_idx].orig_size = static_cast<uint32_t>(sizeof(vga_regs));
+            blob_cursor += sizeof(vga_regs);
+            ++entry_idx;
+
+            // ── VRAM blob ───────────────────────────────────────────────
+            size_t vram_size = dosbox::vga_mem_size();
+            size_t vram_cap = dosbox::zero_rle_bound(vram_size);
+            size_t vram_enc = dosbox::zero_rle_encode(
+                dosbox::vga_mem_linear(), vram_size,
+                ptr + blob_cursor, vram_cap);
+
+            entries[entry_idx].tag = dosbox::V5_SUBTAG_VRAM;
+            entries[entry_idx].flags = dosbox::V5_BLOCK_FLAG_COMPRESSED;
+            entries[entry_idx].offset = static_cast<uint32_t>(blob_cursor);
+            entries[entry_idx].size = static_cast<uint32_t>(vram_enc);
+            entries[entry_idx].orig_size = static_cast<uint32_t>(vram_size);
+            blob_cursor += vram_enc;
+            ++entry_idx;
+        }
+
+        // ── Write directory header ──────────────────────────────────────
+        dosbox::V5SubBlockDir dir{};
+        dir.dir_magic = dosbox::V5_DIR_MAGIC;
+        dir.entry_count = entry_idx;
+        std::memcpy(ptr + dir_offset, &dir, sizeof(dir));
+
+        // ── Write directory entries ─────────────────────────────────────
+        std::memcpy(ptr + dir_offset + dir_header_size, entries,
+                    static_cast<size_t>(entry_idx) * sizeof(dosbox::V5DirEntry));
+
+        actual_total = blob_cursor;
+    }
+
+    // Update ext_size in V5 extension header to cover all data from offset 680
+    {
+        dosbox::EngineStateV5ExtHeader ext_hdr{};
+        ext_hdr.ext_magic = dosbox::ENGINE_STATE_V5_EXT_MAGIC;
+        ext_hdr.ext_size = static_cast<uint32_t>(actual_total - dosbox::ENGINE_STATE_SIZE_V4);
+        std::memcpy(ptr + dosbox::ENGINE_STATE_SIZE_V4, &ext_hdr, sizeof(ext_hdr));
+    }
+
+    // Set actual written size (may be smaller than overestimate)
+    *size_out = actual_total;
+    header.total_size = static_cast<uint32_t>(actual_total);
+
     // Compute checksum over data after header
     const uint8_t* data_start = ptr + sizeof(dosbox::EngineStateHeader);
-    size_t data_size = *size_out - sizeof(dosbox::EngineStateHeader);
+    size_t data_size = actual_total - sizeof(dosbox::EngineStateHeader);
     header.checksum = dosbox::compute_crc32(data_start, data_size);
 
-    // Write header last (includes checksum)
+    // Write header last (includes checksum and actual total_size)
     std::memcpy(ptr, &header, sizeof(header));
 
     return DOSBOX_LIB_OK;
@@ -1049,21 +1170,24 @@ dosbox_lib_error_t dosbox_lib_load_state(
 
     // Deserialize V4 sections (mixer, VGA, DOS)
     if (has_v4_sections) {
-        // Mixer state
-        dosbox::EngineStateMixer mixer{};
-        std::memcpy(&mixer, ptr + header.mixer_offset, sizeof(mixer));
-        ctx->mixer.freq = mixer.freq;
-        ctx->mixer.blocksize = mixer.blocksize;
-        ctx->mixer.mastervol[0] = mixer.master_vol[0];
-        ctx->mixer.mastervol[1] = mixer.master_vol[1];
-        ctx->mixer.recordvol[0] = mixer.record_vol[0];
-        ctx->mixer.recordvol[1] = mixer.record_vol[1];
-        ctx->mixer.prebuffer_samples = mixer.samples;
-        ctx->mixer.enabled = mixer.enabled != 0;
-        ctx->mixer.nosound = mixer.nosound != 0;
-        ctx->mixer.swapstereo = mixer.swapstereo != 0;
-        ctx->mixer.mute = mixer.mute != 0;
-        ctx->mixer.sampleaccurate = mixer.sampleaccurate != 0;
+        // Mixer state — acquire mutex for safe restore (REQ-TH-004)
+        {
+            std::lock_guard<std::mutex> lock(ctx->mixer.mixer_mutex);
+            dosbox::EngineStateMixer mixer{};
+            std::memcpy(&mixer, ptr + header.mixer_offset, sizeof(mixer));
+            ctx->mixer.freq = mixer.freq;
+            ctx->mixer.blocksize = mixer.blocksize;
+            ctx->mixer.mastervol[0] = mixer.master_vol[0];
+            ctx->mixer.mastervol[1] = mixer.master_vol[1];
+            ctx->mixer.recordvol[0] = mixer.record_vol[0];
+            ctx->mixer.recordvol[1] = mixer.record_vol[1];
+            ctx->mixer.prebuffer_samples = mixer.samples;
+            ctx->mixer.enabled = mixer.enabled != 0;
+            ctx->mixer.nosound = mixer.nosound != 0;
+            ctx->mixer.swapstereo = mixer.swapstereo != 0;
+            ctx->mixer.mute = mixer.mute != 0;
+            ctx->mixer.sampleaccurate = mixer.sampleaccurate != 0;
+        }
 
         // VGA state
         dosbox::EngineStateVga vga{};
@@ -1110,6 +1234,99 @@ dosbox_lib_error_t dosbox_lib_load_state(
         ctx->mixer.reset();
         ctx->vga.reset();
         ctx->dos.reset();
+    }
+
+    // Deserialize V5 extension (CPU GPR state) [REQ-SR-002]
+    if (header.version >= 5) {
+        size_t v5_ext_offset = dosbox::ENGINE_STATE_SIZE_V4;
+        size_t v5_ext_end = v5_ext_offset + sizeof(dosbox::EngineStateV5ExtHeader)
+                            + sizeof(dosbox::EngineStateCpuGpr);
+        if (v5_ext_end <= header.total_size) {
+            dosbox::EngineStateV5ExtHeader ext_hdr{};
+            std::memcpy(&ext_hdr, ptr + v5_ext_offset, sizeof(ext_hdr));
+            if (ext_hdr.ext_magic == dosbox::ENGINE_STATE_V5_EXT_MAGIC) {
+                dosbox::EngineStateCpuGpr gpr{};
+                std::memcpy(&gpr, ptr + v5_ext_offset + sizeof(ext_hdr), sizeof(gpr));
+                dosbox::restore_cpu_gprs(
+                    gpr.gpr, gpr.eip, gpr.eflags,
+                    gpr.seg_val, gpr.seg_phys, gpr.seg_limit);
+            }
+        }
+
+        // ── Phase 3: Deserialize RAM + VGA sub-blocks ───────────────────
+        // Sub-block directory starts at offset 792 (after GPR data)
+        size_t dir_offset = dosbox::ENGINE_STATE_SIZE_V5_BASE;
+        if (header.total_size > dir_offset + sizeof(dosbox::V5SubBlockDir)) {
+            dosbox::V5SubBlockDir dir{};
+            std::memcpy(&dir, ptr + dir_offset, sizeof(dir));
+
+            if (dir.dir_magic == dosbox::V5_DIR_MAGIC && dir.entry_count > 0) {
+                size_t entries_offset = dir_offset + sizeof(dosbox::V5SubBlockDir);
+                size_t entries_end = entries_offset +
+                    static_cast<size_t>(dir.entry_count) * sizeof(dosbox::V5DirEntry);
+
+                if (entries_end <= header.total_size) {
+                    for (uint16_t i = 0; i < dir.entry_count; ++i) {
+                        dosbox::V5DirEntry entry{};
+                        std::memcpy(&entry, ptr + entries_offset + i * sizeof(dosbox::V5DirEntry),
+                                    sizeof(entry));
+
+                        // Validate entry bounds
+                        if (static_cast<size_t>(entry.offset) + entry.size > header.total_size)
+                            continue;  // Skip corrupt entry
+
+                        switch (entry.tag) {
+                        case dosbox::V5_SUBTAG_RAM: {
+                            if (ctx->memory.base == nullptr || ctx->memory.size == 0)
+                                break;
+                            if (entry.orig_size > ctx->memory.size)
+                                break;  // Saved RAM larger than current allocation
+                            size_t decoded = dosbox::zero_rle_decode(
+                                ptr + entry.offset, entry.size,
+                                ctx->memory.base, ctx->memory.size);
+                            if (decoded == 0 && entry.orig_size > 0) {
+                                g_last_error = "RAM blob decompression failed";
+                                return DOSBOX_LIB_ERR_INVALID_STATE;
+                            }
+                            break;
+                        }
+                        case dosbox::V5_SUBTAG_VGA_REG: {
+                            if (!dosbox::vga_hw_available())
+                                break;  // No VGA hardware
+                            if (entry.size < sizeof(dosbox::EngineStateVgaRegisters))
+                                break;  // Truncated
+                            dosbox::EngineStateVgaRegisters vga_regs{};
+                            std::memcpy(&vga_regs, ptr + entry.offset, sizeof(vga_regs));
+                            dosbox::restore_vga_registers(vga_regs);
+                            break;
+                        }
+                        case dosbox::V5_SUBTAG_VRAM: {
+                            if (!dosbox::vga_hw_available() || dosbox::vga_mem_size() == 0)
+                                break;
+                            if (entry.orig_size > dosbox::vga_mem_size())
+                                break;
+                            size_t decoded = dosbox::zero_rle_decode(
+                                ptr + entry.offset, entry.size,
+                                dosbox::vga_mem_linear(), dosbox::vga_mem_size());
+                            if (decoded == 0 && entry.orig_size > 0) {
+                                g_last_error = "VRAM blob decompression failed";
+                                return DOSBOX_LIB_ERR_INVALID_STATE;
+                            }
+                            break;
+                        }
+                        default:
+                            // Unknown tag — skip (forward compatible)
+                            break;
+                        }
+                    }
+
+                    // Recompute derived VGA state after register restore
+                    if (dosbox::vga_hw_available()) {
+                        dosbox::vga_post_restore();
+                    }
+                }
+            }
+        }
     }
 
     g_last_error.clear();

@@ -30,10 +30,23 @@ TEST(V4Serialization, DosWireFormatSize) {
     EXPECT_TRUE(std::is_trivially_copyable_v<dosbox::EngineStateDos>);
 }
 
-TEST(V4Serialization, TotalSizeIsV4) {
-    EXPECT_EQ(dosbox::ENGINE_STATE_VERSION, 4u);
-    EXPECT_EQ(dosbox::ENGINE_STATE_SIZE, 680u);
+TEST(V4Serialization, TotalSizeIsV5) {
+    EXPECT_EQ(dosbox::ENGINE_STATE_VERSION, 5u);
+    EXPECT_EQ(dosbox::ENGINE_STATE_SIZE_V4, 680u);
+    EXPECT_EQ(dosbox::ENGINE_STATE_SIZE_V5_BASE, 792u);
     EXPECT_EQ(dosbox::ENGINE_STATE_SIZE_V3, 544u);
+    // ENGINE_STATE_SIZE is now an alias for V5_BASE (dynamic size queried at runtime)
+    EXPECT_EQ(dosbox::ENGINE_STATE_SIZE, dosbox::ENGINE_STATE_SIZE_V5_BASE);
+}
+
+TEST(V4Serialization, VgaRegistersWireFormatSize) {
+    EXPECT_EQ(sizeof(dosbox::EngineStateVgaRegisters), 2528u);
+    EXPECT_TRUE(std::is_trivially_copyable_v<dosbox::EngineStateVgaRegisters>);
+}
+
+TEST(V4Serialization, V5SubBlockDirSize) {
+    EXPECT_EQ(sizeof(dosbox::V5SubBlockDir), 8u);
+    EXPECT_EQ(sizeof(dosbox::V5DirEntry), 16u);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -195,11 +208,12 @@ protected:
     }
 };
 
-TEST_F(V4SaveLoadTest, SaveProducesV4Size) {
+TEST_F(V4SaveLoadTest, SaveProducesDynamicSize) {
     size_t size = 0;
     auto err = dosbox_lib_save_state(handle_, nullptr, 0, &size);
     ASSERT_EQ(err, DOSBOX_LIB_OK);
-    EXPECT_EQ(size, dosbox::ENGINE_STATE_SIZE);
+    // Dynamic size is at least the V5 base (792), may be larger with RAM/VGA blobs
+    EXPECT_GE(size, dosbox::ENGINE_STATE_SIZE_V5_BASE);
 }
 
 TEST_F(V4SaveLoadTest, SaveLoadRoundTrip) {
@@ -218,7 +232,7 @@ TEST_F(V4SaveLoadTest, SaveLoadRoundTrip) {
     dosbox::EngineStateHeader header{};
     std::memcpy(&header, buf.data(), sizeof(header));
     EXPECT_EQ(header.magic, dosbox::ENGINE_STATE_MAGIC);
-    EXPECT_EQ(header.version, 4u);
+    EXPECT_EQ(header.version, dosbox::ENGINE_STATE_VERSION);
     EXPECT_EQ(header.total_size, static_cast<uint32_t>(size));
 
     // Verify V4 offsets are non-zero
@@ -297,15 +311,15 @@ TEST_F(V4SaveLoadTest, V3StateLoadsWithV4Code) {
     // Re-save as V4
     size_t out_size = 0;
     dosbox_lib_save_state(handle_, nullptr, 0, &out_size);
-    EXPECT_EQ(out_size, dosbox::ENGINE_STATE_SIZE); // V4 size on re-save
+    EXPECT_GE(out_size, dosbox::ENGINE_STATE_SIZE_V5_BASE); // Dynamic V5 size on re-save
 
     std::vector<uint8_t> resave_buf(out_size);
     dosbox_lib_save_state(handle_, resave_buf.data(), resave_buf.size(), &out_size);
 
-    // Verify re-saved header is V4
+    // Verify re-saved header is current version
     dosbox::EngineStateHeader resave_header{};
     std::memcpy(&resave_header, resave_buf.data(), sizeof(resave_header));
-    EXPECT_EQ(resave_header.version, 4u);
+    EXPECT_EQ(resave_header.version, dosbox::ENGINE_STATE_VERSION);
 
     // Verify timing survived the V3->V4 round-trip
     dosbox::EngineStateTiming resave_timing{};
