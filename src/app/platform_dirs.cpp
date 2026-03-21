@@ -27,15 +27,20 @@ static std::string getKnownFolderPath(const KNOWNFOLDERID& folder_id) {
     PWSTR path = nullptr;
     HRESULT hr = SHGetKnownFolderPath(folder_id, 0, nullptr, &path);
     if (SUCCEEDED(hr) && path) {
+        // Scope guard ensures CoTaskMemFree is always called, even if
+        // std::string allocation throws std::bad_alloc.
+        struct CoTaskMemGuard {
+            PWSTR ptr;
+            ~CoTaskMemGuard() { if (ptr) CoTaskMemFree(ptr); }
+        } guard{path};
+
         // Convert wide string to UTF-8
         int len = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr);
         if (len > 0) {
             std::string result(static_cast<size_t>(len - 1), '\0');
             WideCharToMultiByte(CP_UTF8, 0, path, -1, result.data(), len, nullptr, nullptr);
-            CoTaskMemFree(path);
             return result;
         }
-        CoTaskMemFree(path);
     }
     return {};
 }
