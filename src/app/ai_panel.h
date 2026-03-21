@@ -35,6 +35,10 @@ public:
     /// Add a response message from the AI.
     void addResponse(const std::string& text);
 
+    /// REQ-SEC-008: Sanitize AI response text to remove potentially dangerous
+    /// patterns (script tags, javascript: URIs, file:// URIs, img tags).
+    static std::string sanitizeResponse(const std::string& text);
+
     /// Add a user message (shown in chat).
     void addUserMessage(const std::string& text);
 

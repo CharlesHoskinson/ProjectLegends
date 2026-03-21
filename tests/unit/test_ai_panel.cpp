@@ -257,5 +257,56 @@ TEST(AIPanelTest, ScrollOffsetStartsAtZero) {
     EXPECT_TRUE(panel.handleKey(0x51, true)); // Down
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// REQ-SEC-008: AI Response Sanitization
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(AIPanelTest, SanitizeResponse_StripsScriptTags) {
+    std::string input = "Hello <script>alert('xss')</script> world";
+    auto result = AIPanel::sanitizeResponse(input);
+    EXPECT_EQ(result, "Hello  world");
+    EXPECT_EQ(result.find("script"), std::string::npos);
+}
+
+TEST(AIPanelTest, SanitizeResponse_StripsScriptTagsCaseInsensitive) {
+    std::string input = "text <SCRIPT>evil()</SCRIPT> more";
+    auto result = AIPanel::sanitizeResponse(input);
+    EXPECT_EQ(result.find("SCRIPT"), std::string::npos);
+    EXPECT_EQ(result.find("evil"), std::string::npos);
+}
+
+TEST(AIPanelTest, SanitizeResponse_StripsImgTags) {
+    std::string input = "see <img src=\"http://evil.com/track.png\"> this";
+    auto result = AIPanel::sanitizeResponse(input);
+    EXPECT_EQ(result.find("img"), std::string::npos);
+    EXPECT_NE(result.find("see"), std::string::npos);
+}
+
+TEST(AIPanelTest, SanitizeResponse_StripsJavascriptURI) {
+    std::string input = "click javascript:alert(1) here";
+    auto result = AIPanel::sanitizeResponse(input);
+    EXPECT_EQ(result.find("javascript:"), std::string::npos);
+}
+
+TEST(AIPanelTest, SanitizeResponse_StripsFileURI) {
+    std::string input = "open file:///etc/passwd please";
+    auto result = AIPanel::sanitizeResponse(input);
+    EXPECT_EQ(result.find("file://"), std::string::npos);
+}
+
+TEST(AIPanelTest, SanitizeResponse_PreservesNormalText) {
+    std::string input = "This is a normal AI response with no issues.";
+    auto result = AIPanel::sanitizeResponse(input);
+    EXPECT_EQ(result, input);
+}
+
+TEST(AIPanelTest, AddResponse_SanitizesBeforeStoring) {
+    AIPanel panel;
+    panel.addResponse("Hello <script>evil()</script> world");
+    ASSERT_EQ(panel.messageCount(), 1u);
+    EXPECT_EQ(panel.history()[0].text.find("script"), std::string::npos);
+    EXPECT_NE(panel.history()[0].text.find("Hello"), std::string::npos);
+}
+
 } // namespace
 } // namespace legends
