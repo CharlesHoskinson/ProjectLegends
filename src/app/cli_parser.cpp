@@ -6,6 +6,7 @@
 #include "app/cli_parser.h"
 #include <legends/legends_version.h>
 
+#include <charconv>
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
@@ -85,19 +86,18 @@ bool CLIOptions::parse(int argc, char** argv) {
                 error_message = "--cycles requires a numeric argument";
                 return false;
             }
-            char* end = nullptr;
-            unsigned long val = std::strtoul(argv[++i], &end, 10);
-            if (end == argv[i] || *end != '\0') {
+            const char* str = argv[++i];
+            const char* str_end = str + std::strlen(str);
+            uint32_t val = 0;
+            auto [ptr, ec] = std::from_chars(str, str_end, val);
+            if (ec != std::errc{} || ptr != str_end) {
                 parse_ok = false;
-                error_message = "--cycles: invalid number";
+                error_message = (ec == std::errc::result_out_of_range)
+                    ? "--cycles: value out of range"
+                    : "--cycles: invalid number";
                 return false;
             }
-            if (val > UINT32_MAX) {
-                parse_ok = false;
-                error_message = "--cycles: value out of range";
-                return false;
-            }
-            cycles = static_cast<uint32_t>(val);
+            cycles = val;
             continue;
         }
         if (std::strcmp(arg, "--machine") == 0) {
@@ -116,19 +116,18 @@ bool CLIOptions::parse(int argc, char** argv) {
                 error_message = "--memsize requires a numeric argument";
                 return false;
             }
-            char* end = nullptr;
-            unsigned long val = std::strtoul(argv[++i], &end, 10);
-            if (end == argv[i] || *end != '\0') {
+            const char* str = argv[++i];
+            const char* str_end = str + std::strlen(str);
+            uint32_t val = 0;
+            auto [ptr, ec] = std::from_chars(str, str_end, val);
+            if (ec != std::errc{} || ptr != str_end) {
                 parse_ok = false;
-                error_message = "--memsize: invalid number";
+                error_message = (ec == std::errc::result_out_of_range)
+                    ? "--memsize: value out of range"
+                    : "--memsize: invalid number";
                 return false;
             }
-            if (val > UINT32_MAX) {
-                parse_ok = false;
-                error_message = "--memsize: value out of range";
-                return false;
-            }
-            memsize_kb = static_cast<uint32_t>(val);
+            memsize_kb = val;
             continue;
         }
         if (std::strcmp(arg, "--profile") == 0) {
