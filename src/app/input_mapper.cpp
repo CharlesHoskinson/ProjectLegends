@@ -5,6 +5,8 @@
 
 #include "app/input_mapper.h"
 
+#include <gsl-lite/gsl-lite.hpp>
+
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -12,6 +14,7 @@
 namespace legends {
 
 bool InputMapper::loadFromFile(const std::string& path) {
+    gsl_Expects(!path.empty());
     std::ifstream file(path);
     if (!file.is_open()) return false;
 
@@ -46,6 +49,7 @@ bool InputMapper::loadFromFile(const std::string& path) {
 }
 
 bool InputMapper::saveToFile(const std::string& path) const {
+    gsl_Expects(!path.empty());
     std::ofstream file(path);
     if (!file.is_open()) return false;
 

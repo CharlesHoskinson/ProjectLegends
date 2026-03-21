@@ -25,6 +25,8 @@
 #include "app/capture.h"
 #include "app/platform_dirs.h"
 
+#include <gsl-lite/gsl-lite.hpp>
+
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -61,7 +63,9 @@ std::string generateCaptureFilename() {
 bool writeScreenshotPNG(const std::string& path,
                         const uint8_t* rgb_data,
                         uint16_t width, uint16_t height) {
-    if (!rgb_data || width == 0 || height == 0) return false;
+    gsl_Expects(rgb_data != nullptr);
+    gsl_Expects(width > 0);
+    gsl_Expects(height > 0);
 
     // stbi_write_png: comp=3 for RGB, stride = width * 3
     int result = stbi_write_png(path.c_str(),

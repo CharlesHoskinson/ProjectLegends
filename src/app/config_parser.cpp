@@ -6,6 +6,8 @@
 #include "app/config_parser.h"
 #include "app/platform_dirs.h"
 
+#include <gsl-lite/gsl-lite.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -16,6 +18,7 @@
 namespace legends {
 
 bool ConfigParser::loadFile(const std::string& path) {
+    gsl_Expects(!path.empty());
     std::ifstream file(path);
     if (!file.is_open()) {
         return false;

@@ -9,6 +9,8 @@
 #include "app/capture.h"
 #include "app/platform_dirs.h"
 
+#include <gsl-lite/gsl-lite.hpp>
+
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -94,10 +96,8 @@ uint32_t SaveManager::computeCRC32(const void* data, size_t size) {
 
 bool SaveManager::saveToSlot(legends_handle engine, int slot,
                              const uint8_t* rgb_thumb, uint16_t w, uint16_t h) {
-    if (!engine || slot < 0 || slot > kMaxSlots) {
-        last_error_ = "Invalid engine handle or slot number";
-        return false;
-    }
+    gsl_Expects(engine != nullptr);
+    gsl_Expects(slot >= 0 && slot <= kMaxSlots);
 
     // Create saves directory
     std::string dir = getSaveDir();
@@ -157,10 +157,8 @@ bool SaveManager::saveToSlot(legends_handle engine, int slot,
 }
 
 bool SaveManager::loadFromSlot(legends_handle engine, int slot) {
-    if (!engine || slot < 0 || slot > kMaxSlots) {
-        last_error_ = "Invalid engine handle or slot number";
-        return false;
-    }
+    gsl_Expects(engine != nullptr);
+    gsl_Expects(slot >= 0 && slot <= kMaxSlots);
 
     std::string path = slotPath(slot);
     if (!std::filesystem::exists(path)) {
@@ -264,6 +262,8 @@ bool SaveManager::recoverAutosave(legends_handle engine) {
 }
 
 bool SaveManager::atomicWrite(const std::string& path, const void* data, size_t size) {
+    gsl_Expects(!path.empty());
+    gsl_Expects(data != nullptr);
     std::string tmp_path = path + ".tmp";
 
     // Write to temporary file

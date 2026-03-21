@@ -284,6 +284,15 @@ target_compile_definitions(legends_pal
         PAL_DEFAULT_BACKEND="${PAL_DEFAULT_BACKEND}"
 )
 
+target_link_libraries(legends_pal PRIVATE gsl::gsl-lite-v1)
+
+target_compile_definitions(legends_pal
+    PRIVATE
+        gsl_CONFIG_DEFAULTS_VERSION=1
+        gsl_CONFIG_CONTRACT_CHECKING_ON
+        gsl_CONFIG_CONTRACT_VIOLATION_TERMINATES=1
+)
+
 if(PAL_BACKEND_SDL2)
     target_link_libraries(legends_pal PRIVATE SDL2::SDL2)
     target_include_directories(legends_pal PRIVATE ${SDL2_INCLUDE_DIRS})
