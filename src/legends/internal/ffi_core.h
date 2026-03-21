@@ -73,11 +73,23 @@ typedef enum {
 } legends_handle_status_t;
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Error Codes
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * Error Codes  (INTERNAL FFI layer — positive values, 0 = success)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * IMPORTANT: This is a SEPARATE error code system from legends_embed.h.
+ *
+ *   legends_embed.h  (public API)  — uses NEGATIVE int32_t values (-1..-14)
+ *   ffi_core.h       (internal)    — uses POSITIVE enum values (1..999)
+ *
+ * The two systems must NEVER be mixed or compared directly.  The internal
+ * codes are caught at the FFI boundary (ffi.h safe_call) and translated
+ * to the public negative codes before crossing into legends_embed.h callers.
+ * The sign difference (positive vs. negative) is the key invariant that
+ * prevents accidental collision; see the static_assert below the enum.
+ */
 
 /**
- * @brief Unified error codes returned by all API functions.
+ * @brief Internal FFI error codes (positive values).
  *
  * Error code ranges:
  * - 0:         Success
@@ -141,6 +153,21 @@ typedef enum {
     LEGENDS_ERR_FATAL = 998,                /**< Fatal unrecoverable error */
     LEGENDS_ERR_INTERNAL = 999              /**< Internal/unknown error */
 } legends_error_t;
+
+/*
+ * Compile-time check: all internal FFI error codes are non-negative.
+ * The public API (legends_embed.h) uses strictly negative values.
+ * This invariant prevents any accidental value collision between the
+ * two error code systems.
+ */
+#ifdef __cplusplus
+static_assert(LEGENDS_OK == 0,
+    "LEGENDS_OK must be zero in both error code systems");
+static_assert(LEGENDS_ERR_INVALID_PARAM > 0,
+    "Internal FFI error codes must be positive (public API uses negative)");
+static_assert(LEGENDS_ERR_INTERNAL > 0,
+    "Internal FFI error codes must be positive (public API uses negative)");
+#endif
 
 /**
  * @brief Get human-readable error message for error code.

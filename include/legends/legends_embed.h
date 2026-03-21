@@ -53,8 +53,18 @@ extern "C" {
      LEGENDS_API_VERSION_PATCH)
 
 /* =========================================================================
- * ERROR CODES
- * ========================================================================= */
+ * ERROR CODES  (Public API — negative values, 0 = success)
+ * =========================================================================
+ *
+ * IMPORTANT: This is a SEPARATE error code system from ffi_core.h.
+ *
+ *   legends_embed.h  (this file, public)  — NEGATIVE int32_t values
+ *   ffi_core.h       (internal FFI)       — POSITIVE enum values
+ *
+ * The internal positive codes never escape to the public API.  They are
+ * caught at the FFI boundary and translated to the negative codes below.
+ * Do NOT include both headers in the same translation unit.
+ */
 
 typedef int32_t legends_error_t;
 
@@ -73,6 +83,20 @@ typedef int32_t legends_error_t;
 #define LEGENDS_ERR_NOT_SUPPORTED     -12
 #define LEGENDS_ERR_INTERNAL          -13
 #define LEGENDS_ERR_WRONG_THREAD      -14   /* Called from non-owner thread */
+
+/*
+ * Compile-time check: all public API error codes are negative (or zero).
+ * The internal FFI layer (ffi_core.h) uses strictly positive values.
+ * This sign-based invariant prevents any accidental collision.
+ */
+#ifdef __cplusplus
+static_assert(LEGENDS_OK == 0,
+    "LEGENDS_OK must be zero in both error code systems");
+static_assert(LEGENDS_ERR_NULL_HANDLE < 0,
+    "Public API error codes must be negative (internal FFI uses positive)");
+static_assert(LEGENDS_ERR_WRONG_THREAD < 0,
+    "Public API error codes must be negative (internal FFI uses positive)");
+#endif
 
 /* =========================================================================
  * HANDLE TYPE (opaque)
