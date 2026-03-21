@@ -97,9 +97,9 @@ void MapperUI::open() {
 }
 
 void MapperUI::close() {
+    commitRemaps();
     open_ = false;
     state_ = State::Idle;
-    pending_remaps_.clear();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -21,11 +21,17 @@
 #include <format>
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FFI Error Codes (from ffi_core.h)
+// FFI Error Codes (from ffi_core.h — INTERNAL positive values)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/* All error codes are now defined in ffi_core.h as the unified legends_error_t enum.
+/* All error codes are now defined in ffi_core.h as the legends_error_t enum.
  * This file uses those codes for exception-to-error-code mapping.
+ *
+ * NOTE: These are INTERNAL positive error codes (1-999).  The public API
+ * (legends_embed.h) uses a separate set of NEGATIVE codes.  The safe_call()
+ * wrapper below catches exceptions and returns internal codes; the caller
+ * in legends_embed_api.cpp is responsible for translating them to the
+ * public negative codes before returning to the user.
  *
  * Hardware/emulation error codes (100-199):
  *   LEGENDS_ERR_CPU      = 100

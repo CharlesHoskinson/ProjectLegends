@@ -129,6 +129,25 @@ TEST_F(MapperUITest, SaveButton_CommitsRemaps) {
     EXPECT_GT(mapper_.customCount(), before);
 }
 
+TEST_F(MapperUITest, CloseCommitsPendingRemaps) {
+    mapper_ui_.open();
+    size_t before = mapper_.customCount();
+    mapper_ui_.addPendingRemap(0x04, 0x05);  // Remap A→B
+    mapper_ui_.close();  // Escape / close should commit pending remaps
+    EXPECT_GT(mapper_.customCount(), before)
+        << "Closing the mapper UI should commit pending remaps";
+}
+
+TEST_F(MapperUITest, EscapeKeyCommitsPendingRemaps) {
+    mapper_ui_.open();
+    size_t before = mapper_.customCount();
+    mapper_ui_.addPendingRemap(0x04, 0x05);  // Remap A→B
+    mapper_ui_.handleKey(0x29, true);  // Escape scancode
+    EXPECT_FALSE(mapper_ui_.isOpen());
+    EXPECT_GT(mapper_.customCount(), before)
+        << "Pressing Escape should commit pending remaps via close()";
+}
+
 TEST_F(MapperUITest, CancelButton_DiscardsRemaps) {
     mapper_ui_.open();
     size_t before = mapper_.customCount();
