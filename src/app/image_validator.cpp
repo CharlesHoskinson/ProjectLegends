@@ -107,6 +107,114 @@ ImageValidationResult ImageValidator::validateFAT(const std::string& path, size_
         }
     }
 
+    // REQ-SEC-016: Validate FAT directory depth to prevent stack exhaustion
+    // from deeply nested directory chains in malformed images.
+    auto depth_result = validateFATDirectoryDepth(file, boot, bytes_per_sector,
+                                                   num_fats, reserved, file_size);
+    if (!depth_result.valid) {
+        return depth_result;
+    }
+
+    return {true, ""};
+}
+
+ImageValidationResult ImageValidator::validateFATDirectoryDepth(
+    std::ifstream& file, const uint8_t* boot,
+    uint16_t bytes_per_sector, uint8_t num_fats,
+    uint16_t reserved_sectors, size_t file_size) {
+
+    // Compute the root directory offset for FAT12/FAT16.
+    // BPB bytes 17-18: Root entry count
+    uint16_t root_entry_count;
+    std::memcpy(&root_entry_count, &boot[17], 2);
+
+    // FAT size (16-bit): BPB bytes 22-23
+    uint16_t fat_size_16;
+    std::memcpy(&fat_size_16, &boot[22], 2);
+
+    if (root_entry_count == 0 || fat_size_16 == 0) {
+        // FAT32 or unrecognizable layout — skip depth check (valid so far)
+        return {true, ""};
+    }
+
+    // Root directory starts after reserved sectors + all FATs
+    uint64_t root_dir_offset = static_cast<uint64_t>(reserved_sectors) * bytes_per_sector
+                             + static_cast<uint64_t>(num_fats) * fat_size_16 * bytes_per_sector;
+
+    uint32_t root_dir_bytes = static_cast<uint32_t>(root_entry_count) * 32u;
+
+    if (root_dir_offset + root_dir_bytes > file_size) {
+        return {false, "FAT root directory extends beyond file"};
+    }
+
+    // Data region starts after root directory
+    uint64_t data_region_offset = root_dir_offset + root_dir_bytes;
+    uint8_t spc = boot[13];
+    uint32_t cluster_bytes = static_cast<uint32_t>(spc) * bytes_per_sector;
+    if (cluster_bytes == 0) {
+        return {false, "Invalid cluster size"};
+    }
+
+    // Walk root directory entries to find subdirectories, then check depth
+    // using iterative BFS with a depth counter capped at kMaxDirectoryDepth.
+    struct DirEntry {
+        uint64_t offset;
+        uint32_t size;
+        int depth;
+    };
+
+    std::vector<DirEntry> stack;
+    stack.push_back({root_dir_offset, root_dir_bytes, 0});
+
+    while (!stack.empty()) {
+        auto current = stack.back();
+        stack.pop_back();
+
+        if (current.depth > kMaxDirectoryDepth) {
+            return {false, "FAT directory depth exceeds limit (" +
+                            std::to_string(kMaxDirectoryDepth) + ")"};
+        }
+
+        // Read directory entries (each is 32 bytes)
+        uint32_t entry_count = current.size / 32;
+        for (uint32_t i = 0; i < entry_count && i < 512; ++i) {
+            uint64_t entry_offset = current.offset + static_cast<uint64_t>(i) * 32;
+            if (entry_offset + 32 > file_size) break;
+
+            uint8_t entry[32];
+            file.seekg(static_cast<std::streamoff>(entry_offset));
+            file.read(reinterpret_cast<char*>(entry), 32);
+            if (!file) break;
+
+            // End-of-directory marker
+            if (entry[0] == 0x00) break;
+            // Deleted entry
+            if (entry[0] == 0xE5) continue;
+            // Long filename entry (attr = 0x0F)
+            if (entry[11] == 0x0F) continue;
+
+            // Check if subdirectory (attr bit 4)
+            if ((entry[11] & 0x10) == 0) continue;
+
+            // Skip "." and ".." entries
+            if (entry[0] == '.' && (entry[1] == ' ' || entry[1] == '.')) continue;
+
+            // Get starting cluster (bytes 26-27 low word)
+            uint16_t start_cluster;
+            std::memcpy(&start_cluster, &entry[26], 2);
+
+            if (start_cluster < 2) continue;
+
+            // Calculate the offset of this subdirectory's data
+            uint64_t subdir_offset = data_region_offset +
+                static_cast<uint64_t>(start_cluster - 2) * cluster_bytes;
+
+            if (subdir_offset + cluster_bytes > file_size) continue;
+
+            stack.push_back({subdir_offset, cluster_bytes, current.depth + 1});
+        }
+    }
+
     return {true, ""};
 }
 
