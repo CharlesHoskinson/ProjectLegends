@@ -1467,7 +1467,7 @@ error message rather than a crash.
 
 ## 9. Security Hardening — PARTIAL
 
-> **Implementation status:** 17 of 22 requirements implemented. Implemented: log file permissions (REQ-SEC-040), AI TLS verification (REQ-SEC-005), API key prohibition (REQ-SEC-006), config field length limits (REQ-SEC-014), AI markdown sanitization (REQ-SEC-008), prompt injection separation (REQ-SEC-018), save state CRC (REQ-SEC-010/011), CWD config warning (REQ-SEC-013), image validation (REQ-SEC-016), canonical paths (REQ-SEC-023), readonly mounts (REQ-SEC-024), sensitive path warning (REQ-SEC-025), dependency scanning (REQ-SEC-028), threat model (REQ-SEC-031), code signing runbook (REQ-SEC-035), SHA-256 checksums (REQ-SEC-036), dependency pinning (REQ-SEC-027). Missing: code signing CI automation (REQ-OPS-008), and 5 Release B items (REQ-SEC-001, REQ-SEC-002, REQ-SEC-038, REQ-SEC-039, REQ-OPS-024).
+> **Implementation status:** 17 of 22 requirements implemented, of which 7 are partial (scaffolded with stubs or basic validation only, not fully exercised against real engine I/O): AI TLS verification (REQ-SEC-005), AI markdown sanitization (REQ-SEC-008), prompt injection separation (REQ-SEC-018), image validation (REQ-SEC-016), canonical paths (REQ-SEC-023), readonly mounts (REQ-SEC-024), sensitive path warning (REQ-SEC-025). Fully implemented: log file permissions (REQ-SEC-040), API key prohibition (REQ-SEC-006), config field length limits (REQ-SEC-014), save state CRC (REQ-SEC-010/011), CWD config warning (REQ-SEC-013), dependency scanning (REQ-SEC-028), threat model (REQ-SEC-031), code signing runbook (REQ-SEC-035), SHA-256 checksums (REQ-SEC-036), dependency pinning (REQ-SEC-027). Missing: code signing CI automation (REQ-OPS-008), and 5 Release B items (REQ-SEC-001, REQ-SEC-002, REQ-SEC-038, REQ-SEC-039, REQ-OPS-024).
 
 **Source:** Security engineering persona review (v3.0.0)
 **Severity:** HIGH — The roadmap previously contained no dedicated security section,
@@ -1990,7 +1990,7 @@ gaps in build infrastructure, release automation, and operational concerns.
 
 ## 12. Quality Engineering — MOSTLY COMPLETE
 
-> **Implementation status:** 19 of 19 quality requirements implemented (Release A). Deferred to external dependencies: macOS Retina testing (REQ-QA-016, needs hardware), Wayland CI (REQ-QA-017, needs compositor).
+> **Implementation status:** 19 of 19 quality requirements implemented (Release A), though several rely on scaffolded stubs pending real engine I/O plumbing. Deferred to external dependencies: macOS Retina testing (REQ-QA-016, needs hardware), Wayland CI (REQ-QA-017, needs compositor). Not yet validated end-to-end: pairwise configuration testing (REQ-QA-008, test matrix runs but boot-to-prompt depends on engine plumbing), cross-config save loading (REQ-QA-011, config fingerprint comparison stubbed), atomic save writes (REQ-QA-012, temp-file + rename implemented but not stress-tested under power loss).
 
 **Source:** QA/Test engineering persona review (v3.0.0)
 **Assessment:** Significant blind spots exist around OS state transitions, run loop
@@ -2172,7 +2172,7 @@ edge cases, configuration interactions, and platform-specific behavior.
 
 ## 13. User Experience & Accessibility — PARTIAL
 
-> **Implementation status:** 5 of 11 requirements implemented (host key concept REQ-UX-003, keyboard menu navigation REQ-UX-009, DPI-aware scaling REQ-UX-008, performance overlay REQ-UX-005, autosave on crash REQ-UX-010). Missing: first-run wizard, drag-and-drop, command palette, GUI settings dialog, hung guest detection.
+> **Implementation status:** 2-3 of 11 requirements implemented. Implemented: host key concept (REQ-UX-003, hotkey dispatcher wired), keyboard menu navigation (REQ-UX-009, menu system supports keyboard). Partially implemented: autosave on crash (REQ-UX-010, crash breadcrumb exists but recovery-on-relaunch not wired). Scaffolded but not functional: DPI-aware scaling (REQ-UX-008, stub only), performance overlay (REQ-UX-005, stub only). Missing: first-run wizard (REQ-UX-001), drag-and-drop (REQ-UX-002), command palette (REQ-UX-004), GUI settings dialog (REQ-UX-006), per-game profiles (REQ-UX-007), hung guest detection (REQ-UX-011).
 
 **Source:** End-user/DOS gamer persona review (v3.0.0)
 **Assessment:** The roadmap focuses on engineering correctness but lacks attention to
@@ -2281,9 +2281,9 @@ first-run experience, discoverability, accessibility, and error recovery.
 
 ---
 
-## 14. GPL v2 Process Isolation — STUB
+## 14. GPL v2 Process Isolation — MOSTLY COMPLETE
 
-> **Implementation status:** 2 of 16 requirements implemented (license files only: REQ-ISO-001 COPYING, REQ-ISO-002 NOTICE). IPC protocol (`src/legends_ipc/protocol.cpp`) is a placeholder. 14 requirements not started.
+> **Implementation status:** 12-13 of 16 requirements implemented. License files (REQ-ISO-001, REQ-ISO-002), IPC message serialization library with wire format (REQ-ISO-003, REQ-ISO-004), engine host executable (REQ-ISO-005, REQ-ISO-006), shared memory framebuffer (REQ-ISO-007), shared memory audio ring buffer (REQ-ISO-008), control channel protocol (REQ-ISO-009), proxy library (REQ-ISO-010), compile-time backend switch (REQ-ISO-011), engine process spawning (REQ-ISO-012). Partial: crash recovery (REQ-ISO-013), heartbeat monitoring (REQ-ISO-014). Not started: license scanner CI (REQ-ISO-015), integration test suite for full IPC round-trip (REQ-ISO-016).
 
 > **Design document:** `docs/design/GPL2_PROCESS_ISOLATION_DESIGN.md` (TDD-LIC-001)
 >

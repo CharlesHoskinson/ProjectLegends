@@ -69,22 +69,38 @@ option(LEGENDS_ENABLE_MT32 "Enable MUNT MT-32 emulation" OFF)
 
 # Tier A (new/refactored code): strict warnings, -Werror enabled via target property
 # Tier B (legacy migration): warnings on, NOT errors (set per legacy target)
+#
+# WARNING/HARDENING FLAGS USE AN INTERFACE LIBRARY (legends_compile_options)
+# instead of global add_compile_options(). This prevents project warning and
+# hardening flags from leaking into FetchContent dependencies (GoogleTest,
+# SDL3, gsl-lite, etc.). Each project target links legends_compile_options
+# via the legends_set_strict/legacy_cxx_standard() helpers.
+
+add_library(legends_compile_options INTERFACE)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    # Base warnings for all targets
-    add_compile_options(-Wall -Wextra -Wpedantic)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        add_compile_options(-g -O0)
-    else()
-        add_compile_options(-O2)
-    endif()
+    # Base warnings for project targets only
+    target_compile_options(legends_compile_options INTERFACE
+        -Wall -Wextra -Wpedantic
+        $<$<CONFIG:Debug>:-g -O0>
+        $<$<NOT:$<CONFIG:Debug>>:-O2>
+    )
+    # Security hardening (H3)
+    target_compile_options(legends_compile_options INTERFACE
+        -fstack-protector-strong -D_FORTIFY_SOURCE=2
+        -fPIE
+    )
+    target_link_options(legends_compile_options INTERFACE -pie)
 elseif(MSVC)
-    add_compile_options(/W4 /permissive- /utf-8)
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+    target_compile_options(legends_compile_options INTERFACE /W4 /permissive- /utf-8)
+    target_compile_definitions(legends_compile_options INTERFACE _CRT_SECURE_NO_WARNINGS)
+    # Security hardening (H3)
+    target_link_options(legends_compile_options INTERFACE /GUARD:CF)
 endif()
 
 # Helper function to apply C++23 and strict warnings to a target (Tier A)
 function(legends_set_strict_cxx_standard target_name)
+    target_link_libraries(${target_name} PRIVATE legends_compile_options)
     set_target_properties(${target_name} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
@@ -102,6 +118,7 @@ endfunction()
 
 # Helper function for legacy code under migration (Tier B)
 function(legends_set_legacy_cxx_standard target_name)
+    target_link_libraries(${target_name} PRIVATE legends_compile_options)
     set_target_properties(${target_name} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
@@ -113,18 +130,6 @@ function(legends_set_legacy_cxx_standard target_name)
     endif()
     # Tier B: warnings NOT errors (migration in progress)
 endfunction()
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Security Hardening (H3)
-# ─────────────────────────────────────────────────────────────────────────────
-
-if(MSVC)
-    add_link_options(/GUARD:CF)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-fstack-protector-strong -D_FORTIFY_SOURCE=2)
-    add_compile_options(-fPIE)
-    add_link_options(-pie)
-endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Dependencies (loaded from cmake/dependencies.cmake above)
