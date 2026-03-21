@@ -11,7 +11,9 @@
 
 namespace legends {
 
-void AudioMixer::mix(int16_t* out, const int16_t* src_a, const int16_t* src_b, size_t count) {
+void AudioMixer::mix(std::span<int16_t> out, std::span<const int16_t> src_a,
+                     std::span<const int16_t> src_b) {
+    size_t count = out.size();
     if (count == 0) {
         return;
     }
@@ -21,7 +23,8 @@ void AudioMixer::mix(int16_t* out, const int16_t* src_a, const int16_t* src_b, s
     }
 }
 
-void AudioMixer::mixAdditive(int16_t* out, const int16_t* src, size_t count) {
+void AudioMixer::mixAdditive(std::span<int16_t> out, std::span<const int16_t> src) {
+    size_t count = std::min(out.size(), src.size());
     if (count == 0) {
         return;
     }
@@ -31,11 +34,11 @@ void AudioMixer::mixAdditive(int16_t* out, const int16_t* src, size_t count) {
     }
 }
 
-void AudioMixer::applyVolume(int16_t* buf, size_t count, float volume) {
-    if (count == 0) {
+void AudioMixer::applyVolume(std::span<int16_t> buf, float volume) {
+    if (buf.empty()) {
         return;
     }
-    for (size_t i = 0; i < count; ++i) {
+    for (size_t i = 0; i < buf.size(); ++i) {
         int32_t scaled = static_cast<int32_t>(std::lroundf(
             static_cast<float>(buf[i]) * volume));
         buf[i] = clampToInt16(scaled);
@@ -52,17 +55,18 @@ int16_t AudioMixer::clampToInt16(int32_t value) {
     return static_cast<int16_t>(value);
 }
 
-void AudioMixer::mixN(int16_t* out, const int16_t* const* sources, size_t n, size_t count) {
-    if (count == 0) {
+void AudioMixer::mixN(std::span<int16_t> out,
+                       std::span<const std::span<const int16_t>> sources) {
+    if (out.empty()) {
         return;
     }
 
     // Zero the output buffer first.
-    std::memset(out, 0, count * sizeof(int16_t));
+    std::memset(out.data(), 0, out.size() * sizeof(int16_t));
 
     // Additively mix each source.
-    for (size_t s = 0; s < n; ++s) {
-        mixAdditive(out, sources[s], count);
+    for (const auto& src : sources) {
+        mixAdditive(out, src);
     }
 }
 

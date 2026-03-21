@@ -65,7 +65,7 @@ TEST_F(VideoCaptureTest, StopCapture_FinalizesFile) {
     // Write a few frames
     std::vector<uint8_t> frame(320 * 200 * 3, 64);
     for (int i = 0; i < 5; ++i) {
-        capture_.addVideoFrame(frame.data(), 320, 200);
+        capture_.addVideoFrame(frame, 320, 200);
     }
 
     capture_.stopCapture();
@@ -94,14 +94,14 @@ TEST_F(VideoCaptureTest, DoubleStart_ReturnsFalse) {
 TEST_F(VideoCaptureTest, AddVideoFrame_WhileRecording) {
     ASSERT_TRUE(capture_.startCapture(output_path_, 64, 64, 30));
     std::vector<uint8_t> frame(64 * 64 * 3, 128);
-    EXPECT_TRUE(capture_.addVideoFrame(frame.data(), 64, 64));
+    EXPECT_TRUE(capture_.addVideoFrame(frame, 64, 64));
     EXPECT_EQ(capture_.framesWritten(), 1u);
 }
 
 TEST_F(VideoCaptureTest, AddAudioSamples_WhileRecording) {
     ASSERT_TRUE(capture_.startCapture(output_path_, 64, 64, 30));
     std::vector<int16_t> audio(4096, 0);
-    EXPECT_TRUE(capture_.addAudioSamples(audio.data(), audio.size()));
+    EXPECT_TRUE(capture_.addAudioSamples(audio));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -111,7 +111,7 @@ TEST_F(VideoCaptureTest, AddAudioSamples_WhileRecording) {
 TEST_F(VideoCaptureTest, OutputFileIsValidAVI) {
     ASSERT_TRUE(capture_.startCapture(output_path_, 320, 200, 30));
     std::vector<uint8_t> frame(320 * 200 * 3, 0);
-    capture_.addVideoFrame(frame.data(), 320, 200);
+    capture_.addVideoFrame(frame, 320, 200);
     capture_.stopCapture();
 
     // Read first 12 bytes and verify RIFF/AVI header
@@ -129,22 +129,15 @@ TEST_F(VideoCaptureTest, OutputFileIsValidAVI) {
 // gsl-lite Contract Violations
 // ═══════════════════════════════════════════════════════════════════════════
 
-TEST_F(VideoCaptureTest, NullRGB_AddFrameThrowsFailFast) {
+TEST_F(VideoCaptureTest, EmptyRGB_AddFrameThrowsFailFast) {
     ASSERT_TRUE(capture_.startCapture(output_path_, 64, 64, 30));
-    EXPECT_THROW(capture_.addVideoFrame(nullptr, 64, 64),
+    EXPECT_THROW(capture_.addVideoFrame(std::span<const uint8_t>{}, 64, 64),
                  legends::gsl::fail_fast);
 }
 
-TEST_F(VideoCaptureTest, NullPCM_AddAudioThrowsFailFast) {
+TEST_F(VideoCaptureTest, EmptyPCM_AddAudioThrowsFailFast) {
     ASSERT_TRUE(capture_.startCapture(output_path_, 64, 64, 30));
-    EXPECT_THROW(capture_.addAudioSamples(nullptr, 100),
-                 legends::gsl::fail_fast);
-}
-
-TEST_F(VideoCaptureTest, ZeroCount_AddAudioThrowsFailFast) {
-    ASSERT_TRUE(capture_.startCapture(output_path_, 64, 64, 30));
-    int16_t dummy = 0;
-    EXPECT_THROW(capture_.addAudioSamples(&dummy, 0),
+    EXPECT_THROW(capture_.addAudioSamples(std::span<const int16_t>{}),
                  legends::gsl::fail_fast);
 }
 

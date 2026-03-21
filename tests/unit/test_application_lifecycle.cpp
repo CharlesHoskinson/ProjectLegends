@@ -213,15 +213,14 @@ TEST(ApplicationLifecycleTest, NotPausedAndMenuClosed_StepsEngine) {
 TEST(ApplicationLifecycleTest, AudioMixer_MixAdditive_DoesNotCrash) {
     std::vector<int16_t> dst = {100, 200, -100};
     std::vector<int16_t> src = {50, -50, 100};
-    AudioMixer::mixAdditive(dst.data(), src.data(), 3);
+    AudioMixer::mixAdditive(dst, src);
     // Verify mixing happened (values summed and clamped)
     EXPECT_NE(dst[0], 100); // Should be ~150
 }
 
 TEST(ApplicationLifecycleTest, AudioMixer_MixAdditive_EmptyBuffers) {
     // Mixing zero samples should not crash
-    int16_t dummy = 0;
-    AudioMixer::mixAdditive(&dummy, &dummy, 0);
+    AudioMixer::mixAdditive(std::span<int16_t>{}, std::span<const int16_t>{});
     SUCCEED();
 }
 

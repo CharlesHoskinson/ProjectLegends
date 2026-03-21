@@ -1207,7 +1207,9 @@ void Application::pumpAudio() {
             legends_capture_midi_audio(engine_, midi_buf.data(), midi_buf.size(), &midi_actual);
             if (midi_actual > 0) {
                 size_t mix_count = std::min(actual, midi_actual);
-                AudioMixer::mixAdditive(audio_buffer_.data(), midi_buf.data(), mix_count);
+                AudioMixer::mixAdditive(
+                    std::span<int16_t>{audio_buffer_.data(), mix_count},
+                    std::span<const int16_t>{midi_buf.data(), mix_count});
             }
         }
     }

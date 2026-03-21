@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -59,16 +60,14 @@ public:
     /// @param width Frame width
     /// @param height Frame height
     /// @return true on success
-    /// @pre rgb != nullptr (gsl_Expects)
-    bool addVideoFrame(const uint8_t* rgb, uint16_t width, uint16_t height);
+    /// @pre !rgb.empty() (gsl_Expects)
+    bool addVideoFrame(std::span<const uint8_t> rgb, uint16_t width, uint16_t height);
 
     /// @brief Add audio samples to the recording.
     /// @param pcm PCM signed 16-bit samples (interleaved stereo)
-    /// @param count Number of samples (not bytes)
     /// @return true on success
-    /// @pre pcm != nullptr (gsl_Expects)
-    /// @pre count > 0 (gsl_Expects)
-    bool addAudioSamples(const int16_t* pcm, size_t count);
+    /// @pre !pcm.empty() (gsl_Expects)
+    bool addAudioSamples(std::span<const int16_t> pcm);
 
     /// @brief Number of video frames written.
     /// @return Frame count

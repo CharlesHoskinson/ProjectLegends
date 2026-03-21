@@ -22,7 +22,7 @@ static bool is_codec_available() {
     ZMBVCodec codec;
     if (!codec.initCompress(16, 16)) return false;
     std::vector<uint8_t> frame(16 * 16 * 3, 42);
-    auto encoded = codec.encodeFrame(frame.data(), 16, 16, true);
+    auto encoded = codec.encodeFrame(frame, 16, 16, true);
     if (encoded.empty()) return false;
     return std::any_of(encoded.begin(), encoded.end(), [](uint8_t b){ return b != 0; });
 }
@@ -59,7 +59,7 @@ TEST(ZMBVCodecTest, EncodeKeyframe_NonEmpty) {
 
     // Solid black frame
     std::vector<uint8_t> frame(64 * 64 * 3, 0);
-    auto encoded = codec.encodeFrame(frame.data(), 64, 64, true);
+    auto encoded = codec.encodeFrame(frame, 64, 64, true);
     EXPECT_FALSE(encoded.empty()) << "Keyframe should produce output";
 }
 
@@ -71,11 +71,11 @@ TEST(ZMBVCodecTest, EncodeDeltaFrame_SameData) {
     std::vector<uint8_t> frame(64 * 64 * 3, 128);
 
     // First frame is keyframe
-    auto keyframe = codec.encodeFrame(frame.data(), 64, 64, true);
+    auto keyframe = codec.encodeFrame(frame, 64, 64, true);
     ASSERT_FALSE(keyframe.empty());
 
     // Delta of identical data should be smaller than keyframe
-    auto delta = codec.encodeFrame(frame.data(), 64, 64, false);
+    auto delta = codec.encodeFrame(frame, 64, 64, false);
     EXPECT_FALSE(delta.empty());
     EXPECT_LE(delta.size(), keyframe.size())
         << "Delta of identical frames should be <= keyframe size";
@@ -88,7 +88,7 @@ TEST(ZMBVCodecTest, CompressionRatio_SolidColor) {
 
     // All-black 640x480 should compress very well
     std::vector<uint8_t> frame(640 * 480 * 3, 0);
-    auto encoded = codec.encodeFrame(frame.data(), 640, 480, true);
+    auto encoded = codec.encodeFrame(frame, 640, 480, true);
     ASSERT_FALSE(encoded.empty());
 
     size_t raw_size = 640 * 480 * 3;
@@ -98,7 +98,7 @@ TEST(ZMBVCodecTest, CompressionRatio_SolidColor) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Round-trip: Encode → Decode
+// Round-trip: Encode -> Decode
 // ═══════════════════════════════════════════════════════════════════════════
 
 TEST(ZMBVCodecTest, RoundTrip_IdenticalOutput) {
@@ -114,12 +114,11 @@ TEST(ZMBVCodecTest, RoundTrip_IdenticalOutput) {
         frame[i] = static_cast<uint8_t>(i & 0xFF);
     }
 
-    auto encoded = encoder.encodeFrame(frame.data(), 64, 64, true);
+    auto encoded = encoder.encodeFrame(frame, 64, 64, true);
     ASSERT_FALSE(encoded.empty());
 
     std::vector<uint8_t> decoded(64 * 64 * 3);
-    ASSERT_TRUE(decoder.decodeFrame(encoded.data(), encoded.size(),
-                                     decoded.data(), decoded.size()));
+    ASSERT_TRUE(decoder.decodeFrame(encoded, decoded));
 
     EXPECT_EQ(frame, decoded) << "Round-trip should produce identical output";
 }
@@ -130,7 +129,7 @@ TEST(ZMBVCodecTest, MinimumDimensions_16x16) {
     ASSERT_TRUE(codec.initCompress(16, 16));
 
     std::vector<uint8_t> frame(16 * 16 * 3, 42);
-    auto encoded = codec.encodeFrame(frame.data(), 16, 16, true);
+    auto encoded = codec.encodeFrame(frame, 16, 16, true);
     EXPECT_FALSE(encoded.empty());
 }
 
@@ -138,42 +137,34 @@ TEST(ZMBVCodecTest, MinimumDimensions_16x16) {
 // gsl-lite Contract Violations
 // ═══════════════════════════════════════════════════════════════════════════
 
-TEST(ZMBVCodecTest, NullPixels_EncodeThrowsFailFast) {
+TEST(ZMBVCodecTest, EmptyPixels_EncodeThrowsFailFast) {
     ZMBVCodec codec;
     ASSERT_TRUE(codec.initCompress(64, 64));
-    EXPECT_THROW(codec.encodeFrame(nullptr, 64, 64, true),
+    EXPECT_THROW(codec.encodeFrame(std::span<const uint8_t>{}, 64, 64, true),
                  legends::gsl::fail_fast);
 }
 
 TEST(ZMBVCodecTest, EncodeBeforeInit_ThrowsFailFast) {
     ZMBVCodec codec;
     std::vector<uint8_t> frame(64 * 64 * 3, 0);
-    EXPECT_THROW(codec.encodeFrame(frame.data(), 64, 64, true),
+    EXPECT_THROW(codec.encodeFrame(frame, 64, 64, true),
                  legends::gsl::fail_fast);
 }
 
-TEST(ZMBVCodecTest, ZeroDataSize_DecodeThrowsFailFast) {
+TEST(ZMBVCodecTest, EmptyData_DecodeThrowsFailFast) {
     ZMBVCodec codec;
     ASSERT_TRUE(codec.initDecompress(64, 64));
     std::vector<uint8_t> output(64 * 64 * 3);
-    uint8_t dummy = 0;
-    EXPECT_THROW(codec.decodeFrame(&dummy, 0, output.data(), output.size()),
+    EXPECT_THROW(codec.decodeFrame(std::span<const uint8_t>{}, output),
                  legends::gsl::fail_fast);
 }
 
-TEST(ZMBVCodecTest, NullData_DecodeThrowsFailFast) {
-    ZMBVCodec codec;
-    ASSERT_TRUE(codec.initDecompress(64, 64));
-    std::vector<uint8_t> output(64 * 64 * 3);
-    EXPECT_THROW(codec.decodeFrame(nullptr, 10, output.data(), output.size()),
-                 legends::gsl::fail_fast);
-}
-
-TEST(ZMBVCodecTest, NullOutput_DecodeThrowsFailFast) {
+TEST(ZMBVCodecTest, EmptyOutput_DecodeThrowsFailFast) {
     ZMBVCodec codec;
     ASSERT_TRUE(codec.initDecompress(64, 64));
     uint8_t dummy = 0;
-    EXPECT_THROW(codec.decodeFrame(&dummy, 1, nullptr, 64 * 64 * 3),
+    EXPECT_THROW(codec.decodeFrame(std::span<const uint8_t>{&dummy, 1},
+                                    std::span<uint8_t>{}),
                  legends::gsl::fail_fast);
 }
 
@@ -182,7 +173,7 @@ TEST(ZMBVCodecTest, DecodeInCompressMode_ThrowsFailFast) {
     ASSERT_TRUE(codec.initCompress(64, 64));
     std::vector<uint8_t> output(64 * 64 * 3);
     uint8_t dummy = 0;
-    EXPECT_THROW(codec.decodeFrame(&dummy, 1, output.data(), output.size()),
+    EXPECT_THROW(codec.decodeFrame(std::span<const uint8_t>{&dummy, 1}, output),
                  legends::gsl::fail_fast);
 }
 
