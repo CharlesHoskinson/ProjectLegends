@@ -24,27 +24,26 @@ struct AudioRingHeader {
 };                                        // 32 total
 
 static_assert(sizeof(AudioRingHeader) == 32);
+static_assert(std::atomic<uint32_t>::is_always_lock_free,
+              "SHM requires lock-free uint32_t atomics for ring buffer indices");
 
 // Lock-free SPSC ring buffer for audio over shared memory.
 // Producer (engine): push(samples) -> frames written
 // Consumer (proxy):  pop(buffer)   -> frames read
 class AudioRingBuffer {
 public:
-<<<<<<< HEAD
     [[nodiscard]] static std::expected<AudioRingBuffer, IpcError>
     create(const std::string& name, uint32_t capacity_frames,
            uint32_t channels = 2, uint32_t sample_rate = 44100);
 
     [[nodiscard]] static std::expected<AudioRingBuffer, IpcError>
     open(const std::string& name, uint32_t capacity_frames,
-=======
     static std::expected<AudioRingBuffer, IpcError>
     create(std::string_view name, uint32_t capacity_frames,
            uint32_t channels = 2, uint32_t sample_rate = 44100);
 
     static std::expected<AudioRingBuffer, IpcError>
     open(std::string_view name, uint32_t capacity_frames,
->>>>>>> worktree-agent-a4ab30fc
          uint32_t channels = 2, uint32_t sample_rate = 44100);
 
     // Push samples (interleaved). Returns number of frames actually written.

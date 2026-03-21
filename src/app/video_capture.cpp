@@ -119,9 +119,9 @@ void VideoCapture::stopCapture() {
 // Frame Writing
 // ─────────────────────────────────────────────────────────────────────────────
 
-bool VideoCapture::addVideoFrame(const uint8_t* rgb, uint16_t width,
+bool VideoCapture::addVideoFrame(std::span<const uint8_t> rgb, uint16_t width,
                                   uint16_t height) {
-    gsl_Expects(rgb != nullptr);
+    gsl_Expects(!rgb.empty());
 
     if (!recording_) return false;
 
@@ -153,18 +153,18 @@ bool VideoCapture::addVideoFrame(const uint8_t* rgb, uint16_t width,
     return true;
 }
 
-bool VideoCapture::addAudioSamples(const int16_t* pcm, size_t count) {
-    gsl_Expects(pcm != nullptr);
-    gsl_Expects(count > 0);
+bool VideoCapture::addAudioSamples(std::span<const int16_t> pcm) {
+    gsl_Expects(!pcm.empty());
 
     if (!recording_) return false;
 
+    size_t count = pcm.size();
     size_t byte_count = count * sizeof(int16_t);
 
     long chunk_offset = std::ftell(file_) - movi_start_pos_;
     writeTag("01wb");
     writeU32LE(static_cast<uint32_t>(byte_count));
-    std::fwrite(pcm, sizeof(int16_t), count, file_);
+    std::fwrite(pcm.data(), sizeof(int16_t), count, file_);
 
     // Pad to 2-byte boundary
     if (byte_count & 1) {

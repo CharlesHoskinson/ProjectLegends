@@ -5,7 +5,7 @@
 
 #include "app/ai_panel.h"
 #include "app/action_bus.h"
-#include "legends/internal/cp437_font_8x16.h"
+#include "app/overlay_render.h"
 
 #include <gsl-lite/gsl-lite.hpp>
 
@@ -13,84 +13,11 @@
 #include <cctype>
 #include <cstring>
 #include <regex>
+#include <span>
 
 namespace legends {
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Text rendering helpers (same pattern as MenuSystem)
-// ─────────────────────────────────────────────────────────────────────────────
-
 namespace {
-
-// Modifies rgb buffer in-place — darkens each pixel to 1/4 brightness.
-void darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-                int x, int y, int w, int h) {
-    for (int py = y; py < y + h && py < buf_h; ++py) {
-        if (py < 0) continue;
-        for (int px = x; px < x + w && px < buf_w; ++px) {
-            if (px < 0) continue;
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb[idx]     = static_cast<uint8_t>(rgb[idx] / 4);
-            rgb[idx + 1] = static_cast<uint8_t>(rgb[idx + 1] / 4);
-            rgb[idx + 2] = static_cast<uint8_t>(rgb[idx + 2] / 4);
-        }
-    }
-}
-
-// Modifies rgb buffer in-place — renders a single CP437 glyph.
-void drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-              int x, int y, uint8_t ch,
-              uint8_t fr, uint8_t fg, uint8_t fb,
-              uint8_t br, uint8_t bg, uint8_t bb) {
-    const auto& font = internal::CP437_FONT_8x16;
-    int glyph_offset = static_cast<int>(ch) * 16;
-
-    for (int row = 0; row < 16; ++row) {
-        int py = y + row;
-        if (py < 0 || py >= buf_h) continue;
-
-        uint8_t bits = font[static_cast<size_t>(glyph_offset + row)];
-        for (int col = 0; col < 8; ++col) {
-            int px = x + col;
-            if (px < 0 || px >= buf_w) continue;
-
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            bool set = (bits & (0x80 >> col)) != 0;
-            rgb[idx]     = set ? fr : br;
-            rgb[idx + 1] = set ? fg : bg;
-            rgb[idx + 2] = set ? fb : bb;
-        }
-    }
-}
-
-// Modifies rgb buffer in-place — renders a string of CP437 glyphs.
-void drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-                int x, int y, const std::string& text,
-                uint8_t fr, uint8_t fg, uint8_t fb,
-                uint8_t br, uint8_t bg, uint8_t bb) {
-    for (size_t i = 0; i < text.size(); ++i) {
-        drawChar(rgb, buf_w, buf_h, pitch,
-                 x + static_cast<int>(i) * 8, y,
-                 static_cast<uint8_t>(text[i]),
-                 fr, fg, fb, br, bg, bb);
-    }
-}
-
-// Modifies rgb buffer in-place — fills a rectangle with a solid color.
-void fillRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-              int x, int y, int w, int h,
-              uint8_t r, uint8_t g, uint8_t b) {
-    for (int py = y; py < y + h && py < buf_h; ++py) {
-        if (py < 0) continue;
-        for (int px = x; px < x + w && px < buf_w; ++px) {
-            if (px < 0) continue;
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb[idx]     = r;
-            rgb[idx + 1] = g;
-            rgb[idx + 2] = b;
-        }
-    }
-}
 
 // Word-wrap text into lines of max_chars width
 std::vector<std::string> wordWrap(const std::string& text, int max_chars) {
@@ -298,6 +225,7 @@ void AIPanel::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
 
     // Default pitch = tightly packed RGB24
     if (pitch == 0) pitch = static_cast<uint32_t>(width) * 3;
+    std::span<uint8_t> buf{rgb_buffer, static_cast<size_t>(pitch) * height};
 
     // Panel dimensions (right 40% of screen)
     int panel_w = static_cast<int>(static_cast<float>(width) * panel_width_fraction_);
@@ -305,22 +233,22 @@ void AIPanel::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
     int panel_h = height;
 
     // Darken the panel area for semi-transparent background
-    darkenRect(rgb_buffer, width, height, pitch,
-               panel_x, 0, panel_w, panel_h);
+    overlay::darkenRect(buf, width, height, pitch,
+               panel_x, 0, panel_w, panel_h, 4);
 
     // Fill with dark background
-    fillRect(rgb_buffer, width, height, pitch,
+    overlay::fillRect(buf, width, height, pitch,
              panel_x, 0, panel_w, panel_h,
              20, 20, 30);
 
     // ── Title bar ──────────────────────────────────────────────────────
     int title_h = kCharH + 4;
-    fillRect(rgb_buffer, width, height, pitch,
+    overlay::fillRect(buf, width, height, pitch,
              panel_x, 0, panel_w, title_h,
              40, 40, 80);
 
     std::string title = " AI Assistant";
-    drawString(rgb_buffer, width, height, pitch,
+    overlay::drawString(buf, width, height, pitch,
                panel_x + kPadding, 2, title,
                220, 220, 255,    // fg: light blue-white
                40, 40, 80);      // bg: dark blue
@@ -328,7 +256,7 @@ void AIPanel::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
     // ── Input box at bottom ────────────────────────────────────────────
     int input_h = kCharH + kPadding;
     int input_y = height - input_h;
-    fillRect(rgb_buffer, width, height, pitch,
+    overlay::fillRect(buf, width, height, pitch,
              panel_x, input_y, panel_w, input_h,
              30, 30, 50);
 
@@ -341,7 +269,7 @@ void AIPanel::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
     }
     display_input += '_'; // cursor
 
-    drawString(rgb_buffer, width, height, pitch,
+    overlay::drawString(buf, width, height, pitch,
                panel_x + kPadding, input_y + kPadding / 2,
                display_input,
                200, 200, 200,    // fg: light gray
@@ -403,7 +331,7 @@ void AIPanel::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
         }
 
         if (!line.text.empty()) {
-            drawString(rgb_buffer, width, height, pitch,
+            overlay::drawString(buf, width, height, pitch,
                        panel_x + kPadding, draw_y,
                        line.text,
                        fr, fg_c, fb,

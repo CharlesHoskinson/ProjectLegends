@@ -755,6 +755,60 @@ if(LEGENDS_BUILD_TESTS)
 
     # Engine host sources for IPC dispatcher tests (not part of legends_app)
     target_sources(legends_unit_tests PRIVATE
+<<<<<<< HEAD
+=======
+        src/app/cli_parser.cpp
+        src/app/config_parser.cpp
+        src/app/platform_dirs.cpp
+        src/app/scancode_map.cpp
+        src/app/action_bus.cpp
+        src/app/capture.cpp
+        src/app/input_mapper.cpp
+        src/app/save_manager.cpp
+        src/app/menu_system.cpp
+        src/app/hotkey_dispatcher.cpp
+        src/app/mount_manager.cpp
+        src/app/image_validator.cpp
+        src/app/zmbv_codec.cpp
+        src/app/video_capture.cpp
+        src/app/mapper_ui.cpp
+        src/app/save_browser.cpp
+        src/app/overlay_render.cpp
+        # Phase 3: Enhanced Features
+        src/app/joystick_mapper.cpp
+        src/app/shader_renderer.cpp
+        src/app/shader_presets.cpp
+        src/app/ai_config.cpp
+        src/app/ai_http_client.cpp
+        src/app/ai_screen_context.cpp
+        src/app/ai_panel.cpp
+        src/app/audio_mixer.cpp
+        src/app/midi_config.cpp
+        src/app/printer_manager.cpp
+        src/app/ttf_renderer.cpp
+        src/app/ipx_config.cpp
+        src/app/glide_config.cpp
+        src/app/pc98_config.cpp
+        # Phase 4: Polish & Release
+        src/app/file_logger.cpp
+        src/app/error_reporter.cpp
+        src/app/crash_breadcrumb.cpp
+        src/app/crash_reporter.cpp
+        # Phase 4 Sprint 4: SSIM
+        src/app/ssim.cpp
+        # Phase 4 Sprint 6: Portable mode
+        src/app/portable_mode.cpp
+        # Phase 4 Sprint 7: Update checker
+        src/app/update_checker.cpp
+    )
+
+    target_sources(legends_unit_tests PRIVATE
+        external/glad/glad.c
+        engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture tests
+        engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
+        src/app/application.cpp              # Application lifecycle tests
+        # Engine host sources for IPC dispatcher tests
+>>>>>>> worktree-agent-af784013
         src/engine_host/cli_parser.cpp
         src/engine_host/engine_dispatcher.cpp
     )
@@ -1156,7 +1210,60 @@ endif()
 if(PAL_BACKEND_SDL3)
     add_executable(project_legends
         src/main.cpp
+<<<<<<< HEAD
         $<$<PLATFORM_ID:Windows>:src/app/project_legends.manifest>
+=======
+        src/app/application.cpp
+        src/app/action_bus.cpp
+        src/app/capture.cpp
+        src/app/input_mapper.cpp
+        src/app/save_manager.cpp
+        src/app/menu_system.cpp
+        src/app/hotkey_dispatcher.cpp
+        src/app/cli_parser.cpp
+        src/app/config_parser.cpp
+        src/app/platform_dirs.cpp
+        src/app/scancode_map.cpp
+        src/app/mount_manager.cpp
+        src/app/image_validator.cpp
+        src/app/video_capture.cpp
+        src/app/zmbv_codec.cpp
+        src/app/mapper_ui.cpp
+        src/app/save_browser.cpp
+        src/app/overlay_render.cpp
+        # Phase 3: Enhanced Features
+        src/app/joystick_mapper.cpp
+        src/app/shader_renderer.cpp
+        src/app/shader_presets.cpp
+        src/app/ai_config.cpp
+        src/app/ai_http_client.cpp
+        src/app/ai_screen_context.cpp
+        src/app/ai_panel.cpp
+        src/app/audio_mixer.cpp
+        src/app/midi_config.cpp
+        src/app/printer_manager.cpp
+        src/app/ttf_renderer.cpp
+        src/app/ipx_config.cpp
+        src/app/glide_config.cpp
+        src/app/pc98_config.cpp
+        # Phase 4: Polish & Release
+        src/app/file_logger.cpp
+        src/app/error_reporter.cpp
+        src/app/crash_breadcrumb.cpp
+        src/app/crash_reporter.cpp
+        # Phase 4 Sprint 4: SSIM
+        src/app/ssim.cpp
+        # Phase 4 Sprint 6: Portable mode
+        src/app/portable_mode.cpp
+        # Phase 4 Sprint 7: Update checker (platform-conditional)
+        src/app/update_checker.cpp
+        $<$<PLATFORM_ID:Windows>:src/app/update_checker_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
+        $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
+        external/glad/glad.c
+        engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture
+        engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
+>>>>>>> worktree-agent-af784013
     )
 
     legends_set_strict_cxx_standard(project_legends)

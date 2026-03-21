@@ -33,7 +33,6 @@ public:
     [[nodiscard]] bool loadFile(const std::string& path);
 
     /// Get a string value.
-<<<<<<< HEAD
     [[nodiscard]] std::string get(const std::string& section, const std::string& key,
                     const std::string& default_val = "") const;
 
@@ -50,7 +49,6 @@ public:
 
     /// Check if a key exists within a section.
     [[nodiscard]] bool hasKey(const std::string& section, const std::string& key) const;
-=======
     std::string get(std::string_view section, std::string_view key,
                     const std::string& default_val = "") const;
 
@@ -67,7 +65,6 @@ public:
 
     /// Check if a key exists within a section.
     bool hasKey(std::string_view section, std::string_view key) const;
->>>>>>> worktree-agent-a4ab30fc
 
     /// Get the path of the loaded file (empty if none loaded).
     [[nodiscard]] const std::string& getLoadedPath() const { return loaded_path_; }
@@ -85,13 +82,10 @@ private:
     std::unordered_map<std::string, SectionMap> sections_;
     std::string loaded_path_;
 
-<<<<<<< HEAD
     [[nodiscard]] static std::string toLower(const std::string& s);
     [[nodiscard]] static std::string trim(const std::string& s);
-=======
     static std::string toLower(std::string_view s);
     static std::string trim(std::string_view s);
->>>>>>> worktree-agent-a4ab30fc
 };
 
 } // namespace legends

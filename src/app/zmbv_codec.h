@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 // Forward-declare the engine's VideoCodec to avoid exposing its header
@@ -58,22 +59,25 @@ public:
     /// @param height Frame height
     /// @param keyframe true to force keyframe, false for delta frame
     /// @return Encoded frame data (empty on failure)
-    /// @pre pixels != nullptr (gsl_Expects)
+    /// @pre !pixels.empty() (gsl_Expects)
     /// @pre isInitialized() (gsl_Expects)
     [[nodiscard]] std::vector<uint8_t> encodeFrame(const uint8_t* pixels,
+    std::vector<uint8_t> encodeFrame(std::span<const uint8_t> pixels,
                                       uint16_t width, uint16_t height,
                                       bool keyframe);
 
     /// @brief Decode a compressed frame into RGB24 output.
     /// @param data Compressed frame data
-    /// @param data_size Size of compressed data
     /// @param output Output buffer (width * height * 3 bytes)
-    /// @param output_size Size of output buffer
     /// @return true on success
     /// @pre data != nullptr (gsl_Expects)
     /// @pre output != nullptr (gsl_Expects)
     [[nodiscard]] bool decodeFrame(const uint8_t* data, size_t data_size,
                      uint8_t* output, size_t output_size);
+    /// @pre !data.empty() (gsl_Expects)
+    /// @pre !output.empty() (gsl_Expects)
+    bool decodeFrame(std::span<const uint8_t> data,
+                     std::span<uint8_t> output);
 
 private:
     std::unique_ptr<VideoCodec> codec_;

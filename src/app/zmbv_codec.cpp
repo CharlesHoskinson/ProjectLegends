@@ -57,10 +57,10 @@ bool ZMBVCodec::initDecompress(uint16_t width, uint16_t height) {
 // Compression
 // ─────────────────────────────────────────────────────────────────────────────
 
-std::vector<uint8_t> ZMBVCodec::encodeFrame(const uint8_t* pixels,
+std::vector<uint8_t> ZMBVCodec::encodeFrame(std::span<const uint8_t> pixels,
                                               uint16_t width, uint16_t height,
                                               bool keyframe) {
-    gsl_Expects(pixels != nullptr);
+    gsl_Expects(!pixels.empty());
     gsl_Expects(initialized_ && compress_mode_);
 
     int flags = keyframe ? 1 : 0;
@@ -74,7 +74,7 @@ std::vector<uint8_t> ZMBVCodec::encodeFrame(const uint8_t* pixels,
     // Feed lines top-to-bottom
     size_t pitch = static_cast<size_t>(width) * 3;
     for (uint16_t y = 0; y < height; ++y) {
-        void* line = const_cast<uint8_t*>(pixels + y * pitch);
+        void* line = const_cast<uint8_t*>(pixels.data() + y * pitch);
         codec_->CompressLines(1, &line);
     }
 
@@ -88,23 +88,22 @@ std::vector<uint8_t> ZMBVCodec::encodeFrame(const uint8_t* pixels,
 // Decompression
 // ─────────────────────────────────────────────────────────────────────────────
 
-bool ZMBVCodec::decodeFrame(const uint8_t* data, size_t data_size,
-                             uint8_t* output, size_t output_size) {
-    gsl_Expects(data != nullptr);
-    gsl_Expects(output != nullptr);
-    gsl_Expects(data_size > 0);
+bool ZMBVCodec::decodeFrame(std::span<const uint8_t> data,
+                             std::span<uint8_t> output) {
+    gsl_Expects(!data.empty());
+    gsl_Expects(!output.empty());
     gsl_Expects(initialized_ && !compress_mode_);
 
-    if (!codec_->DecompressFrame(const_cast<uint8_t*>(data),
-                                  static_cast<int>(data_size))) {
+    if (!codec_->DecompressFrame(const_cast<uint8_t*>(data.data()),
+                                  static_cast<int>(data.size()))) {
         return false;
     }
 
     // Extract 24-bit RGB output
     size_t expected = static_cast<size_t>(width_) * height_ * 3;
-    if (output_size < expected) return false;
+    if (output.size() < expected) return false;
 
-    codec_->Output_UpsideDown_24(output);
+    codec_->Output_UpsideDown_24(output.data());
     return true;
 }
 
