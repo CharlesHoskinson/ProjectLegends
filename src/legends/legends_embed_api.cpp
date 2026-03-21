@@ -2869,7 +2869,7 @@ legends_error_t legends_start_video_capture(
     // will delegate to the Application's video capture controller.
     (void)output_path;
 
-    return LEGENDS_OK;
+    return LEGENDS_ERR_NOT_SUPPORTED;
 }
 
 legends_error_t legends_stop_video_capture(
@@ -2917,7 +2917,7 @@ legends_error_t legends_joystick_event(
     // TODO: Bridge to engine joystick port 0x201 once engine context is wired.
     (void)joystick_id; (void)axis_x; (void)axis_y; (void)buttons;
 
-    return LEGENDS_OK;
+    return LEGENDS_ERR_NOT_SUPPORTED;
 }
 
 // Sprint 4: MIDI
@@ -3024,7 +3024,7 @@ legends_error_t legends_set_ttf_font(
     // TODO: Forward to engine TTF renderer once wired.
     (void)ttf_path; (void)point_size;
 
-    return LEGENDS_OK;
+    return LEGENDS_ERR_NOT_SUPPORTED;
 }
 
 // Sprint 6: IPX Networking
