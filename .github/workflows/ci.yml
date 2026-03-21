@@ -90,6 +90,43 @@ jobs:
           retention-days: 14
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # Build and Test - Linux IPC Mode (GPL v2 Process Isolation)
+  # ─────────────────────────────────────────────────────────────────────────────
+  linux-ipc:
+    name: Linux IPC (gcc)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake ninja-build gcc-13 g++-13
+
+      - name: Configure (IPC mode)
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DLEGENDS_BUILD_TESTS=ON \
+            -DLEGENDS_HEADLESS=ON \
+            -DLEGENDS_USE_IPC=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Verify IPC executables exist
+        run: |
+          test -f build/legends_engine_host && echo "legends_engine_host: OK"
+          test -f build/legends_unit_tests && echo "legends_unit_tests: OK"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Build and Test - Linux SDL3
   # ─────────────────────────────────────────────────────────────────────────────
   linux-sdl3:
