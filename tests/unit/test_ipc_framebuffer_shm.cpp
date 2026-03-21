@@ -1,26 +1,15 @@
 // SPDX-License-Identifier: MIT
 #include <gtest/gtest.h>
 #include <legends_ipc/framebuffer_shm.h>
+#include "test_utils/ipc_test_helpers.h"
 #include <cstring>
 #include <string>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
 using namespace legends_ipc;
+using legends_ipc::test_utils::ipc_test_unique_name;
 
 static std::string fb_name(const char* base) {
-    static int counter = 0;
-#ifdef _WIN32
-    auto pid = static_cast<unsigned long>(GetCurrentProcessId());
-#else
-    auto pid = static_cast<unsigned long>(getpid());
-#endif
-    return std::string(base) + "_" + std::to_string(pid) +
-           "_" + std::to_string(counter++);
+    return ipc_test_unique_name(base);
 }
 
 TEST(IpcFramebufferShmTest, CreateAndWriteFlipRead) {

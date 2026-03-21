@@ -2,24 +2,16 @@
 #include <gtest/gtest.h>
 #include <legends_ipc/control_channel.h>
 #include <legends_ipc/messages.h>
+#include "test_utils/ipc_test_helpers.h"
 #include <array>
 #include <string>
 #include <thread>
 
-#ifdef _WIN32
-#include <windows.h>
-#define GET_PID() static_cast<uint32_t>(GetCurrentProcessId())
-#else
-#include <unistd.h>
-#define GET_PID() static_cast<uint32_t>(getpid())
-#endif
-
 using namespace legends_ipc;
+using legends_ipc::test_utils::ipc_test_unique_name;
 
 static std::string cc_name(const char* base) {
-    static int counter = 0;
-    return std::string(base) + "_" + std::to_string(GET_PID()) +
-           "_" + std::to_string(counter++);
+    return ipc_test_unique_name(base);
 }
 
 TEST(IpcControlChannelTest, ServerClientConnect) {
