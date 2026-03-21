@@ -30,15 +30,13 @@ public:
 
     /// Validate a disk image file before mounting.
     /// Returns {true, ""} on success or {false, reason} on failure.
-    static ImageValidationResult validate(const std::string& path);
+    [[nodiscard]] static ImageValidationResult validate(const std::string& path);
 
 private:
-    static ImageValidationResult validateFAT(const std::string& path, size_t file_size);
-    static ImageValidationResult validateISO(const std::string& path, size_t file_size);
+    [[nodiscard]] static ImageValidationResult validateFAT(const std::string& path, size_t file_size);
+    [[nodiscard]] static ImageValidationResult validateISO(const std::string& path, size_t file_size);
 
-    /// REQ-SEC-016: Validate directory nesting depth in FAT images to prevent
-    /// stack exhaustion from adversarial deeply-nested directory chains.
-    static ImageValidationResult validateFATDirectoryDepth(
+    [[nodiscard]] static ImageValidationResult validateFATDirectoryDepth(
         std::ifstream& file, const uint8_t* boot,
         uint16_t bytes_per_sector, uint8_t num_fats,
         uint16_t reserved_sectors, size_t file_size);

@@ -9,8 +9,8 @@
 
 namespace legends {
 
-std::string getExecutableDir();
-bool        isPortableMode();
-std::string getPortableBaseDir();
+[[nodiscard]] std::string getExecutableDir();
+[[nodiscard]] bool        isPortableMode();
+[[nodiscard]] std::string getPortableBaseDir();
 
 } // namespace legends

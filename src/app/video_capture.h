@@ -42,7 +42,7 @@ public:
     /// @param fps Frames per second
     /// @return true on success, false if already recording or init fails
     /// @pre path is not empty (gsl_Expects)
-    bool startCapture(const std::string& path, uint16_t width, uint16_t height,
+    [[nodiscard]] bool startCapture(const std::string& path, uint16_t width, uint16_t height,
                       uint32_t fps);
 
     /// @brief Stop recording and finalize the AVI file.
@@ -52,7 +52,7 @@ public:
 
     /// @brief Check if currently recording.
     /// @return true if recording is active
-    bool isRecording() const { return recording_; }
+    [[nodiscard]] bool isRecording() const { return recording_; }
 
     /// @brief Add a video frame to the recording.
     /// @param rgb RGB24 pixel data (width * height * 3 bytes)
@@ -60,7 +60,7 @@ public:
     /// @param height Frame height
     /// @return true on success
     /// @pre rgb != nullptr (gsl_Expects)
-    bool addVideoFrame(const uint8_t* rgb, uint16_t width, uint16_t height);
+    [[nodiscard]] bool addVideoFrame(const uint8_t* rgb, uint16_t width, uint16_t height);
 
     /// @brief Add audio samples to the recording.
     /// @param pcm PCM signed 16-bit samples (interleaved stereo)
@@ -68,11 +68,11 @@ public:
     /// @return true on success
     /// @pre pcm != nullptr (gsl_Expects)
     /// @pre count > 0 (gsl_Expects)
-    bool addAudioSamples(const int16_t* pcm, size_t count);
+    [[nodiscard]] bool addAudioSamples(const int16_t* pcm, size_t count);
 
     /// @brief Number of video frames written.
     /// @return Frame count
-    uint64_t framesWritten() const { return frames_written_; }
+    [[nodiscard]] uint64_t framesWritten() const { return frames_written_; }
 
 private:
     void writeRIFFHeader();

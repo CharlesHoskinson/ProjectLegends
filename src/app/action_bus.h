@@ -91,10 +91,10 @@ public:
     void clearAll();
 
     /// Return the number of handlers registered for an action.
-    size_t handlerCount(Action action) const;
+    [[nodiscard]] size_t handlerCount(Action action) const;
 
     /// Return total number of dispatches (for testing).
-    uint32_t dispatchCount() const { return dispatch_count_; }
+    [[nodiscard]] uint32_t dispatchCount() const { return dispatch_count_; }
 
 private:
     std::unordered_map<Action, std::vector<Handler>> handlers_;

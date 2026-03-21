@@ -37,25 +37,25 @@ struct FrameData {
 // Reader (proxy):  read_if_new(last_idx) -> optional<FrameData>
 class FramebufferShm {
 public:
-    static std::expected<FramebufferShm, IpcError>
+    [[nodiscard]] static std::expected<FramebufferShm, IpcError>
     create(const std::string& name, uint32_t max_width, uint32_t max_height);
 
-    static std::expected<FramebufferShm, IpcError>
+    [[nodiscard]] static std::expected<FramebufferShm, IpcError>
     open(const std::string& name, uint32_t max_width, uint32_t max_height);
 
     // Writer: get buffer to write into (the non-active buffer).
-    std::span<uint8_t> begin_write();
+    [[nodiscard]] std::span<uint8_t> begin_write();
 
     // Writer: flip active buffer and update dimensions + frame index.
     void end_write(uint32_t width, uint32_t height);
 
     // Reader: read the active buffer if frame_index > last_index.
-    std::optional<FrameData> read_if_new(uint64_t last_index) const;
+    [[nodiscard]] std::optional<FrameData> read_if_new(uint64_t last_index) const;
 
-    uint32_t max_width() const;
-    uint32_t max_height() const;
+    [[nodiscard]] uint32_t max_width() const;
+    [[nodiscard]] uint32_t max_height() const;
 
-    static size_t required_size(uint32_t max_w, uint32_t max_h) {
+    [[nodiscard]] static size_t required_size(uint32_t max_w, uint32_t max_h) {
         return sizeof(FramebufferHeader) + 2 * static_cast<size_t>(max_w) * max_h * 4;
     }
 

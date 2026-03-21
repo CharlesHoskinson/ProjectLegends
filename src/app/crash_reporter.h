@@ -16,10 +16,10 @@ public:
 
     void install();
     void uninstall();
-    bool enable(const std::string& crash_dir);
+    [[nodiscard]] bool enable(const std::string& crash_dir);
     void disable();
 };
 
-CrashReporter& globalCrashReporter();
+[[nodiscard]] CrashReporter& globalCrashReporter();
 
 } // namespace legends

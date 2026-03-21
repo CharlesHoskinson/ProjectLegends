@@ -25,28 +25,28 @@ public:
     ControlChannel& operator=(ControlChannel&& other) noexcept;
 
     // Create server-side channel. Blocks until client connects (up to timeout_ms).
-    static std::expected<ControlChannel, IpcError>
+    [[nodiscard]] static std::expected<ControlChannel, IpcError>
     create_server(const std::string& pipe_name, uint32_t timeout_ms = 5000);
 
     // Connect as client to an existing server.
-    static std::expected<ControlChannel, IpcError>
+    [[nodiscard]] static std::expected<ControlChannel, IpcError>
     connect_client(const std::string& pipe_name, uint32_t timeout_ms = 5000);
 
     // Send a framed message (header + payload).
-    std::expected<void, IpcError> send(
+    [[nodiscard]] std::expected<void, IpcError> send(
         MsgType msg_type, uint32_t sequence_id,
         std::span<const uint8_t> payload);
 
     // Receive a complete framed message. Blocks up to timeout_ms.
     // Returns BufferTooSmall if timeout fires (no data).
-    std::expected<MessageCodec::DecodedMessage, IpcError>
+    [[nodiscard]] std::expected<MessageCodec::DecodedMessage, IpcError>
     recv(uint32_t timeout_ms = 5000);
 
-    bool is_connected() const;
-    const std::string& pipe_name() const { return name_; }
+    [[nodiscard]] bool is_connected() const;
+    [[nodiscard]] const std::string& pipe_name() const { return name_; }
 
     // Generate platform-appropriate pipe name from PID.
-    static std::string make_pipe_name(uint32_t pid);
+    [[nodiscard]] static std::string make_pipe_name(uint32_t pid);
 
 private:
     ControlChannel() = default;
@@ -63,8 +63,8 @@ private:
 #endif
 
     // Low-level read/write (platform-specific).
-    std::expected<size_t, IpcError> raw_write(std::span<const uint8_t> data);
-    std::expected<size_t, IpcError> raw_read(std::span<uint8_t> buffer, uint32_t timeout_ms);
+    [[nodiscard]] std::expected<size_t, IpcError> raw_write(std::span<const uint8_t> data);
+    [[nodiscard]] std::expected<size_t, IpcError> raw_read(std::span<uint8_t> buffer, uint32_t timeout_ms);
 
     void cleanup();
 };

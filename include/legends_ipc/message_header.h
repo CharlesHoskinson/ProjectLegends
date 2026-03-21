@@ -28,7 +28,7 @@ struct MessageHeader {
     }
 
     // Deserialize from buf. buf must be >= HeaderSize.
-    static std::expected<MessageHeader, IpcError>
+    [[nodiscard]] static std::expected<MessageHeader, IpcError>
     deserialize(std::span<const uint8_t> buf) {
         if (buf.size() < HeaderSize)
             return std::unexpected(IpcError::BufferTooSmall);

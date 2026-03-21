@@ -40,7 +40,7 @@ struct CLIOptions {
 
     /// Parse argc/argv. Returns true on success.
     /// On failure, sets parse_ok = false and error_message.
-    bool parse(int argc, char** argv);
+    [[nodiscard]] bool parse(int argc, char** argv);
 
     /// Print usage/help text to stdout.
     static void printUsage(const char* program_name);

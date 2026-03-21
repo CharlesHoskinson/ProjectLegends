@@ -58,18 +58,18 @@ inline void write_bool(std::span<uint8_t> buf, size_t offset, bool v) {
 
 // ── Read helpers (little-endian wire -> host) ───────────────────────────────
 
-inline uint8_t read_u8(std::span<const uint8_t> buf, size_t offset) {
+[[nodiscard]] inline uint8_t read_u8(std::span<const uint8_t> buf, size_t offset) {
     gsl_Expects(offset < buf.size());
     return buf[offset];
 }
 
-inline uint16_t read_u16_le(std::span<const uint8_t> buf, size_t offset) {
+[[nodiscard]] inline uint16_t read_u16_le(std::span<const uint8_t> buf, size_t offset) {
     gsl_Expects(offset + 2 <= buf.size());
     return static_cast<uint16_t>(buf[offset]) |
            (static_cast<uint16_t>(buf[offset + 1]) << 8);
 }
 
-inline uint32_t read_u32_le(std::span<const uint8_t> buf, size_t offset) {
+[[nodiscard]] inline uint32_t read_u32_le(std::span<const uint8_t> buf, size_t offset) {
     gsl_Expects(offset + 4 <= buf.size());
     return static_cast<uint32_t>(buf[offset]) |
            (static_cast<uint32_t>(buf[offset + 1]) << 8) |
@@ -77,7 +77,7 @@ inline uint32_t read_u32_le(std::span<const uint8_t> buf, size_t offset) {
            (static_cast<uint32_t>(buf[offset + 3]) << 24);
 }
 
-inline uint64_t read_u64_le(std::span<const uint8_t> buf, size_t offset) {
+[[nodiscard]] inline uint64_t read_u64_le(std::span<const uint8_t> buf, size_t offset) {
     gsl_Expects(offset + 8 <= buf.size());
     uint64_t v = 0;
     for (int i = 0; i < 8; ++i)
@@ -85,19 +85,19 @@ inline uint64_t read_u64_le(std::span<const uint8_t> buf, size_t offset) {
     return v;
 }
 
-inline int16_t read_i16_le(std::span<const uint8_t> buf, size_t offset) {
+[[nodiscard]] inline int16_t read_i16_le(std::span<const uint8_t> buf, size_t offset) {
     return static_cast<int16_t>(read_u16_le(buf, offset));
 }
 
-inline int32_t read_i32_le(std::span<const uint8_t> buf, size_t offset) {
+[[nodiscard]] inline int32_t read_i32_le(std::span<const uint8_t> buf, size_t offset) {
     return static_cast<int32_t>(read_u32_le(buf, offset));
 }
 
-inline int64_t read_i64_le(std::span<const uint8_t> buf, size_t offset) {
+[[nodiscard]] inline int64_t read_i64_le(std::span<const uint8_t> buf, size_t offset) {
     return static_cast<int64_t>(read_u64_le(buf, offset));
 }
 
-inline bool read_bool(std::span<const uint8_t> buf, size_t offset) {
+[[nodiscard]] inline bool read_bool(std::span<const uint8_t> buf, size_t offset) {
     gsl_Expects(offset < buf.size());
     return buf[offset] != 0;
 }

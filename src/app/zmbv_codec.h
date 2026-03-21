@@ -40,17 +40,17 @@ public:
     /// @param width Frame width in pixels (must be > 0)
     /// @param height Frame height in pixels (must be > 0)
     /// @return true on success, false on failure
-    bool initCompress(uint16_t width, uint16_t height);
+    [[nodiscard]] bool initCompress(uint16_t width, uint16_t height);
 
     /// @brief Initialize the codec for decompression.
     /// @param width Frame width in pixels (must be > 0)
     /// @param height Frame height in pixels (must be > 0)
     /// @return true on success, false on failure
-    bool initDecompress(uint16_t width, uint16_t height);
+    [[nodiscard]] bool initDecompress(uint16_t width, uint16_t height);
 
     /// @brief Check if the codec is initialized for compression or decompression.
     /// @return true if initialized
-    bool isInitialized() const { return initialized_; }
+    [[nodiscard]] bool isInitialized() const { return initialized_; }
 
     /// @brief Encode a single RGB24 frame.
     /// @param pixels RGB24 pixel data (width * height * 3 bytes)
@@ -60,7 +60,7 @@ public:
     /// @return Encoded frame data (empty on failure)
     /// @pre pixels != nullptr (gsl_Expects)
     /// @pre isInitialized() (gsl_Expects)
-    std::vector<uint8_t> encodeFrame(const uint8_t* pixels,
+    [[nodiscard]] std::vector<uint8_t> encodeFrame(const uint8_t* pixels,
                                       uint16_t width, uint16_t height,
                                       bool keyframe);
 
@@ -72,7 +72,7 @@ public:
     /// @return true on success
     /// @pre data != nullptr (gsl_Expects)
     /// @pre output != nullptr (gsl_Expects)
-    bool decodeFrame(const uint8_t* data, size_t data_size,
+    [[nodiscard]] bool decodeFrame(const uint8_t* data, size_t data_size,
                      uint8_t* output, size_t output_size);
 
 private:

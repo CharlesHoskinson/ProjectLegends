@@ -38,19 +38,19 @@ public:
     /// @param width   Framebuffer width in pixels.
     /// @param height  Framebuffer height in pixels.
     /// @return true on success.
-    bool init(uint16_t width, uint16_t height);
+    [[nodiscard]] bool init(uint16_t width, uint16_t height);
 
     /// Release all GL resources.
     void destroy();
 
     /// @return true after a successful init() and before destroy().
-    bool isInitialized() const { return initialized_; }
+    [[nodiscard]] bool isInitialized() const { return initialized_; }
 
     /// Compile and activate a built-in shader preset.
-    bool loadPreset(ShaderPreset preset);
+    [[nodiscard]] bool loadPreset(ShaderPreset preset);
 
     /// Compile and activate a shader loaded from a GLSL file on disk.
-    bool loadCustomShader(const std::string& glsl_path);
+    [[nodiscard]] bool loadCustomShader(const std::string& glsl_path);
 
     /// Upload an RGB frame and render it through the active shader.
     /// @param rgb_data  Pointer to tightly-packed RGB888 pixel data.
@@ -59,10 +59,10 @@ public:
     void render(const uint8_t* rgb_data, uint16_t width, uint16_t height);
 
     /// @return The currently active preset.
-    ShaderPreset currentPreset() const { return current_preset_; }
+    [[nodiscard]] ShaderPreset currentPreset() const { return current_preset_; }
 
     /// @return Human-readable name of the active shader.
-    const std::string& currentShaderName() const { return current_name_; }
+    [[nodiscard]] const std::string& currentShaderName() const { return current_name_; }
 
     /// Cycle to the next built-in preset (wraps, skips Custom/COUNT).
     void nextPreset();
@@ -71,13 +71,13 @@ public:
     void prevPreset();
 
     /// @return true if shader post-processing is enabled.
-    bool shadersEnabled() const { return shaders_enabled_; }
+    [[nodiscard]] bool shadersEnabled() const { return shaders_enabled_; }
 
     /// Enable or disable shader post-processing.
     void setShadersEnabled(bool enabled) { shaders_enabled_ = enabled; }
 
 private:
-    bool compileShader(const std::string& vertex_src,
+    [[nodiscard]] bool compileShader(const std::string& vertex_src,
                        const std::string& fragment_src);
     void setupFullscreenQuad();
     void setupFramebuffer(uint16_t width, uint16_t height);

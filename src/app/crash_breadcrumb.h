@@ -47,11 +47,11 @@ public:
     void add(const char* message,
              BreadcrumbCategory category = BreadcrumbCategory::General);
 
-    std::vector<BreadcrumbEntry> read() const;
-    size_t readInto(BreadcrumbEntry* out, size_t max_entries) const;
+    [[nodiscard]] std::vector<BreadcrumbEntry> read() const;
+    [[nodiscard]] size_t readInto(BreadcrumbEntry* out, size_t max_entries) const;
     void   clear();
 
-    uint64_t totalCount() const {
+    [[nodiscard]] uint64_t totalCount() const {
         return write_index_.load(std::memory_order_acquire);
     }
 
@@ -59,11 +59,11 @@ private:
     BreadcrumbEntry          entries_[kCapacity];
     std::atomic<uint64_t>    write_index_{0};
 
-    static uint32_t currentThreadId();
-    static uint64_t currentTimestampUs();
+    [[nodiscard]] static uint32_t currentThreadId();
+    [[nodiscard]] static uint64_t currentTimestampUs();
 };
 
-CrashBreadcrumb& globalBreadcrumb();
+[[nodiscard]] CrashBreadcrumb& globalBreadcrumb();
 
 #define LEGENDS_BREADCRUMB(msg) ::legends::globalBreadcrumb().add(msg)
 

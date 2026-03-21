@@ -40,42 +40,42 @@ public:
     void setEnabled(bool enabled) { enabled_ = enabled; }
 
     /// Check if update checking is enabled.
-    bool isEnabled() const { return enabled_; }
+    [[nodiscard]] bool isEnabled() const { return enabled_; }
 
     /// Set the minimum interval between checks (default: 24 hours).
     void setCheckInterval(std::chrono::seconds interval) { check_interval_ = interval; }
 
     /// Get the check interval.
-    std::chrono::seconds checkInterval() const { return check_interval_; }
+    [[nodiscard]] std::chrono::seconds checkInterval() const { return check_interval_; }
 
     /// Perform an update check. Returns immediately if:
     /// - Update checking is disabled
     /// - A check was performed less than check_interval ago
-    UpdateCheckResult checkForUpdate();
+    [[nodiscard]] UpdateCheckResult checkForUpdate();
 
     /// Force an update check regardless of rate limiting.
-    UpdateCheckResult forceCheck();
+    [[nodiscard]] UpdateCheckResult forceCheck();
 
     /// Get the time of the last successful check.
-    std::chrono::steady_clock::time_point lastCheckTime() const { return last_check_time_; }
+    [[nodiscard]] std::chrono::steady_clock::time_point lastCheckTime() const { return last_check_time_; }
 
     /// Check if enough time has passed since the last check.
-    bool canCheckNow() const;
+    [[nodiscard]] bool canCheckNow() const;
 
     /// Compare two version strings (e.g., "1.0.0" vs "1.1.0").
     /// Returns: -1 if a < b, 0 if a == b, 1 if a > b.
-    static int compareVersions(const std::string& a, const std::string& b);
+    [[nodiscard]] static int compareVersions(const std::string& a, const std::string& b);
 
     /// Get the current application version.
-    static std::string currentVersion();
+    [[nodiscard]] static std::string currentVersion();
 
 protected:
     /// Platform-specific: fetch the update manifest JSON from the remote server.
     /// Implementations should return the raw JSON string or empty on error.
-    virtual std::string fetchManifest() = 0;
+    [[nodiscard]] virtual std::string fetchManifest() = 0;
 
     /// Parse the manifest JSON and populate the result.
-    UpdateCheckResult parseManifest(const std::string& json);
+    [[nodiscard]] UpdateCheckResult parseManifest(const std::string& json);
 
 private:
     bool        enabled_  = false;
@@ -85,6 +85,6 @@ private:
 };
 
 /// Factory: create the platform-specific update checker.
-std::unique_ptr<UpdateChecker> createPlatformUpdateChecker();
+[[nodiscard]] std::unique_ptr<UpdateChecker> createPlatformUpdateChecker();
 
 } // namespace legends

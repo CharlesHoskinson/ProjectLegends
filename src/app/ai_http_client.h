@@ -45,13 +45,13 @@ public:
     void submitRequest(const AIRequest& request, ResponseCallback callback);
 
     /// Check if a request is in progress.
-    bool isBusy() const { return busy_.load(std::memory_order_acquire); }
+    [[nodiscard]] bool isBusy() const { return busy_.load(std::memory_order_acquire); }
 
     /// Cancel pending request.
     void cancel();
 
     /// Poll for completed response. Returns true if response ready.
-    bool pollResponse(AIResponse& out);
+    [[nodiscard]] bool pollResponse(AIResponse& out);
 
     /// Start worker thread.
     void start();
@@ -59,13 +59,13 @@ public:
     /// Stop worker thread.
     void stop();
 
-    bool isRunning() const { return running_.load(std::memory_order_acquire); }
+    [[nodiscard]] bool isRunning() const { return running_.load(std::memory_order_acquire); }
 
     /// Build JSON request body for Anthropic Messages API.
-    static std::string buildRequestJson(const AIRequest& request);
+    [[nodiscard]] static std::string buildRequestJson(const AIRequest& request);
 
     /// Parse JSON response from Anthropic Messages API.
-    static AIResponse parseResponseJson(const std::string& json, int http_status);
+    [[nodiscard]] static AIResponse parseResponseJson(const std::string& json, int http_status);
 
 private:
     std::atomic<bool> running_{false};

@@ -26,10 +26,10 @@ struct GlideConfig {
 
     /// Validate resolution and settings.
     /// @return true if the configuration is usable.
-    bool isValid() const;
+    [[nodiscard]] bool isValid() const;
 
     /// @return true if Glide emulation requires an OpenGL context.
-    bool requiresOpenGL() const { return enabled; }
+    [[nodiscard]] bool requiresOpenGL() const { return enabled; }
 };
 
 } // namespace legends

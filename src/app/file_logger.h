@@ -13,8 +13,8 @@ namespace legends {
 
 enum class LogLevel { Debug, Info, Warning, Error, Fatal };
 
-const char* logLevelToString(LogLevel level);
-LogLevel    parseLogLevel(const char* str);
+[[nodiscard]] const char* logLevelToString(LogLevel level);
+[[nodiscard]] LogLevel    parseLogLevel(const char* str);
 
 class FileLogger {
 public:
@@ -24,13 +24,13 @@ public:
     FileLogger(const FileLogger&)            = delete;
     FileLogger& operator=(const FileLogger&) = delete;
 
-    bool open(const std::string& path);
+    [[nodiscard]] bool open(const std::string& path);
     void close();
     void log(LogLevel level, const char* message);
     void flush();
 
     void setMinLevel(LogLevel level) { min_level_ = level; }
-    bool isOpen() const { return file_ != nullptr; }
+    [[nodiscard]] bool isOpen() const { return file_ != nullptr; }
 
     static void engineLogCallback(int level, const char* message, void* userdata);
 
@@ -40,7 +40,7 @@ private:
 
     void        rotateIfNeeded();
     void        performRotation();
-    std::string rotatedPath(int index) const;
+    [[nodiscard]] std::string rotatedPath(int index) const;
     void        setFilePermissions(const std::string& filepath);
 
     std::mutex  mutex_;

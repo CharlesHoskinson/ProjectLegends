@@ -10,7 +10,7 @@
 namespace pal {
 
 /// Result codes for PAL operations
-enum class Result {
+enum class [[nodiscard]] Result {
     Success = 0,
     NotInitialized,
     AlreadyInitialized,
@@ -40,7 +40,7 @@ enum class PixelFormat {
 };
 
 /// Convert Result to string for debugging
-constexpr const char* toString(Result r) noexcept {
+[[nodiscard]] constexpr const char* toString(Result r) noexcept {
     switch (r) {
         case Result::Success:            return "Success";
         case Result::NotInitialized:     return "NotInitialized";
@@ -63,7 +63,7 @@ constexpr const char* toString(Result r) noexcept {
 }
 
 /// Convert PixelFormat to string for debugging
-constexpr const char* toString(PixelFormat fmt) noexcept {
+[[nodiscard]] constexpr const char* toString(PixelFormat fmt) noexcept {
     switch (fmt) {
         case PixelFormat::Unknown:  return "Unknown";
         case PixelFormat::RGB565:   return "RGB565";
@@ -76,7 +76,7 @@ constexpr const char* toString(PixelFormat fmt) noexcept {
 }
 
 /// Get bytes per pixel for format
-constexpr uint32_t bytesPerPixel(PixelFormat fmt) noexcept {
+[[nodiscard]] constexpr uint32_t bytesPerPixel(PixelFormat fmt) noexcept {
     switch (fmt) {
         case PixelFormat::RGB565:   return 2;
         case PixelFormat::RGB888:   return 3;
@@ -88,12 +88,12 @@ constexpr uint32_t bytesPerPixel(PixelFormat fmt) noexcept {
 }
 
 /// Check if Result indicates success
-constexpr bool succeeded(Result r) noexcept {
+[[nodiscard]] constexpr bool succeeded(Result r) noexcept {
     return r == Result::Success;
 }
 
 /// Check if Result indicates failure
-constexpr bool failed(Result r) noexcept {
+[[nodiscard]] constexpr bool failed(Result r) noexcept {
     return r != Result::Success;
 }
 

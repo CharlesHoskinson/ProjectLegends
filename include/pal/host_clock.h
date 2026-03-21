@@ -32,13 +32,13 @@ public:
 
     /// Initialize the host clock
     /// @return Success, AlreadyInitialized
-    virtual Result initialize() = 0;
+    [[nodiscard]] virtual Result initialize() = 0;
 
     /// Shutdown the host clock (safe to call if not initialized)
     virtual void shutdown() = 0;
 
     /// Check if clock is initialized
-    virtual bool isInitialized() const = 0;
+    [[nodiscard]] virtual bool isInitialized() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Time Query (Host Wall-Clock)
@@ -47,12 +47,12 @@ public:
     /// Get milliseconds since initialization
     /// @return Milliseconds since init, or 0 if not initialized
     /// @note Values increase monotonically (never decrease)
-    virtual uint64_t getTicksMs() const = 0;
+    [[nodiscard]] virtual uint64_t getTicksMs() const = 0;
 
     /// Get microseconds since initialization
     /// @return Microseconds since init, or 0 if not initialized
     /// @note Values increase monotonically (never decrease)
-    virtual uint64_t getTicksUs() const = 0;
+    [[nodiscard]] virtual uint64_t getTicksUs() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Sleep (Host-Side Delays)

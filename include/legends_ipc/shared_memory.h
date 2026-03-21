@@ -22,17 +22,17 @@ public:
     SharedMemoryRegion& operator=(SharedMemoryRegion&& other) noexcept;
 
     // Create a new shared memory region.
-    static std::expected<SharedMemoryRegion, IpcError>
+    [[nodiscard]] static std::expected<SharedMemoryRegion, IpcError>
     create(const std::string& name, size_t size);
 
     // Open an existing shared memory region by name.
-    static std::expected<SharedMemoryRegion, IpcError>
+    [[nodiscard]] static std::expected<SharedMemoryRegion, IpcError>
     open(const std::string& name, size_t size);
 
-    std::span<uint8_t> data() { return {data_, size_}; }
-    std::span<const uint8_t> data() const { return {data_, size_}; }
-    size_t size() const { return size_; }
-    const std::string& name() const { return name_; }
+    [[nodiscard]] std::span<uint8_t> data() { return {data_, size_}; }
+    [[nodiscard]] std::span<const uint8_t> data() const { return {data_, size_}; }
+    [[nodiscard]] size_t size() const { return size_; }
+    [[nodiscard]] const std::string& name() const { return name_; }
 
     // Default-constructs an empty (unmapped) region.
     SharedMemoryRegion() = default;

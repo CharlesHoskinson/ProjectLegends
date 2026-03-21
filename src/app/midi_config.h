@@ -35,16 +35,16 @@ struct MIDIConfig {
     /// Parse a device name string (e.g. "fluidsynth", "mt32") into a MIDIDevice enum.
     /// @param name  Case-insensitive device name.
     /// @return Corresponding MIDIDevice value; MIDIDevice::None for unrecognised names.
-    static MIDIDevice parseDeviceName(const std::string& name);
+    [[nodiscard]] static MIDIDevice parseDeviceName(const std::string& name);
 
     /// Get the canonical string name for a MIDIDevice enum value.
     /// @param device  The device enum.
     /// @return Null-terminated device name string.
-    static const char* deviceName(MIDIDevice device);
+    [[nodiscard]] static const char* deviceName(MIDIDevice device);
 
     /// Validate that required fields are present for the selected device.
     /// @return true if the configuration is usable.
-    bool isValid() const;
+    [[nodiscard]] bool isValid() const;
 };
 
 } // namespace legends

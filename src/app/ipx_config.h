@@ -24,7 +24,7 @@ struct IPXConfig {
 
     /// Validate that required fields (server address) are present when enabled.
     /// @return true if the configuration is usable.
-    bool isValid() const;
+    [[nodiscard]] bool isValid() const;
 };
 
 } // namespace legends

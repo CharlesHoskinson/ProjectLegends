@@ -42,20 +42,20 @@ public:
 
     /// Create a software rendering context (memory buffer)
     /// @return Success, InvalidParameter, OutOfMemory, AlreadyInitialized
-    virtual Result createSoftware(uint32_t width, uint32_t height, PixelFormat fmt) = 0;
+    [[nodiscard]] virtual Result createSoftware(uint32_t width, uint32_t height, PixelFormat fmt) = 0;
 
     /// Create an OpenGL rendering context
     /// @param major OpenGL major version (e.g., 3)
     /// @param minor OpenGL minor version (e.g., 3)
     /// @param core_profile True for core profile, false for compatibility
     /// @return Success, NotSupported, AlreadyInitialized
-    virtual Result createOpenGL(int major, int minor, bool core_profile) = 0;
+    [[nodiscard]] virtual Result createOpenGL(int major, int minor, bool core_profile) = 0;
 
     /// Destroy the context and release resources
     virtual void destroy() = 0;
 
     /// Check if context has been created
-    virtual bool isCreated() const = 0;
+    [[nodiscard]] virtual bool isCreated() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Software Context Operations
@@ -64,13 +64,13 @@ public:
     /// Lock the software surface for direct pixel access
     /// @param ctx [out] Receives surface details
     /// @return Success, InvalidOperation (not software), AlreadyLocked
-    virtual Result lockSurface(SoftwareContext& ctx) = 0;
+    [[nodiscard]] virtual Result lockSurface(SoftwareContext& ctx) = 0;
 
     /// Unlock the software surface after writing pixels
     virtual void unlockSurface() = 0;
 
     /// Check if surface is currently locked
-    virtual bool isLocked() const = 0;
+    [[nodiscard]] virtual bool isLocked() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // OpenGL Context Operations
@@ -78,14 +78,14 @@ public:
 
     /// Make this OpenGL context current on the calling thread
     /// @return Success, InvalidOperation (not OpenGL), NotInitialized
-    virtual Result makeCurrent() = 0;
+    [[nodiscard]] virtual Result makeCurrent() = 0;
 
     /// Swap front and back buffers (OpenGL double-buffering)
     virtual void swapBuffers() = 0;
 
     /// Get OpenGL function pointer by name
     /// @return Function pointer, or nullptr if not found
-    virtual void* getProcAddress(const char* name) = 0;
+    [[nodiscard]] virtual void* getProcAddress(const char* name) = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Logical Presentation
@@ -101,11 +101,11 @@ public:
     // ═══════════════════════════════════════════════════════════════════════
 
     /// Get the type of this context
-    virtual ContextType getType() const = 0;
+    [[nodiscard]] virtual ContextType getType() const = 0;
 };
 
 /// Convert ContextType to string for debugging
-constexpr const char* toString(ContextType type) noexcept {
+[[nodiscard]] constexpr const char* toString(ContextType type) noexcept {
     switch (type) {
         case ContextType::None:     return "None";
         case ContextType::Software: return "Software";

@@ -115,13 +115,13 @@ public:
 
     /// Initialize the input source
     /// @return Success, AlreadyInitialized
-    virtual Result initialize() = 0;
+    [[nodiscard]] virtual Result initialize() = 0;
 
     /// Shutdown the input source (safe to call if not initialized)
     virtual void shutdown() = 0;
 
     /// Check if input source is initialized
-    virtual bool isInitialized() const = 0;
+    [[nodiscard]] virtual bool isInitialized() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Event Polling
@@ -131,7 +131,7 @@ public:
     /// @param events [out] Array to receive events
     /// @param max_events Maximum number of events to retrieve
     /// @return Number of events retrieved (0 if none pending)
-    virtual uint32_t poll(InputEvent* events, uint32_t max_events) = 0;
+    [[nodiscard]] virtual uint32_t poll(InputEvent* events, uint32_t max_events) = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Mouse Capture
@@ -140,22 +140,22 @@ public:
     /// Capture or release the mouse
     /// @param capture True to capture mouse to window
     /// @return Success, NotSupported
-    virtual Result setMouseCapture(bool capture) = 0;
+    [[nodiscard]] virtual Result setMouseCapture(bool capture) = 0;
 
     /// Check if mouse is captured
-    virtual bool isMouseCaptured() const = 0;
+    [[nodiscard]] virtual bool isMouseCaptured() const = 0;
 
     /// Enable or disable relative mouse mode
     /// @param relative True for relative mode (FPS-style)
     /// @return Success, NotSupported
-    virtual Result setRelativeMouseMode(bool relative) = 0;
+    [[nodiscard]] virtual Result setRelativeMouseMode(bool relative) = 0;
 
     /// Check if relative mouse mode is enabled
-    virtual bool isRelativeMouseMode() const = 0;
+    [[nodiscard]] virtual bool isRelativeMouseMode() const = 0;
 };
 
 /// Convert InputEventType to string for debugging
-constexpr const char* toString(InputEventType type) noexcept {
+[[nodiscard]] constexpr const char* toString(InputEventType type) noexcept {
     switch (type) {
         case InputEventType::None:            return "None";
         case InputEventType::KeyDown:         return "KeyDown";

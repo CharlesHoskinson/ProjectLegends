@@ -30,20 +30,20 @@ public:
     TTFRenderer& operator=(const TTFRenderer&) = delete;
 
     /// Load a TTF font from file.
-    bool loadFont(const std::string& path, uint32_t point_size);
+    [[nodiscard]] bool loadFont(const std::string& path, uint32_t point_size);
 
     /// Check if font is loaded.
-    bool isLoaded() const { return loaded_; }
+    [[nodiscard]] bool isLoaded() const { return loaded_; }
 
     /// Get current point size.
-    uint32_t pointSize() const { return point_size_; }
+    [[nodiscard]] uint32_t pointSize() const { return point_size_; }
 
     /// Get cell dimensions (for text mode grid).
-    int cellWidth() const { return cell_width_; }
-    int cellHeight() const { return cell_height_; }
+    [[nodiscard]] int cellWidth() const { return cell_width_; }
+    [[nodiscard]] int cellHeight() const { return cell_height_; }
 
     /// Get glyph info for a CP437 character.
-    const GlyphInfo& getGlyph(uint8_t cp437_char) const;
+    [[nodiscard]] const GlyphInfo& getGlyph(uint8_t cp437_char) const;
 
     /// Render a text cell (single character) into an RGB buffer.
     /// @param rgb     Target buffer
@@ -61,7 +61,7 @@ public:
 
     /// Enable/disable TTF rendering.
     void setEnabled(bool enabled) { enabled_ = enabled; }
-    bool isEnabled() const { return enabled_; }
+    [[nodiscard]] bool isEnabled() const { return enabled_; }
 
 private:
     void buildGlyphCache();

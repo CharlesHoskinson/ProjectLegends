@@ -29,29 +29,29 @@ static_assert(sizeof(AudioRingHeader) == 32);
 // Consumer (proxy):  pop(buffer)   -> frames read
 class AudioRingBuffer {
 public:
-    static std::expected<AudioRingBuffer, IpcError>
+    [[nodiscard]] static std::expected<AudioRingBuffer, IpcError>
     create(const std::string& name, uint32_t capacity_frames,
            uint32_t channels = 2, uint32_t sample_rate = 44100);
 
-    static std::expected<AudioRingBuffer, IpcError>
+    [[nodiscard]] static std::expected<AudioRingBuffer, IpcError>
     open(const std::string& name, uint32_t capacity_frames,
          uint32_t channels = 2, uint32_t sample_rate = 44100);
 
     // Push samples (interleaved). Returns number of frames actually written.
     // Drops oldest if buffer is full (overwrites).
-    uint32_t push(std::span<const int16_t> samples);
+    [[nodiscard]] uint32_t push(std::span<const int16_t> samples);
 
     // Pop samples into buffer. Returns number of frames actually read.
-    uint32_t pop(std::span<int16_t> buffer);
+    [[nodiscard]] uint32_t pop(std::span<int16_t> buffer);
 
     // How many frames are available to read.
-    uint32_t available() const;
+    [[nodiscard]] uint32_t available() const;
 
-    uint32_t capacity_frames() const;
-    uint32_t channels() const;
-    uint32_t sample_rate() const;
+    [[nodiscard]] uint32_t capacity_frames() const;
+    [[nodiscard]] uint32_t channels() const;
+    [[nodiscard]] uint32_t sample_rate() const;
 
-    static size_t required_size(uint32_t capacity_frames, uint32_t channels) {
+    [[nodiscard]] static size_t required_size(uint32_t capacity_frames, uint32_t channels) {
         return sizeof(AudioRingHeader) +
                static_cast<size_t>(capacity_frames) * channels * sizeof(int16_t);
     }

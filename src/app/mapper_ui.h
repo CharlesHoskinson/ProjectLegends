@@ -44,11 +44,11 @@ public:
     void close();
 
     /// @brief Check if the mapper is currently open.
-    bool isOpen() const { return open_; }
+    [[nodiscard]] bool isOpen() const { return open_; }
 
     /// @brief Get the current state machine state.
     /// @return Current state (Idle or Capturing).
-    State state() const { return state_; }
+    [[nodiscard]] State state() const { return state_; }
 
     /// @brief Begin capturing a key for the selected mapping entry.
     void startCapture();
@@ -63,13 +63,13 @@ public:
     /// @brief Handle a key event. Returns true if consumed.
     /// @param scancode SDL3 scancode.
     /// @param down     True for key-down, false for key-up.
-    bool handleKey(uint16_t scancode, bool down);
+    [[nodiscard]] bool handleKey(uint16_t scancode, bool down);
 
     /// @brief Get the currently selected list index.
-    int selectedIndex() const { return selected_index_; }
+    [[nodiscard]] int selectedIndex() const { return selected_index_; }
 
     /// @brief Get the current scroll offset.
-    int scrollOffset() const { return scroll_offset_; }
+    [[nodiscard]] int scrollOffset() const { return scroll_offset_; }
 
     /// @brief Render the mapper overlay into an RGB24 buffer.
     /// @param rgb   Destination RGB24 pixel buffer (must not be null when open).

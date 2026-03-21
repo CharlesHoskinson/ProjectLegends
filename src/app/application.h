@@ -63,12 +63,12 @@ public:
     Application(const Application&) = delete;
     Application& operator=(const Application&) = delete;
 
-    ExitCode init(int argc, char** argv);
-    ExitCode run();
+    [[nodiscard]] ExitCode init(int argc, char** argv);
+    [[nodiscard]] ExitCode run();
 
 private:
     void shutdown();
-    bool processEvents();
+    [[nodiscard]] bool processEvents();
     void renderFrame();
     void pumpAudio();
 
