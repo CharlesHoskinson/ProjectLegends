@@ -24,6 +24,10 @@ struct FramebufferHeader {
 };                                        // 32 total
 
 static_assert(sizeof(FramebufferHeader) == 32);
+static_assert(std::atomic<uint64_t>::is_always_lock_free,
+              "SHM requires lock-free uint64_t atomics for frame_index");
+static_assert(std::atomic<uint32_t>::is_always_lock_free,
+              "SHM requires lock-free uint32_t atomics for active_buffer");
 
 struct FrameData {
     std::span<const uint8_t> pixels;

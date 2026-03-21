@@ -23,6 +23,8 @@ struct AudioRingHeader {
 };                                        // 32 total
 
 static_assert(sizeof(AudioRingHeader) == 32);
+static_assert(std::atomic<uint32_t>::is_always_lock_free,
+              "SHM requires lock-free uint32_t atomics for ring buffer indices");
 
 // Lock-free SPSC ring buffer for audio over shared memory.
 // Producer (engine): push(samples) -> frames written
