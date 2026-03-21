@@ -28,6 +28,8 @@ struct CLIOptions {
     std::string program;                    // positional [program]
     std::vector<std::string> mount_args;    // --mount D:=/path (repeatable)
 
+    bool        opengl         = false;     // --opengl
+
     bool        show_version   = false;     // --version (action)
     bool        show_help      = false;     // --help (action)
 

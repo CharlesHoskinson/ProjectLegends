@@ -39,6 +39,10 @@ bool CLIOptions::parse(int argc, char** argv) {
             fullscreen = true;
             continue;
         }
+        if (std::strcmp(arg, "--opengl") == 0) {
+            opengl = true;
+            continue;
+        }
         if (std::strcmp(arg, "--log") == 0) {
             log_enabled = true;
             continue;
@@ -177,6 +181,7 @@ void CLIOptions::printUsage(const char* program_name) {
         "Options:\n"
         "  --conf <path>      Path to .conf configuration file\n"
         "  --fullscreen       Start in fullscreen mode\n"
+        "  --opengl           Use OpenGL renderer (default: software)\n"
         "  --cycles <n>       CPU cycles per millisecond (0 = auto)\n"
         "  --machine <type>   Machine type: vga, ega, cga, hercules, tandy, pc98\n"
         "  --memsize <kb>     Conventional memory size in KB (default: 640)\n"

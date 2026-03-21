@@ -105,17 +105,35 @@ ExitCode Application::init(int argc, char** argv) {
         window_->setFullscreen(true);
     }
 
-    // ── Software rendering context ───────────────────────────────────────
+    // ── Rendering context ─────────────────────────────────────────────────
+    // CLI --opengl overrides config
+    if (cli.opengl) {
+        use_opengl_ = true;
+    }
+
     context_ = pal::Platform::createContext(*window_);
     if (!context_) {
         std::fprintf(stderr, "Error: Failed to create context\n");
         return ExitCode::ContextCreateFailed;
     }
-    result = context_->createSoftware(640, 480, pal::PixelFormat::RGB888);
-    if (pal::failed(result)) {
-        std::fprintf(stderr, "Error: createSoftware() failed: %s\n",
-                     pal::toString(result));
-        return ExitCode::ContextCreateFailed;
+
+    if (use_opengl_) {
+        result = context_->createOpenGL(3, 3, true);
+        if (pal::failed(result)) {
+            std::fprintf(stderr,
+                "Warning: OpenGL context creation failed (%s), falling back to software\n",
+                pal::toString(result));
+            use_opengl_ = false;
+        }
+    }
+
+    if (!use_opengl_) {
+        result = context_->createSoftware(640, 480, pal::PixelFormat::RGB888);
+        if (pal::failed(result)) {
+            std::fprintf(stderr, "Error: createSoftware() failed: %s\n",
+                         pal::toString(result));
+            return ExitCode::ContextCreateFailed;
+        }
     }
     ctx_width_  = 640;
     ctx_height_ = 480;
@@ -327,8 +345,8 @@ ExitCode Application::init(int argc, char** argv) {
 
     // ── Phase 3: Enhanced Features config ────────────────────────────────
 
-    // Sprint 2: Shader config
-    {
+    // Sprint 2: Shader config (CLI --opengl already set use_opengl_ above)
+    if (!use_opengl_) {
         std::string renderer = config.get("render", "renderer", "software");
         use_opengl_ = (renderer == "opengl");
     }
@@ -1075,6 +1093,79 @@ void Application::renderFrame() {
     legends_capture_rgb(engine_, rgb_buffer_.data(),
                         rgb_buffer_.size(), &size_needed, &fw, &fh);
 
+    // ── TTF text-mode override ──────────────────────────────────────────
+    // When TTF rendering is enabled and loaded, re-render text cells using
+    // the TTF font for higher-quality text display.
+    if (ttf_renderer_.isEnabled() && ttf_renderer_.isLoaded()) {
+        size_t cell_count = 0;
+        legends_text_info_t tinfo{};
+        legends_capture_text(engine_, nullptr, 0, &cell_count, &tinfo);
+        if (cell_count > 0 && tinfo.columns > 0 && tinfo.rows > 0) {
+            std::vector<legends_text_cell_t> cells(cell_count);
+            legends_capture_text(engine_, cells.data(), cells.size(),
+                                 &cell_count, &tinfo);
+
+            uint32_t pitch = static_cast<uint32_t>(fw) * 3;
+            for (uint8_t row = 0; row < tinfo.rows; ++row) {
+                for (uint8_t col = 0; col < tinfo.columns; ++col) {
+                    size_t idx = row * tinfo.columns + col;
+                    if (idx >= cell_count) break;
+
+                    uint8_t ch   = cells[idx].character;
+                    uint8_t attr = cells[idx].attribute;
+
+                    // VGA attribute: low nibble = foreground, high nibble bits 0-2 = background
+                    // Standard VGA 16-color palette (CGA colors)
+                    static constexpr uint8_t kVGA16[16][3] = {
+                        {0,0,0}, {0,0,170}, {0,170,0}, {0,170,170},
+                        {170,0,0}, {170,0,170}, {170,85,0}, {170,170,170},
+                        {85,85,85}, {85,85,255}, {85,255,85}, {85,255,255},
+                        {255,85,85}, {255,85,255}, {255,255,85}, {255,255,255}
+                    };
+
+                    uint8_t fg_idx = attr & 0x0F;
+                    uint8_t bg_idx = (attr >> 4) & 0x07;
+
+                    int x = col * ttf_renderer_.cellWidth();
+                    int y = row * ttf_renderer_.cellHeight();
+
+                    ttf_renderer_.renderCell(
+                        rgb_buffer_.data(), pitch, fw, fh,
+                        x, y, ch,
+                        kVGA16[fg_idx][0], kVGA16[fg_idx][1], kVGA16[fg_idx][2],
+                        kVGA16[bg_idx][0], kVGA16[bg_idx][1], kVGA16[bg_idx][2]);
+                }
+            }
+        }
+    }
+
+    // ── OpenGL path: render through shader pipeline ─────────────────────
+    if (use_opengl_) {
+        bool gl_ok = true;
+        // Lazy-init shader renderer on first frame (or resolution change)
+        if (!shader_renderer_.isInitialized() ||
+            fw != ctx_width_ || fh != ctx_height_) {
+            shader_renderer_.destroy();
+            if (!shader_renderer_.init(fw, fh)) {
+                std::fprintf(stderr,
+                    "Warning: ShaderRenderer init failed, falling back to software\n");
+                use_opengl_ = false;
+                gl_ok = false;
+            } else {
+                ctx_width_  = fw;
+                ctx_height_ = fh;
+            }
+        }
+        if (gl_ok) {
+            shader_renderer_.render(rgb_buffer_.data(), fw, fh);
+            context_->swapBuffers();
+            return;
+        }
+        // Fall through to software path on init failure
+    }
+
+    // ── Software path: blit to locked surface ───────────────────────────
+
     // Dynamic resolution handling (Step 7): recreate context if engine
     // resolution changed
     if (fw != ctx_width_ || fh != ctx_height_) {
@@ -1228,6 +1319,8 @@ void Application::shutdown() {
         file_logger_.flush();
     }
     globalCrashReporter().disable();
+
+    shader_renderer_.destroy();
 
     if (engine_) {
         legends_destroy(engine_);
