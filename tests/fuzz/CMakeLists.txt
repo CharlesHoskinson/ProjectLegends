@@ -178,11 +178,41 @@ target_compile_definitions(fuzz_input_injection PRIVATE
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Fuzz target: config parser (legends app level)
+# ─────────────────────────────────────────────────────────────────────────────
+
+add_executable(fuzz_config_parser
+    fuzz_config_parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/config_parser.cpp
+)
+
+target_link_libraries(fuzz_config_parser PRIVATE
+    legends_core
+)
+
+target_include_directories(fuzz_config_parser PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_compile_options(fuzz_config_parser PRIVATE
+    ${FUZZ_COMPILE_OPTIONS}
+)
+
+target_link_options(fuzz_config_parser PRIVATE
+    ${FUZZ_LINK_OPTIONS}
+)
+
+target_compile_definitions(fuzz_config_parser PRIVATE
+    AIBOX_LIBRARY_MODE=1
+    AIBOX_HEADLESS=1
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Convenience targets
 # ─────────────────────────────────────────────────────────────────────────────
 
 add_custom_target(fuzz-all
-    DEPENDS fuzz_legends_load_state fuzz_engine_load_state fuzz_input_injection
+    DEPENDS fuzz_legends_load_state fuzz_engine_load_state fuzz_input_injection fuzz_config_parser
     COMMENT "Building all fuzz targets"
 )
 
