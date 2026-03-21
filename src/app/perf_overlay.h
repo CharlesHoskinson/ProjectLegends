@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "legends/internal/cp437_font_8x16.h"
+
 namespace legends {
 
 class PerfOverlay {
@@ -33,7 +35,7 @@ public:
     /// Render the overlay text into an RGB24 framebuffer.
     /// Draws white text on a translucent dark background at top-left.
     void render(uint8_t* pixels, uint16_t width, uint16_t height, uint32_t pitch) const {
-        if (!enabled_ || !pixels || width < 160 || height < 30) return;
+        if (!enabled_ || !pixels || width < 160 || height < 20) return;
 
         // Compute average FPS from recent frames
         double avg_us = 0;
@@ -52,9 +54,9 @@ public:
                        static_cast<unsigned long long>(cycles_per_sec_),
                        audio_queued_ms_);
 
-        // Draw dark background strip (2 rows of 8px characters)
-        uint32_t bar_h = 12;
-        uint32_t bar_w = static_cast<uint32_t>(std::strlen(buf)) * 6 + 8;
+        // Draw dark background strip (one row of 16px characters + padding)
+        uint32_t bar_h = 20;
+        uint32_t bar_w = static_cast<uint32_t>(std::strlen(buf)) * 8 + 8;
         if (bar_w > width) bar_w = width;
         for (uint32_t y = 0; y < bar_h && y < height; ++y) {
             uint8_t* row = pixels + y * pitch;
@@ -67,7 +69,7 @@ public:
             }
         }
 
-        // Draw text using minimal 5x7 bitmap font
+        // Draw text using CP437 8x16 bitmap font
         drawString(pixels, width, height, pitch, 4, 2, buf);
     }
 
@@ -79,29 +81,26 @@ private:
     uint64_t cycles_per_sec_ = 0;
     uint32_t audio_queued_ms_ = 0;
 
-    // Minimal 5-wide bitmap font for digits and common chars
+    // Draw a single character using the CP437 8x16 bitmap font.
     static void drawChar(uint8_t* pixels, uint16_t width, uint16_t height,
                           uint32_t pitch, int x0, int y0, char ch) {
-        // Minimal approach: draw white pixels for recognized ASCII
-        // Using a 4x7 font embedded as bit patterns
-        static constexpr uint8_t font_4x7[128][7] = {}; // stub — use simple approach
-        (void)font_4x7;
+        auto idx = static_cast<uint8_t>(ch);
+        const auto& font = internal::CP437_FONT_8x16;
+        int glyph_offset = static_cast<int>(idx) * 16;
 
-        // Simple fallback: draw a white dot pattern for each char
-        // This is a minimal implementation — real overlay would use CP437 font
-        if (ch < 32 || ch > 126) return;
-
-        // 5x7 monospace block — just draw a visible white rectangle for now
-        // A production implementation would use the engine's embedded CP437 font
-        for (int dy = 0; dy < 7; ++dy) {
-            int py = y0 + dy;
+        for (int row = 0; row < 16; ++row) {
+            int py = y0 + row;
             if (py < 0 || py >= height) continue;
-            for (int dx = 0; dx < 5; ++dx) {
-                int px = x0 + dx;
+
+            uint8_t bits = font[static_cast<size_t>(glyph_offset + row)];
+            for (int col = 0; col < 8; ++col) {
+                int px = x0 + col;
                 if (px < 0 || px >= width) continue;
-                // Simple: draw white for chars, using basic glyph heuristics
-                uint8_t* p = pixels + py * pitch + px * 3;
-                p[0] = 255; p[1] = 255; p[2] = 255;
+
+                if ((bits & (0x80 >> col)) != 0) {
+                    uint8_t* p = pixels + py * pitch + px * 3;
+                    p[0] = 255; p[1] = 255; p[2] = 255;
+                }
             }
         }
     }
@@ -109,8 +108,8 @@ private:
     static void drawString(uint8_t* pixels, uint16_t width, uint16_t height,
                              uint32_t pitch, int x, int y, const char* str) {
         for (int i = 0; str[i]; ++i) {
-            drawChar(pixels, width, height, pitch, x + i * 6, y, str[i]);
-            // Each char is 5 wide + 1 pixel gap = 6 pixel advance
+            drawChar(pixels, width, height, pitch, x + i * 8, y, str[i]);
+            // Each char is 8 wide with no gap (standard VGA text mode spacing)
         }
     }
 };
