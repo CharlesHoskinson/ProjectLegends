@@ -954,15 +954,24 @@ void Application::registerActionHandlers() {
             ai_panel_.setWaiting(false);
             return;
         }
-        // Capture screen context
+        // Capture screen context and cursor/geometry via embed API
         std::string screen = captureScreenContext(engine_, ai_config_.max_context_chars);
+        uint8_t cursor_x = 0, cursor_y = 0;
+        int cursor_visible = 0;
+        legends_get_cursor(engine_, &cursor_x, &cursor_y, &cursor_visible);
+        legends_text_info_t text_info{};
+        legends_capture_text(engine_, nullptr, 0, nullptr, &text_info);
+        // REQ-SEC-018: Use formatScreenContext() for structured delimiters
+        // that separate untrusted screen content from the system prompt.
+        std::string formatted = formatScreenContext(
+            screen, cursor_x, cursor_y, text_info.columns, text_info.rows);
         // Build request
         AIRequest req;
         req.endpoint = ai_config_.endpoint;
         req.api_key = api_key;
         req.model = ai_config_.model;
         req.system_prompt = "You are an AI assistant embedded in a DOS emulator. "
-            "Help the user with their DOS programs and games.\n\nCurrent screen:\n" + screen;
+            "Help the user with their DOS programs and games.\n\n" + formatted;
         const auto& history = ai_panel_.history();
         if (!history.empty()) {
             req.user_message = history.back().text;

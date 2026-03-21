@@ -60,7 +60,12 @@ bool ConfigParser::loadFile(const std::string& path) {
 
         // Section header
         if (line.front() == '[' && line.back() == ']') {
-            current_section = toLower(trim(line.substr(1, line.size() - 2)));
+            std::string name = toLower(trim(line.substr(1, line.size() - 2)));
+            // REQ-SEC-014: Skip section names exceeding the length limit.
+            if (name.size() > kMaxSectionNameLen) {
+                continue;
+            }
+            current_section = std::move(name);
             continue;
         }
 
@@ -69,6 +74,10 @@ bool ConfigParser::loadFile(const std::string& path) {
         if (eq_pos != std::string::npos) {
             std::string key = toLower(trim(line.substr(0, eq_pos)));
             std::string value = trim(line.substr(eq_pos + 1));
+            // REQ-SEC-014: Skip entries with oversized keys or values.
+            if (key.size() > kMaxKeyLen || value.size() > kMaxValueLen) {
+                continue;
+            }
             if (!key.empty()) {
                 sections_[current_section][key] = value;
             }

@@ -12,6 +12,12 @@
 
 namespace legends {
 
+/// Field length limits for INI parsing (REQ-SEC-014).
+/// Lines with section names, keys, or values exceeding these limits are skipped.
+inline constexpr size_t kMaxSectionNameLen = 256;
+inline constexpr size_t kMaxKeyLen         = 256;
+inline constexpr size_t kMaxValueLen       = 4096;
+
 /// INI-style configuration file parser.
 ///
 /// Supports:
