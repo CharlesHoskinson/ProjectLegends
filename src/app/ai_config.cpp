@@ -6,6 +6,8 @@
 #include "app/ai_config.h"
 #include "app/config_parser.h"
 
+#include <gsl-lite/gsl-lite.hpp>
+
 #include <cstdlib>
 
 namespace legends {
@@ -19,9 +21,9 @@ void AIConfig::loadFrom(const ConfigParser& config) {
     endpoint = config.get("ai", "endpoint", endpoint);
     model = config.get("ai", "model", model);
     api_key_env = config.get("ai", "api_key_env", api_key_env);
-    max_tokens = static_cast<uint32_t>(
+    max_tokens = gsl::narrow<uint32_t>(
         config.getInt("ai", "max_tokens", static_cast<int>(max_tokens)));
-    max_context_chars = static_cast<uint32_t>(
+    max_context_chars = gsl::narrow<uint32_t>(
         config.getInt("ai", "max_context_chars", static_cast<int>(max_context_chars)));
     privacy_mode = config.getBool("ai", "privacy_mode", privacy_mode);
 }

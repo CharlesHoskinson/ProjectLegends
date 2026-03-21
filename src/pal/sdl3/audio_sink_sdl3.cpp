@@ -8,6 +8,7 @@
 
 #include "pal/audio_sink.h"
 #include <SDL3/SDL.h>
+#include <gsl-lite/gsl-lite.hpp>
 #include <algorithm>
 #include <climits>
 #include <memory>
@@ -35,9 +36,9 @@ public:
 
         // Set up SDL3 audio spec
         SDL_AudioSpec spec{};
-        spec.freq = static_cast<int>(config.sample_rate);
+        spec.freq = gsl::narrow<int>(config.sample_rate);
         spec.format = SDL_AUDIO_S16;
-        spec.channels = static_cast<int>(config.channels);
+        spec.channels = gsl::narrow<int>(config.channels);
 
         // SDL3: Create audio stream bound to default playback device
         stream_ = SDL_OpenAudioDeviceStream(
@@ -117,7 +118,7 @@ public:
         }
 
         // SDL3: Push directly to audio stream
-        if (!SDL_PutAudioStreamData(stream_, samples, static_cast<int>(bytes))) {
+        if (!SDL_PutAudioStreamData(stream_, samples, gsl::narrow_cast<int>(bytes))) {
             // If push fails despite clearing, count all as dropped
             dropped_frames_ += frame_count;
         }
@@ -132,7 +133,7 @@ public:
         int bytes = SDL_GetAudioStreamQueued(stream_);
         // M23: Handle error return (negative value) from SDL
         if (bytes < 0) return 0;
-        return static_cast<uint32_t>(bytes) / (config_.channels * sizeof(int16_t));
+        return gsl::narrow<uint32_t>(bytes) / (config_.channels * sizeof(int16_t));
     }
 
     uint32_t getBufferCapacity() const override {

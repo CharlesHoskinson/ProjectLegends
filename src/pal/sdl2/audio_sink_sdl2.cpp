@@ -5,6 +5,7 @@
 
 #include "pal/audio_sink.h"
 #include <SDL.h>
+#include <gsl-lite/gsl-lite.hpp>
 #include <algorithm>
 #include <atomic>
 #include <cstring>
@@ -139,10 +140,10 @@ public:
 
         // Set up SDL audio spec
         SDL_AudioSpec desired{};
-        desired.freq = static_cast<int>(config.sample_rate);
+        desired.freq = gsl::narrow<int>(config.sample_rate);
         desired.format = AUDIO_S16SYS;
-        desired.channels = static_cast<Uint8>(config.channels);
-        desired.samples = static_cast<Uint16>(buffer_samples / config.channels);
+        desired.channels = gsl::narrow<Uint8>(config.channels);
+        desired.samples = gsl::narrow<Uint16>(buffer_samples / config.channels);
         desired.callback = audioCallback;
         desired.userdata = this;
 
@@ -155,7 +156,7 @@ public:
         }
 
         // Update config with actual values
-        config_.sample_rate = static_cast<uint32_t>(obtained.freq);
+        config_.sample_rate = gsl::narrow<uint32_t>(obtained.freq);
         config_.channels = obtained.channels;
 
         // Calculate capacity in frames
@@ -205,7 +206,7 @@ public:
             size_t to_discard = sample_count - free;
             size_t discarded = ring_buffer_->discard(to_discard);
             // Track dropped frames (samples / channels)
-            dropped_frames_ += static_cast<uint32_t>(discarded / config_.channels);
+            dropped_frames_ += gsl::narrow<uint32_t>(discarded / config_.channels);
         }
 
         ring_buffer_->push(samples, sample_count);
@@ -216,7 +217,7 @@ public:
         if (!ring_buffer_) {
             return 0;
         }
-        return static_cast<uint32_t>(ring_buffer_->available() / config_.channels);
+        return gsl::narrow<uint32_t>(ring_buffer_->available() / config_.channels);
     }
 
     uint32_t getBufferCapacity() const override {

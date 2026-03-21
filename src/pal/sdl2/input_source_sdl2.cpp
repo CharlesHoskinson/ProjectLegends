@@ -5,6 +5,7 @@
 
 #include "pal/input_source.h"
 #include <SDL.h>
+#include <gsl-lite/gsl-lite.hpp>
 #include <memory>
 
 namespace pal {
@@ -110,15 +111,15 @@ private:
         switch (sdl.type) {
             case SDL_KEYDOWN:
                 event.type = InputEventType::KeyDown;
-                event.key.scancode = static_cast<uint16_t>(sdl.key.keysym.scancode);
-                event.key.keycode = static_cast<uint16_t>(sdl.key.keysym.sym & 0xFFFF);
+                event.key.scancode = gsl::narrow<uint16_t>(sdl.key.keysym.scancode);
+                event.key.keycode = gsl::narrow_cast<uint16_t>(sdl.key.keysym.sym & 0xFFFF);
                 event.key.repeat = sdl.key.repeat != 0;
                 return true;
 
             case SDL_KEYUP:
                 event.type = InputEventType::KeyUp;
-                event.key.scancode = static_cast<uint16_t>(sdl.key.keysym.scancode);
-                event.key.keycode = static_cast<uint16_t>(sdl.key.keysym.sym & 0xFFFF);
+                event.key.scancode = gsl::narrow<uint16_t>(sdl.key.keysym.scancode);
+                event.key.keycode = gsl::narrow_cast<uint16_t>(sdl.key.keysym.sym & 0xFFFF);
                 event.key.repeat = false;
                 return true;
 
@@ -154,15 +155,15 @@ private:
 
             case SDL_JOYAXISMOTION:
                 event.type = InputEventType::JoystickAxis;
-                event.joy_axis.id = static_cast<uint8_t>(sdl.jaxis.which);
-                event.joy_axis.axis = static_cast<int16_t>(sdl.jaxis.axis);
+                event.joy_axis.id = gsl::narrow<uint8_t>(sdl.jaxis.which);
+                event.joy_axis.axis = gsl::narrow<int16_t>(sdl.jaxis.axis);
                 event.joy_axis.value = sdl.jaxis.value;
                 return true;
 
             case SDL_JOYBUTTONDOWN:
             case SDL_JOYBUTTONUP:
                 event.type = InputEventType::JoystickButton;
-                event.joy_button.id = static_cast<uint8_t>(sdl.jbutton.which);
+                event.joy_button.id = gsl::narrow<uint8_t>(sdl.jbutton.which);
                 event.joy_button.button = sdl.jbutton.button;
                 event.joy_button.pressed = (sdl.type == SDL_JOYBUTTONDOWN);
                 return true;
@@ -188,8 +189,8 @@ private:
             case SDL_WINDOWEVENT_RESIZED:
             case SDL_WINDOWEVENT_SIZE_CHANGED:
                 event.type = InputEventType::WindowResize;
-                event.window_resize.width = static_cast<uint32_t>(win.data1);
-                event.window_resize.height = static_cast<uint32_t>(win.data2);
+                event.window_resize.width = gsl::narrow<uint32_t>(win.data1);
+                event.window_resize.height = gsl::narrow<uint32_t>(win.data2);
                 return true;
 
             case SDL_WINDOWEVENT_FOCUS_GAINED:

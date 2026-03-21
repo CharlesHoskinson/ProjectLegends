@@ -6,6 +6,8 @@
 #include "app/cli_parser.h"
 #include <legends/legends_version.h>
 
+#include <gsl-lite/gsl-lite.hpp>
+
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
@@ -97,7 +99,7 @@ bool CLIOptions::parse(int argc, char** argv) {
                 error_message = "--cycles: value out of range";
                 return false;
             }
-            cycles = static_cast<uint32_t>(val);
+            cycles = gsl::narrow_cast<uint32_t>(val);  // range validated above
             continue;
         }
         if (std::strcmp(arg, "--machine") == 0) {
@@ -128,7 +130,7 @@ bool CLIOptions::parse(int argc, char** argv) {
                 error_message = "--memsize: value out of range";
                 return false;
             }
-            memsize_kb = static_cast<uint32_t>(val);
+            memsize_kb = gsl::narrow_cast<uint32_t>(val);  // range validated above
             continue;
         }
         if (std::strcmp(arg, "--profile") == 0) {
