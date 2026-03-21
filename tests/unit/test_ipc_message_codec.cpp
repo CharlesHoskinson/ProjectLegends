@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 #include <gtest/gtest.h>
 #include <legends_ipc/message_codec.h>
+#include <legends_ipc/message_header.h>
 #include <legends_ipc/messages.h>
+#include <legends_ipc/wire_format.h>
 #include <array>
 
 using namespace legends_ipc;
@@ -141,4 +143,23 @@ TEST_F(IpcMessageCodecTest, ByteByByteFeed) {
     auto r = codec_.try_decode();
     ASSERT_TRUE(r.has_value());
     EXPECT_EQ(r->header.msg_type, MsgType::KeyEventReq);
+}
+
+TEST_F(IpcMessageCodecTest, RejectsOversizedPayload) {
+    // Craft a raw header that claims a payload of 256 MB + 1 byte,
+    // which exceeds kMaxPayloadSize (64 MB).  The decoder must reject
+    // this without attempting the allocation.
+    constexpr uint32_t oversized = 256u * 1024u * 1024u + 1u;
+    std::array<uint8_t, 10> raw_header{};  // HeaderSize == 10
+    wire::write_u16_le(raw_header, 0, static_cast<uint16_t>(MsgType::Handshake));
+    wire::write_u32_le(raw_header, 2, oversized);
+    wire::write_u32_le(raw_header, 6, 1);  // sequence_id
+
+    codec_.feed(raw_header);
+    auto result = codec_.try_decode();
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), IpcError::InvalidHeader);
+
+    // Buffer should have been cleared on rejection.
+    EXPECT_EQ(codec_.buffered_bytes(), 0u);
 }
