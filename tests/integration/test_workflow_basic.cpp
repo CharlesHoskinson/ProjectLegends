@@ -8,25 +8,11 @@
 #include <gtest/gtest.h>
 #include <legends/legends_embed.h>
 #include <pal/platform.h>
+#include "test_utils/integration_fixture.h"
 #include <cstring>
 #include <vector>
 
-class BasicWorkflowTest : public ::testing::Test {
-protected:
-    legends_handle handle_ = nullptr;
-
-    void SetUp() override {
-        pal::Platform::shutdown();
-        pal::Platform::initialize(pal::Backend::Headless);
-        legends_force_destroy();
-    }
-
-    void TearDown() override {
-        if (handle_) {
-            legends_destroy(handle_);
-        }
-        pal::Platform::shutdown();
-    }
+class BasicWorkflowTest : public legends::test_utils::LegendsIntegrationTest {
 };
 
 // E2E: create -> step -> capture_text -> destroy

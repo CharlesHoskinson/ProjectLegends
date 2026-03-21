@@ -4,22 +4,22 @@
 #include <gtest/gtest.h>
 #include "pal/platform.h"
 #include "pal/input_source.h"
+#include "test_utils/pal_headless_fixture.h"
 
 namespace pal {
 namespace {
 
-class PalInputSourceTest : public ::testing::Test {
+class PalInputSourceTest : public test_utils::PalHeadlessFixture {
 protected:
     void SetUp() override {
-        Platform::shutdown();
-        ASSERT_EQ(Platform::initialize(Backend::Headless), Result::Success);
+        test_utils::PalHeadlessFixture::SetUp();
         input_ = Platform::createInputSource();
         ASSERT_NE(input_, nullptr);
     }
 
     void TearDown() override {
         input_.reset();
-        Platform::shutdown();
+        test_utils::PalHeadlessFixture::TearDown();
     }
 
     std::unique_ptr<IInputSource> input_;

@@ -4,22 +4,22 @@
 #include <gtest/gtest.h>
 #include "pal/platform.h"
 #include "pal/window.h"
+#include "test_utils/pal_headless_fixture.h"
 
 namespace pal {
 namespace {
 
-class PalWindowTest : public ::testing::Test {
+class PalWindowTest : public test_utils::PalHeadlessFixture {
 protected:
     void SetUp() override {
-        Platform::shutdown();
-        ASSERT_EQ(Platform::initialize(Backend::Headless), Result::Success);
+        test_utils::PalHeadlessFixture::SetUp();
         window_ = Platform::createWindow();
         ASSERT_NE(window_, nullptr);
     }
 
     void TearDown() override {
         window_.reset();
-        Platform::shutdown();
+        test_utils::PalHeadlessFixture::TearDown();
     }
 
     std::unique_ptr<IWindow> window_;

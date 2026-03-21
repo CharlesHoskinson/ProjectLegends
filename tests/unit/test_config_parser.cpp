@@ -5,39 +5,20 @@
 
 #include <gtest/gtest.h>
 #include "app/config_parser.h"
+#include "test_utils/temp_file_fixture.h"
 
-#include <cstdio>
-#include <filesystem>
-#include <fstream>
 #include <string>
 
 namespace legends {
 namespace {
 
-class ConfigParserTest : public ::testing::Test {
+class ConfigParserTest : public test_utils::TempFileFixture {
 protected:
     ConfigParser parser_;
-    std::vector<std::string> temp_files_;
-
-    void TearDown() override {
-        for (auto& f : temp_files_) {
-            std::filesystem::remove(f);
-        }
-    }
 
     std::string writeTempFile(const std::string& content) {
-        auto path = std::filesystem::temp_directory_path() /
-                    ("test_config_" + std::to_string(counter_++) + ".conf");
-        std::ofstream out(path, std::ios::binary);
-        out << content;
-        out.close();
-        auto s = path.string();
-        temp_files_.push_back(s);
-        return s;
+        return test_utils::TempFileFixture::writeTempFile(content, "test_config");
     }
-
-private:
-    static inline int counter_ = 0;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

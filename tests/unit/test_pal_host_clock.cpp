@@ -4,22 +4,22 @@
 #include <gtest/gtest.h>
 #include "pal/platform.h"
 #include "pal/host_clock.h"
+#include "test_utils/pal_headless_fixture.h"
 
 namespace pal {
 namespace {
 
-class PalHostClockTest : public ::testing::Test {
+class PalHostClockTest : public test_utils::PalHeadlessFixture {
 protected:
     void SetUp() override {
-        Platform::shutdown();
-        ASSERT_EQ(Platform::initialize(Backend::Headless), Result::Success);
+        test_utils::PalHeadlessFixture::SetUp();
         clock_ = Platform::createHostClock();
         ASSERT_NE(clock_, nullptr);
     }
 
     void TearDown() override {
         clock_.reset();
-        Platform::shutdown();
+        test_utils::PalHeadlessFixture::TearDown();
     }
 
     std::unique_ptr<IHostClock> clock_;

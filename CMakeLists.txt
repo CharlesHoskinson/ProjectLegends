@@ -714,6 +714,7 @@ if(LEGENDS_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/external/glad  # glad GL loader
         ${CMAKE_CURRENT_SOURCE_DIR}/engine/src/libs  # ZMBV codec headers
         ${CMAKE_BINARY_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit      # Shared test fixtures
     )
 
     target_compile_definitions(legends_unit_tests PRIVATE
@@ -895,6 +896,7 @@ if(LEGENDS_BUILD_TESTS)
 
     target_include_directories(legends_integration_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration  # Shared test fixtures
     )
 
     target_link_libraries(legends_integration_tests PRIVATE
