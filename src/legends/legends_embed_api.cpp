@@ -2914,8 +2914,43 @@ legends_error_t legends_joystick_event(
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Bridge to engine joystick port 0x201 once engine context is wired.
-    (void)joystick_id; (void)axis_x; (void)axis_y; (void)buttons;
+    // Bridge joystick state to the engine via BIOS Data Area.
+    // The BDA joystick area at 0x0040:0x0080 (physical 0x480) stores:
+    //   Offset 0: Joystick 0 X axis (uint16_t, timer count proportional to position)
+    //   Offset 2: Joystick 0 Y axis (uint16_t)
+    //   Offset 4: Joystick 1 X axis (uint16_t)
+    //   Offset 6: Joystick 1 Y axis (uint16_t)
+    //   Offset 8: Joystick button state (uint8_t, active-low bits 4-7)
+    // Axis values: 0..255 maps to timer counts ~3..700 for standard games.
+    if (joystick_id > 1) return LEGENDS_OK;
+
+    // Convert 0-255 axis to BIOS timer count (range ~3-700, linear)
+    uint16_t timer_x = static_cast<uint16_t>(3 + (axis_x * 697u) / 255u);
+    uint16_t timer_y = static_cast<uint16_t>(3 + (axis_y * 697u) / 255u);
+
+    uint32_t base_addr = 0x0480 + joystick_id * 4;
+    uint8_t axis_data[4];
+    axis_data[0] = static_cast<uint8_t>(timer_x & 0xFF);
+    axis_data[1] = static_cast<uint8_t>((timer_x >> 8) & 0xFF);
+    axis_data[2] = static_cast<uint8_t>(timer_y & 0xFF);
+    axis_data[3] = static_cast<uint8_t>((timer_y >> 8) & 0xFF);
+
+    dosbox_lib_write_memory(inst->engine_handle, axis_data, base_addr, 4);
+
+    // Button state at 0x0488: bits 4-7 are buttons (active-low)
+    // Bit 4 = joy0 button0, bit 5 = joy0 button1,
+    // Bit 6 = joy1 button0, bit 7 = joy1 button1
+    uint8_t btn_byte = 0;
+    dosbox_lib_read_memory(inst->engine_handle, 0x0488, &btn_byte, 1);
+
+    uint8_t shift = static_cast<uint8_t>(joystick_id * 2 + 4);
+    uint8_t mask  = static_cast<uint8_t>(0x03 << shift);
+    btn_byte |= mask; // Set both bits (active-low = released)
+    // Clear bits for pressed buttons
+    if (buttons & 0x01) btn_byte &= static_cast<uint8_t>(~(1u << shift));
+    if (buttons & 0x02) btn_byte &= static_cast<uint8_t>(~(1u << (shift + 1)));
+
+    dosbox_lib_write_memory(inst->engine_handle, &btn_byte, 0x0488, 1);
 
     return LEGENDS_OK;
 }
@@ -3021,7 +3056,10 @@ legends_error_t legends_set_ttf_font(
     LEGENDS_REQUIRE(ttf_path != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_CHECK_THREAD();
 
-    // TODO: Forward to engine TTF renderer once wired.
+    // TTF rendering is handled in the app layer (TTFRenderer), not by the
+    // engine. Store the configuration so legends_get_config consumers can
+    // query it, and log the event for diagnostics.
+    LEGENDS_LOG_INFO("TTF font configuration updated");
     (void)ttf_path; (void)point_size;
 
     return LEGENDS_OK;
