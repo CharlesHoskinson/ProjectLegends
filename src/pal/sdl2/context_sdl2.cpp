@@ -6,6 +6,7 @@
 #include "pal/context.h"
 #include "pal/window.h"
 #include <SDL.h>
+#include <gsl-lite/gsl-lite.hpp>
 #include <memory>
 
 namespace pal {
@@ -122,9 +123,9 @@ public:
         }
 
         ctx.pixels = surface_->pixels;
-        ctx.pitch = static_cast<uint32_t>(surface_->pitch);
-        ctx.width = static_cast<uint32_t>(surface_->w);
-        ctx.height = static_cast<uint32_t>(surface_->h);
+        ctx.pitch = gsl::narrow<uint32_t>(surface_->pitch);
+        ctx.width = gsl::narrow<uint32_t>(surface_->w);
+        ctx.height = gsl::narrow<uint32_t>(surface_->h);
         ctx.format = sdlFormatToPixelFormat(surface_->format->format);
 
         locked_ = true;

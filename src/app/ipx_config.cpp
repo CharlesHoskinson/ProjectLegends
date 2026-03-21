@@ -6,6 +6,8 @@
 #include "app/ipx_config.h"
 #include "app/config_parser.h"
 
+#include <gsl-lite/gsl-lite.hpp>
+
 namespace legends {
 
 void IPXConfig::loadFrom(const ConfigParser& config) {
@@ -15,7 +17,7 @@ void IPXConfig::loadFrom(const ConfigParser& config) {
 
     enabled = config.getBool("ipx", "ipx", enabled);
     server = config.get("ipx", "server", server);
-    port = static_cast<uint16_t>(config.getInt("ipx", "port",
+    port = gsl::narrow<uint16_t>(config.getInt("ipx", "port",
                                   static_cast<int>(port)));
 }
 

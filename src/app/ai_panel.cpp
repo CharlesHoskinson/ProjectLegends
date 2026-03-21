@@ -7,6 +7,8 @@
 #include "app/action_bus.h"
 #include "legends/internal/cp437_font_8x16.h"
 
+#include <gsl-lite/gsl-lite.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -145,6 +147,7 @@ std::vector<std::string> wordWrap(const std::string& text, int max_chars) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void AIPanel::initialize(ActionBus* bus) {
+    gsl_Expects(bus != nullptr);
     bus_ = bus;
 }
 
@@ -290,7 +293,8 @@ void AIPanel::clearHistory() {
 
 void AIPanel::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
                      uint32_t pitch) const {
-    if (!open_ || rgb_buffer == nullptr) return;
+    gsl_Expects(rgb_buffer != nullptr);
+    if (!open_) return;
 
     // Default pitch = tightly packed RGB24
     if (pitch == 0) pitch = static_cast<uint32_t>(width) * 3;

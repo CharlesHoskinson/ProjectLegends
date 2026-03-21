@@ -6,7 +6,8 @@
 #include "app/cli_parser.h"
 #include <legends/legends_version.h>
 
-#include <charconv>
+#include <gsl-lite/gsl-lite.hpp>
+
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
@@ -38,10 +39,6 @@ bool CLIOptions::parse(int argc, char** argv) {
         }
         if (std::strcmp(arg, "--fullscreen") == 0) {
             fullscreen = true;
-            continue;
-        }
-        if (std::strcmp(arg, "--opengl") == 0) {
-            opengl = true;
             continue;
         }
         if (std::strcmp(arg, "--log") == 0) {
@@ -90,18 +87,19 @@ bool CLIOptions::parse(int argc, char** argv) {
                 error_message = "--cycles requires a numeric argument";
                 return false;
             }
-            const char* str = argv[++i];
-            const char* str_end = str + std::strlen(str);
-            uint32_t val = 0;
-            auto [ptr, ec] = std::from_chars(str, str_end, val);
-            if (ec != std::errc{} || ptr != str_end) {
+            char* end = nullptr;
+            unsigned long val = std::strtoul(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0') {
                 parse_ok = false;
-                error_message = (ec == std::errc::result_out_of_range)
-                    ? "--cycles: value out of range"
-                    : "--cycles: invalid number";
+                error_message = "--cycles: invalid number";
                 return false;
             }
-            cycles = val;
+            if (val > UINT32_MAX) {
+                parse_ok = false;
+                error_message = "--cycles: value out of range";
+                return false;
+            }
+            cycles = gsl::narrow_cast<uint32_t>(val);  // range validated above
             continue;
         }
         if (std::strcmp(arg, "--machine") == 0) {
@@ -120,18 +118,19 @@ bool CLIOptions::parse(int argc, char** argv) {
                 error_message = "--memsize requires a numeric argument";
                 return false;
             }
-            const char* str = argv[++i];
-            const char* str_end = str + std::strlen(str);
-            uint32_t val = 0;
-            auto [ptr, ec] = std::from_chars(str, str_end, val);
-            if (ec != std::errc{} || ptr != str_end) {
+            char* end = nullptr;
+            unsigned long val = std::strtoul(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0') {
                 parse_ok = false;
-                error_message = (ec == std::errc::result_out_of_range)
-                    ? "--memsize: value out of range"
-                    : "--memsize: invalid number";
+                error_message = "--memsize: invalid number";
                 return false;
             }
-            memsize_kb = val;
+            if (val > UINT32_MAX) {
+                parse_ok = false;
+                error_message = "--memsize: value out of range";
+                return false;
+            }
+            memsize_kb = gsl::narrow_cast<uint32_t>(val);  // range validated above
             continue;
         }
         if (std::strcmp(arg, "--profile") == 0) {
@@ -180,7 +179,6 @@ void CLIOptions::printUsage(const char* program_name) {
         "Options:\n"
         "  --conf <path>      Path to .conf configuration file\n"
         "  --fullscreen       Start in fullscreen mode\n"
-        "  --opengl           Use OpenGL renderer (default: software)\n"
         "  --cycles <n>       CPU cycles per millisecond (0 = auto)\n"
         "  --machine <type>   Machine type: vga, ega, cga, hercules, tandy, pc98\n"
         "  --memsize <kb>     Conventional memory size in KB (default: 640)\n"

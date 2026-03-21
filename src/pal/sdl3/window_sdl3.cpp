@@ -5,6 +5,7 @@
 
 #include "pal/window.h"
 #include <SDL3/SDL.h>
+#include <gsl-lite/gsl-lite.hpp>
 #include <memory>
 #include <string>
 
@@ -51,8 +52,8 @@ public:
             SDL_free(displays);
         }
 
-        int scaled_w = static_cast<int>(config.width * dpi_scale);
-        int scaled_h = static_cast<int>(config.height * dpi_scale);
+        int scaled_w = gsl::narrow_cast<int>(config.width * dpi_scale);
+        int scaled_h = gsl::narrow_cast<int>(config.height * dpi_scale);
 
         // SDL3: CreateWindow has no x,y parameters - uses SDL_WINDOWPOS_CENTERED by default
         window_ = SDL_CreateWindow(
@@ -100,7 +101,7 @@ public:
             return Result::InvalidParameter;
         }
 
-        if (!SDL_SetWindowSize(window_, static_cast<int>(width), static_cast<int>(height))) {
+        if (!SDL_SetWindowSize(window_, gsl::narrow<int>(width), gsl::narrow<int>(height))) {
             return Result::NotSupported;
         }
         width_ = width;
@@ -144,8 +145,8 @@ public:
         if (window_) {
             int w, h;
             SDL_GetWindowSize(window_, &w, &h);
-            width = static_cast<uint32_t>(w);
-            height = static_cast<uint32_t>(h);
+            width = gsl::narrow<uint32_t>(w);
+            height = gsl::narrow<uint32_t>(h);
         } else {
             width = width_;
             height = height_;
@@ -162,13 +163,13 @@ public:
         if (displays) {
             SDL_free(displays);
         }
-        return count > 0 ? static_cast<uint32_t>(count) : 1;
+        return count > 0 ? gsl::narrow<uint32_t>(count) : 1;
     }
 
     Result getDisplayInfo(uint32_t index, DisplayInfo& info) const override {
         int count = 0;
         SDL_DisplayID* displays = SDL_GetDisplays(&count);
-        if (!displays || static_cast<int>(index) >= count) {
+        if (!displays || gsl::narrow<int>(index) >= count) {
             if (displays) SDL_free(displays);
             return Result::InvalidParameter;
         }
@@ -181,8 +182,8 @@ public:
             return Result::NotSupported;
         }
 
-        info.width = static_cast<uint32_t>(mode->w);
-        info.height = static_cast<uint32_t>(mode->h);
+        info.width = gsl::narrow<uint32_t>(mode->w);
+        info.height = gsl::narrow<uint32_t>(mode->h);
         info.refresh_rate = mode->refresh_rate;
 
         // Get DPI scale

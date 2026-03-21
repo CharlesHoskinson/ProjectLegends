@@ -5,6 +5,7 @@
 
 #include "pal/audio_sink.h"
 #include <SDL.h>
+#include <gsl-lite/gsl-lite.hpp>
 #include <algorithm>
 #include <atomic>
 #include <cstring>
@@ -139,10 +140,10 @@ public:
 
         // Set up SDL audio spec
         SDL_AudioSpec desired{};
-        desired.freq = static_cast<int>(config.sample_rate);
+        desired.freq = gsl::narrow<int>(config.sample_rate);
         desired.format = AUDIO_S16SYS;
-        desired.channels = static_cast<Uint8>(config.channels);
-        desired.samples = static_cast<Uint16>(buffer_samples / config.channels);
+        desired.channels = gsl::narrow<Uint8>(config.channels);
+        desired.samples = gsl::narrow<Uint16>(buffer_samples / config.channels);
         desired.callback = audioCallback;
         desired.userdata = this;
 
@@ -155,7 +156,7 @@ public:
         }
 
         // Update config with actual values
-        config_.sample_rate = static_cast<uint32_t>(obtained.freq);
+        config_.sample_rate = gsl::narrow<uint32_t>(obtained.freq);
         config_.channels = obtained.channels;
 
         // Calculate capacity in frames
@@ -174,7 +175,7 @@ public:
             device_id_ = 0;
         }
         ring_buffer_.reset();
-        dropped_frames_.store(0, std::memory_order_relaxed);
+        dropped_frames_ = 0;
         paused_ = false;
     }
 
@@ -205,9 +206,7 @@ public:
             size_t to_discard = sample_count - free;
             size_t discarded = ring_buffer_->discard(to_discard);
             // Track dropped frames (samples / channels)
-            dropped_frames_.fetch_add(
-                static_cast<uint64_t>(discarded / config_.channels),
-                std::memory_order_relaxed);
+            dropped_frames_ += gsl::narrow<uint32_t>(discarded / config_.channels);
         }
 
         ring_buffer_->push(samples, sample_count);
@@ -218,7 +217,7 @@ public:
         if (!ring_buffer_) {
             return 0;
         }
-        return static_cast<uint32_t>(ring_buffer_->available() / config_.channels);
+        return gsl::narrow<uint32_t>(ring_buffer_->available() / config_.channels);
     }
 
     uint32_t getBufferCapacity() const override {
@@ -226,7 +225,7 @@ public:
     }
 
     uint32_t getDroppedFrames() const override {
-        return static_cast<uint32_t>(dropped_frames_.load(std::memory_order_relaxed));
+        return dropped_frames_;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -248,12 +247,12 @@ public:
     }
 
     Result setVolume(float volume) override {
-        volume_.store(std::clamp(volume, 0.0f, 1.0f), std::memory_order_relaxed);
+        volume_ = std::clamp(volume, 0.0f, 1.0f);
         return Result::Success;
     }
 
     float getVolume() const override {
-        return volume_.load(std::memory_order_relaxed);
+        return volume_;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -272,11 +271,10 @@ private:
         int16_t* output = reinterpret_cast<int16_t*>(stream);
         size_t got = sink->ring_buffer_->pull(output, sample_count);
 
-        // Apply volume (atomic load — volume_ is shared with the main thread)
-        float vol = sink->volume_.load(std::memory_order_relaxed);
-        if (vol < 1.0f) {
+        // Apply volume
+        if (sink->volume_ < 1.0f) {
             for (size_t i = 0; i < got; ++i) {
-                output[i] = static_cast<int16_t>(output[i] * vol);
+                output[i] = static_cast<int16_t>(output[i] * sink->volume_);
             }
         }
 
@@ -290,9 +288,9 @@ private:
     std::unique_ptr<AudioRingBuffer> ring_buffer_;
     AudioConfig config_{};
     uint32_t capacity_frames_ = 0;
-    std::atomic<uint64_t> dropped_frames_{0};
+    uint32_t dropped_frames_ = 0;
     bool paused_ = false;
-    std::atomic<float> volume_{1.0f};
+    float volume_ = 1.0f;
 };
 
 } // namespace sdl2

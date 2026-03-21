@@ -6,6 +6,8 @@
 #include "app/midi_config.h"
 #include "app/config_parser.h"
 
+#include <gsl-lite/gsl-lite.hpp>
+
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -35,7 +37,7 @@ void MIDIConfig::loadFrom(const ConfigParser& config) {
     soundfont_path = config.get("midi", "fluid.soundfont", soundfont_path);
     mt32_romdir = config.get("midi", "mt32.romdir", mt32_romdir);
 
-    sample_rate = static_cast<uint32_t>(
+    sample_rate = gsl::narrow<uint32_t>(
         config.getInt("midi", "samplerate", static_cast<int>(sample_rate)));
 
     // Volume: read as integer percentage 0-100, convert to float 0.0-1.0;

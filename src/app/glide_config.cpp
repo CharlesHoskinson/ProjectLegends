@@ -6,6 +6,8 @@
 #include "app/glide_config.h"
 #include "app/config_parser.h"
 
+#include <gsl-lite/gsl-lite.hpp>
+
 namespace legends {
 
 void GlideConfig::loadFrom(const ConfigParser& config) {
@@ -14,9 +16,9 @@ void GlideConfig::loadFrom(const ConfigParser& config) {
     }
 
     enabled = config.getBool("glide", "glide", enabled);
-    width = static_cast<uint16_t>(config.getInt("glide", "width",
+    width = gsl::narrow<uint16_t>(config.getInt("glide", "width",
                                    static_cast<int>(width)));
-    height = static_cast<uint16_t>(config.getInt("glide", "height",
+    height = gsl::narrow<uint16_t>(config.getInt("glide", "height",
                                     static_cast<int>(height)));
     lfb_access = config.getBool("glide", "lfb", lfb_access);
     splash_screen = config.get("glide", "splash", splash_screen);
