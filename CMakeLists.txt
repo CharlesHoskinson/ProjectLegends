@@ -469,6 +469,94 @@ if(LEGENDS_BUILD_WASM)
 endif()
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Application Library (shared between executable and unit tests)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# The legends_app STATIC library collects all src/app/ sources plus supporting
+# external/engine files (glad, zmbv) so they are compiled once and linked by
+# both the project_legends executable and the legends_unit_tests target.
+
+add_library(legends_app STATIC
+    src/app/application.cpp
+    src/app/cli_parser.cpp
+    src/app/config_parser.cpp
+    src/app/platform_dirs.cpp
+    src/app/scancode_map.cpp
+    src/app/action_bus.cpp
+    src/app/capture.cpp
+    src/app/input_mapper.cpp
+    src/app/save_manager.cpp
+    src/app/menu_system.cpp
+    src/app/hotkey_dispatcher.cpp
+    src/app/mount_manager.cpp
+    src/app/image_validator.cpp
+    src/app/zmbv_codec.cpp
+    src/app/video_capture.cpp
+    src/app/mapper_ui.cpp
+    src/app/save_browser.cpp
+    # Phase 3: Enhanced Features
+    src/app/joystick_mapper.cpp
+    src/app/shader_renderer.cpp
+    src/app/shader_presets.cpp
+    src/app/ai_config.cpp
+    src/app/ai_http_client.cpp
+    src/app/ai_screen_context.cpp
+    src/app/ai_panel.cpp
+    src/app/audio_mixer.cpp
+    src/app/midi_config.cpp
+    src/app/printer_manager.cpp
+    src/app/ttf_renderer.cpp
+    src/app/ipx_config.cpp
+    src/app/glide_config.cpp
+    src/app/pc98_config.cpp
+    # Phase 4: Polish & Release
+    src/app/file_logger.cpp
+    src/app/error_reporter.cpp
+    src/app/crash_breadcrumb.cpp
+    src/app/crash_reporter.cpp
+    # Phase 4 Sprint 4: SSIM
+    src/app/ssim.cpp
+    # Phase 4 Sprint 6: Portable mode
+    src/app/portable_mode.cpp
+    # Phase 4 Sprint 7: Update checker
+    src/app/update_checker.cpp
+    $<$<PLATFORM_ID:Windows>:src/app/update_checker_win.cpp>
+    $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
+    $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
+    # External / engine support files
+    external/glad/glad.c
+    engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture
+    engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
+)
+
+legends_set_strict_cxx_standard(legends_app)
+
+target_include_directories(legends_app
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/external
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/glad
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine/src/libs  # ZMBV codec headers
+        ${CMAKE_BINARY_DIR}/include
+)
+
+target_link_libraries(legends_app
+    PUBLIC
+        legends_core
+        legends_pal
+    PRIVATE
+        gsl::gsl-lite-v1
+)
+
+target_compile_definitions(legends_app PRIVATE
+    gsl_CONFIG_DEFAULTS_VERSION=1
+    gsl_CONFIG_CONTRACT_CHECKING_ON
+    gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -519,6 +607,11 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_vision_overlay.cpp
         tests/unit/test_vision_annotations.cpp
         tests/unit/test_legends_embed.cpp
+        tests/unit/test_legends_embed_lifecycle.cpp
+        tests/unit/test_legends_embed_capture.cpp
+        tests/unit/test_legends_embed_input.cpp
+        tests/unit/test_legends_embed_savestate.cpp
+        tests/unit/test_legends_embed_security.cpp
         # PAL Tests
         tests/unit/test_pal_types.cpp
         tests/unit/test_pal_window.cpp
@@ -639,80 +732,22 @@ if(LEGENDS_BUILD_TESTS)
     legends_set_strict_cxx_standard(legends_unit_tests)
 
     target_link_libraries(legends_unit_tests PRIVATE
-        legends_core
-        legends_pal
+        legends_app
         legends_ipc
         GTest::gtest_main
         GTest::gmock
         gsl::gsl-lite-v1  # Tests may use gsl-lite directly for testing
     )
 
+    # Engine host sources for IPC dispatcher tests (not part of legends_app)
     target_sources(legends_unit_tests PRIVATE
-        src/app/cli_parser.cpp
-        src/app/config_parser.cpp
-        src/app/platform_dirs.cpp
-        src/app/scancode_map.cpp
-        src/app/action_bus.cpp
-        src/app/capture.cpp
-        src/app/input_mapper.cpp
-        src/app/save_manager.cpp
-        src/app/menu_system.cpp
-        src/app/hotkey_dispatcher.cpp
-        src/app/mount_manager.cpp
-        src/app/image_validator.cpp
-        src/app/zmbv_codec.cpp
-        src/app/video_capture.cpp
-        src/app/mapper_ui.cpp
-        src/app/save_browser.cpp
-        # Phase 3: Enhanced Features
-        src/app/joystick_mapper.cpp
-        src/app/shader_renderer.cpp
-        src/app/shader_presets.cpp
-        src/app/ai_config.cpp
-        src/app/ai_http_client.cpp
-        src/app/ai_screen_context.cpp
-        src/app/ai_panel.cpp
-        src/app/audio_mixer.cpp
-        src/app/midi_config.cpp
-        src/app/printer_manager.cpp
-        src/app/ttf_renderer.cpp
-        src/app/ipx_config.cpp
-        src/app/glide_config.cpp
-        src/app/pc98_config.cpp
-        # Phase 4: Polish & Release
-        src/app/file_logger.cpp
-        src/app/error_reporter.cpp
-        src/app/crash_breadcrumb.cpp
-        src/app/crash_reporter.cpp
-        # Phase 4 Sprint 4: SSIM
-        src/app/ssim.cpp
-        # Phase 4 Sprint 6: Portable mode
-        src/app/portable_mode.cpp
-        # Phase 4 Sprint 7: Update checker
-        src/app/update_checker.cpp
-    )
-
-    target_sources(legends_unit_tests PRIVATE
-        external/glad/glad.c
-        engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture tests
-        engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
-        src/app/application.cpp              # Application lifecycle tests
-        # Engine host sources for IPC dispatcher tests
         src/engine_host/cli_parser.cpp
         src/engine_host/engine_dispatcher.cpp
-        # Platform-specific update checker (needed by application.cpp)
-        $<$<PLATFORM_ID:Windows>:src/app/update_checker_win.cpp>
-        $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
-        $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
     )
 
     target_include_directories(legends_unit_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/legends  # F6: internal FFI headers
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/engine_host  # Engine host dispatcher tests
-        ${CMAKE_CURRENT_SOURCE_DIR}/external
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/glad  # glad GL loader
-        ${CMAKE_CURRENT_SOURCE_DIR}/engine/src/libs  # ZMBV codec headers
         ${CMAKE_BINARY_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit      # Shared test fixtures
     )
@@ -727,7 +762,9 @@ if(LEGENDS_BUILD_TESTS)
 
     gtest_discover_tests(legends_unit_tests
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        PROPERTIES LABELS "unit"
+        PROPERTIES
+            LABELS "unit"
+            TIMEOUT 30
     )
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -1103,70 +1140,13 @@ endif()
 if(PAL_BACKEND_SDL3)
     add_executable(project_legends
         src/main.cpp
-        src/app/application.cpp
-        src/app/action_bus.cpp
-        src/app/capture.cpp
-        src/app/input_mapper.cpp
-        src/app/save_manager.cpp
-        src/app/menu_system.cpp
-        src/app/hotkey_dispatcher.cpp
-        src/app/cli_parser.cpp
-        src/app/config_parser.cpp
-        src/app/platform_dirs.cpp
-        src/app/scancode_map.cpp
-        src/app/mount_manager.cpp
-        src/app/image_validator.cpp
-        src/app/video_capture.cpp
-        src/app/zmbv_codec.cpp
-        src/app/mapper_ui.cpp
-        src/app/save_browser.cpp
-        # Phase 3: Enhanced Features
-        src/app/joystick_mapper.cpp
-        src/app/shader_renderer.cpp
-        src/app/shader_presets.cpp
-        src/app/ai_config.cpp
-        src/app/ai_http_client.cpp
-        src/app/ai_screen_context.cpp
-        src/app/ai_panel.cpp
-        src/app/audio_mixer.cpp
-        src/app/midi_config.cpp
-        src/app/printer_manager.cpp
-        src/app/ttf_renderer.cpp
-        src/app/ipx_config.cpp
-        src/app/glide_config.cpp
-        src/app/pc98_config.cpp
-        # Phase 4: Polish & Release
-        src/app/file_logger.cpp
-        src/app/error_reporter.cpp
-        src/app/crash_breadcrumb.cpp
-        src/app/crash_reporter.cpp
-        # Phase 4 Sprint 4: SSIM
-        src/app/ssim.cpp
-        # Phase 4 Sprint 6: Portable mode
-        src/app/portable_mode.cpp
-        # Phase 4 Sprint 7: Update checker (platform-conditional)
-        src/app/update_checker.cpp
-        $<$<PLATFORM_ID:Windows>:src/app/update_checker_win.cpp>
-        $<$<PLATFORM_ID:Darwin>:src/app/update_checker_mac.cpp>
-        $<$<AND:$<NOT:$<PLATFORM_ID:Windows>>,$<NOT:$<PLATFORM_ID:Darwin>>>:src/app/update_checker_linux.cpp>
-        external/glad/glad.c
-        engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture
-        engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
     )
 
     legends_set_strict_cxx_standard(project_legends)
 
-    target_include_directories(project_legends PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/external
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/glad
-        ${CMAKE_CURRENT_SOURCE_DIR}/engine/src/libs  # ZMBV codec headers
-        ${CMAKE_BINARY_DIR}/include
-    )
-
     # In IPC mode, link the proxy (MIT) instead of legends_core (GPL).
-    # In monolithic mode (default), link legends_core directly.
+    # In monolithic mode (default), link legends_app which transitively
+    # brings in legends_core and legends_pal.
     if(LEGENDS_USE_IPC)
         target_link_libraries(project_legends PRIVATE
             legends_proxy
@@ -1178,18 +1158,10 @@ if(PAL_BACKEND_SDL3)
         )
     else()
         target_link_libraries(project_legends PRIVATE
-            legends_core
-            legends_pal
+            legends_app
             SDL3::SDL3-shared
-            gsl::gsl-lite-v1
         )
     endif()
-
-    target_compile_definitions(project_legends PRIVATE
-        gsl_CONFIG_DEFAULTS_VERSION=1
-        gsl_CONFIG_CONTRACT_CHECKING_ON
-        gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
-    )
 
     # Phase 3: Optional feature-gated library linking
     if(LEGENDS_ENABLE_AI AND CURL_FOUND)
