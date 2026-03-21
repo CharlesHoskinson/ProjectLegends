@@ -3,10 +3,13 @@
 
 #include <gtest/gtest.h>
 #include "pal/platform.h"
+#include "test_utils/pal_headless_fixture.h"
 
 namespace pal {
 namespace {
 
+// PalPlatformTest uses a minimal fixture: only shutdown in SetUp/TearDown
+// (not initialize) since these tests exercise initialization itself.
 class PalPlatformTest : public ::testing::Test {
 protected:
     void SetUp() override {

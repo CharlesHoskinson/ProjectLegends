@@ -4,24 +4,24 @@
 #include <gtest/gtest.h>
 #include "pal/platform.h"
 #include "pal/audio_sink.h"
+#include "test_utils/pal_headless_fixture.h"
 #include <vector>
 #include <cmath>
 
 namespace pal {
 namespace {
 
-class PalAudioSinkTest : public ::testing::Test {
+class PalAudioSinkTest : public test_utils::PalHeadlessFixture {
 protected:
     void SetUp() override {
-        Platform::shutdown();
-        ASSERT_EQ(Platform::initialize(Backend::Headless), Result::Success);
+        test_utils::PalHeadlessFixture::SetUp();
         sink_ = Platform::createAudioSink();
         ASSERT_NE(sink_, nullptr);
     }
 
     void TearDown() override {
         sink_.reset();
-        Platform::shutdown();
+        test_utils::PalHeadlessFixture::TearDown();
     }
 
     std::unique_ptr<IAudioSink> sink_;
