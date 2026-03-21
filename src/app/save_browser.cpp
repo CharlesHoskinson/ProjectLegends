@@ -7,10 +7,11 @@
 #include "app/save_browser.h"
 #include "app/action_bus.h"
 #include "app/save_manager.h"
-#include "legends/internal/cp437_font_8x16.h"
+#include "app/overlay_render.h"
 
 #include <algorithm>
 #include <cstring>
+#include <span>
 
 namespace legends {
 
@@ -149,80 +150,6 @@ bool SaveBrowser::handleMouseClick(int32_t /*x*/, int32_t /*y*/) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Rendering Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-void SaveBrowser::darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                              uint32_t pitch,
-                              int x, int y, int w, int h) const {
-    for (int py = y; py < y + h && py < buf_h; ++py) {
-        if (py < 0) continue;
-        for (int px = x; px < x + w && px < buf_w; ++px) {
-            if (px < 0) continue;
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb[idx]     = static_cast<uint8_t>(rgb[idx] / 3);
-            rgb[idx + 1] = static_cast<uint8_t>(rgb[idx + 1] / 3);
-            rgb[idx + 2] = static_cast<uint8_t>(rgb[idx + 2] / 3);
-        }
-    }
-}
-
-void SaveBrowser::fillRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                             uint32_t pitch,
-                             int x, int y, int w, int h,
-                             uint8_t r, uint8_t g, uint8_t b) const {
-    for (int py = y; py < y + h && py < buf_h; ++py) {
-        if (py < 0) continue;
-        for (int px = x; px < x + w && px < buf_w; ++px) {
-            if (px < 0) continue;
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb[idx]     = r;
-            rgb[idx + 1] = g;
-            rgb[idx + 2] = b;
-        }
-    }
-}
-
-void SaveBrowser::drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                             uint32_t pitch,
-                             int x, int y, uint8_t ch,
-                             uint8_t fr, uint8_t fg, uint8_t fb,
-                             uint8_t br, uint8_t bg, uint8_t bb) const {
-    const auto& font = internal::CP437_FONT_8x16;
-    int glyph_offset = static_cast<int>(ch) * 16;
-
-    for (int row = 0; row < 16; ++row) {
-        int py = y + row;
-        if (py < 0 || py >= buf_h) continue;
-
-        uint8_t bits = font[static_cast<size_t>(glyph_offset + row)];
-        for (int col = 0; col < 8; ++col) {
-            int px = x + col;
-            if (px < 0 || px >= buf_w) continue;
-
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            bool set = (bits & (0x80 >> col)) != 0;
-            rgb[idx]     = set ? fr : br;
-            rgb[idx + 1] = set ? fg : bg;
-            rgb[idx + 2] = set ? fb : bb;
-        }
-    }
-}
-
-void SaveBrowser::drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                               uint32_t pitch,
-                               int x, int y, const std::string& text,
-                               uint8_t fr, uint8_t fg, uint8_t fb,
-                               uint8_t br, uint8_t bg, uint8_t bb) const {
-    for (size_t i = 0; i < text.size(); ++i) {
-        drawChar(rgb, buf_w, buf_h, pitch,
-                 x + static_cast<int>(i) * kCharW, y,
-                 static_cast<uint8_t>(text[i]),
-                 fr, fg, fb, br, bg, bb);
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main Render
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -232,9 +159,10 @@ void SaveBrowser::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) c
     gsl_Expects(rgb != nullptr);
 
     if (pitch == 0) pitch = static_cast<uint32_t>(w) * 3;
+    std::span<uint8_t> buf{rgb, static_cast<size_t>(pitch) * h};
 
     // Darken full background
-    darkenRect(const_cast<uint8_t*>(rgb), w, h, pitch, 0, 0, w, h);
+    overlay::darkenRect(buf, w, h, pitch, 0, 0, w, h);
 
     // Grid dimensions
     int grid_w = kCols * kCellW + (kCols - 1) * kCellPad;
@@ -248,7 +176,7 @@ void SaveBrowser::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) c
     std::string title = (mode_ == Mode::Save) ? "Save State" : "Load State";
     int title_x = (w - static_cast<int>(title.size()) * kCharW) / 2;
     int title_y = grid_y - kTitleH;
-    drawString(const_cast<uint8_t*>(rgb), w, h, pitch,
+    overlay::drawString(buf, w, h, pitch,
                title_x, title_y, title,
                255, 255, 255,
                0, 0, 0);
@@ -265,20 +193,20 @@ void SaveBrowser::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) c
 
             // Cell background
             if (selected) {
-                fillRect(const_cast<uint8_t*>(rgb), w, h, pitch,
+                overlay::fillRect(buf, w, h, pitch,
                          cell_x, cell_y, kCellW, kCellH,
                          60, 60, 120);  // highlighted
                 // Selection border (1px white)
-                fillRect(const_cast<uint8_t*>(rgb), w, h, pitch,
+                overlay::fillRect(buf, w, h, pitch,
                          cell_x, cell_y, kCellW, 1, 255, 255, 255);
-                fillRect(const_cast<uint8_t*>(rgb), w, h, pitch,
+                overlay::fillRect(buf, w, h, pitch,
                          cell_x, cell_y + kCellH - 1, kCellW, 1, 255, 255, 255);
-                fillRect(const_cast<uint8_t*>(rgb), w, h, pitch,
+                overlay::fillRect(buf, w, h, pitch,
                          cell_x, cell_y, 1, kCellH, 255, 255, 255);
-                fillRect(const_cast<uint8_t*>(rgb), w, h, pitch,
+                overlay::fillRect(buf, w, h, pitch,
                          cell_x + kCellW - 1, cell_y, 1, kCellH, 255, 255, 255);
             } else {
-                fillRect(const_cast<uint8_t*>(rgb), w, h, pitch,
+                overlay::fillRect(buf, w, h, pitch,
                          cell_x, cell_y, kCellW, kCellH,
                          30, 30, 60);   // normal
             }
@@ -288,7 +216,7 @@ void SaveBrowser::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) c
             std::snprintf(slot_num, sizeof(slot_num), "Slot %d", slot_idx + 1);
             int text_x = cell_x + (kCellW - static_cast<int>(std::strlen(slot_num)) * kCharW) / 2;
             int text_y = cell_y + kCellH / 2 - kCharH;
-            drawString(const_cast<uint8_t*>(rgb), w, h, pitch,
+            overlay::drawString(buf, w, h, pitch,
                        text_x, text_y, slot_num,
                        255, 255, 255,
                        selected ? static_cast<uint8_t>(60) : static_cast<uint8_t>(30),
@@ -299,7 +227,7 @@ void SaveBrowser::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) c
             const std::string& status = slot.timestamp;
             int st_x = cell_x + (kCellW - static_cast<int>(status.size()) * kCharW) / 2;
             int st_y = text_y + kCharH + 4;
-            drawString(const_cast<uint8_t*>(rgb), w, h, pitch,
+            overlay::drawString(buf, w, h, pitch,
                        st_x, st_y, status,
                        slot.occupied ? static_cast<uint8_t>(170) : static_cast<uint8_t>(100),
                        slot.occupied ? static_cast<uint8_t>(170) : static_cast<uint8_t>(100),
@@ -314,7 +242,7 @@ void SaveBrowser::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) c
     std::string footer = "Arrow keys=Navigate  Enter=Select  Esc=Cancel";
     int footer_x = (w - static_cast<int>(footer.size()) * kCharW) / 2;
     int footer_y = grid_y + grid_h + 8;
-    drawString(const_cast<uint8_t*>(rgb), w, h, pitch,
+    overlay::drawString(buf, w, h, pitch,
                footer_x, footer_y, footer,
                170, 170, 170,
                0, 0, 0);

@@ -5,10 +5,11 @@
 
 #include "app/menu_system.h"
 #include "app/action_bus.h"
-#include "legends/internal/cp437_font_8x16.h"
+#include "app/overlay_render.h"
 
 #include <algorithm>
 #include <cstring>
+#include <span>
 
 namespace legends {
 
@@ -380,16 +381,10 @@ void MenuSystem::renderBar(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
     if (menus_.empty() || width == 0 || height == 0) return;
 
     if (pitch == 0) pitch = static_cast<uint32_t>(width) * 3;
+    std::span<uint8_t> buf{rgb_buffer, static_cast<size_t>(pitch) * height};
 
     // Fill menu bar background (dark blue)
-    for (int py = 0; py < kMenuBarH && py < height; ++py) {
-        for (int px = 0; px < width; ++px) {
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb_buffer[idx]     = 0;
-            rgb_buffer[idx + 1] = 0;
-            rgb_buffer[idx + 2] = 170; // dark blue
-        }
-    }
+    overlay::fillRect(buf, width, height, pitch, 0, 0, width, kMenuBarH, 0, 0, 170);
 
     // Draw menu titles
     int title_x = 0;
@@ -397,12 +392,12 @@ void MenuSystem::renderBar(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
         bool selected = dropdown_open_ && (static_cast<int>(i) == selected_menu_);
         std::string label = " " + menus_[i].title + " ";
         if (selected) {
-            drawString(rgb_buffer, width, height, pitch,
+            overlay::drawString(buf, width, height, pitch,
                        title_x, 2, label,
                        0, 0, 170,        // fg: dark blue
                        255, 255, 255);   // bg: white (inverted)
         } else {
-            drawString(rgb_buffer, width, height, pitch,
+            overlay::drawString(buf, width, height, pitch,
                        title_x, 2, label,
                        255, 255, 255,    // fg: white
                        0, 0, 170);       // bg: dark blue
@@ -441,14 +436,7 @@ void MenuSystem::renderBar(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
     if (drop_x < 0) drop_x = 0;
 
     // Fill dropdown background (black)
-    for (int py = drop_y; py < drop_y + drop_h && py < height; ++py) {
-        for (int px = drop_x; px < drop_x + drop_w && px < width; ++px) {
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb_buffer[idx]     = 0;
-            rgb_buffer[idx + 1] = 0;
-            rgb_buffer[idx + 2] = 0;
-        }
-    }
+    overlay::fillRect(buf, width, height, pitch, drop_x, drop_y, drop_w, drop_h, 0, 0, 0);
 
     // Draw items
     int item_y = drop_y;
@@ -458,13 +446,8 @@ void MenuSystem::renderBar(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
         if (item.separator) {
             int line_y = item_y + 2;
             if (line_y >= 0 && line_y < height) {
-                for (int px = drop_x + 4; px < drop_x + drop_w - 4 && px < width; ++px) {
-                    if (px < 0) continue;
-                    size_t idx = static_cast<size_t>(line_y) * pitch + static_cast<size_t>(px) * 3;
-                    rgb_buffer[idx]     = 128;
-                    rgb_buffer[idx + 1] = 128;
-                    rgb_buffer[idx + 2] = 128;
-                }
+                overlay::fillRect(buf, width, height, pitch,
+                                  drop_x + 4, line_y, drop_w - 8, 1, 128, 128, 128);
             }
             item_y += 4;
             continue;
@@ -477,13 +460,13 @@ void MenuSystem::renderBar(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
         }
 
         if (highlighted) {
-            drawString(rgb_buffer, width, height, pitch,
+            overlay::drawString(buf, width, height, pitch,
                        drop_x, item_y, padded,
                        0, 0, 0,              // fg: black
                        200, 200, 200);       // bg: light gray
         } else {
             bool disabled = (item.action_id < 0);
-            drawString(rgb_buffer, width, height, pitch,
+            overlay::drawString(buf, width, height, pitch,
                        drop_x, item_y, padded,
                        disabled ? static_cast<uint8_t>(128) : static_cast<uint8_t>(255),
                        disabled ? static_cast<uint8_t>(128) : static_cast<uint8_t>(255),
@@ -499,80 +482,19 @@ void MenuSystem::renderBar(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
 // Rendering
 // ─────────────────────────────────────────────────────────────────────────────
 
-void MenuSystem::darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                            uint32_t pitch,
-                            int x, int y, int w, int h) const {
-    for (int py = y; py < y + h && py < buf_h; ++py) {
-        if (py < 0) continue;
-        for (int px = x; px < x + w && px < buf_w; ++px) {
-            if (px < 0) continue;
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb[idx]     = static_cast<uint8_t>(rgb[idx] / 3);
-            rgb[idx + 1] = static_cast<uint8_t>(rgb[idx + 1] / 3);
-            rgb[idx + 2] = static_cast<uint8_t>(rgb[idx + 2] / 3);
-        }
-    }
-}
-
-void MenuSystem::drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                          uint32_t pitch,
-                          int x, int y, uint8_t ch,
-                          uint8_t fr, uint8_t fg, uint8_t fb,
-                          uint8_t br, uint8_t bg, uint8_t bb) const {
-    const auto& font = internal::CP437_FONT_8x16;
-    int glyph_offset = static_cast<int>(ch) * 16;
-
-    for (int row = 0; row < 16; ++row) {
-        int py = y + row;
-        if (py < 0 || py >= buf_h) continue;
-
-        uint8_t bits = font[static_cast<size_t>(glyph_offset + row)];
-        for (int col = 0; col < 8; ++col) {
-            int px = x + col;
-            if (px < 0 || px >= buf_w) continue;
-
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            bool set = (bits & (0x80 >> col)) != 0;
-            rgb[idx]     = set ? fr : br;
-            rgb[idx + 1] = set ? fg : bg;
-            rgb[idx + 2] = set ? fb : bb;
-        }
-    }
-}
-
-void MenuSystem::drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                            uint32_t pitch,
-                            int x, int y, const std::string& text,
-                            uint8_t fr, uint8_t fg, uint8_t fb,
-                            uint8_t br, uint8_t bg, uint8_t bb) const {
-    for (size_t i = 0; i < text.size(); ++i) {
-        drawChar(rgb, buf_w, buf_h, pitch,
-                 x + static_cast<int>(i) * kCharW, y,
-                 static_cast<uint8_t>(text[i]),
-                 fr, fg, fb, br, bg, bb);
-    }
-}
-
 void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
                         uint32_t pitch) {
     if (!open_ || menus_.empty()) return;
 
     // Default pitch = tightly packed RGB24
     if (pitch == 0) pitch = static_cast<uint32_t>(width) * 3;
+    std::span<uint8_t> buf{rgb_buffer, static_cast<size_t>(pitch) * height};
 
     // Semi-transparent darkened background
-    darkenRect(rgb_buffer, width, height, pitch, 0, 0, width, height);
+    overlay::darkenRect(buf, width, height, pitch, 0, 0, width, height);
 
     // ── Menu bar ────────────────────────────────────────────────────────
-    // Fill menu bar background
-    for (int py = 0; py < kMenuBarH && py < height; ++py) {
-        for (int px = 0; px < width; ++px) {
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb_buffer[idx]     = 0;
-            rgb_buffer[idx + 1] = 0;
-            rgb_buffer[idx + 2] = 170; // dark blue
-        }
-    }
+    overlay::fillRect(buf, width, height, pitch, 0, 0, width, kMenuBarH, 0, 0, 170);
 
     // Draw menu titles
     int title_x = 0;
@@ -580,12 +502,12 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
         bool selected = (static_cast<int>(i) == selected_menu_);
         std::string label = " " + menus_[i].title + " ";
         if (selected) {
-            drawString(rgb_buffer, width, height, pitch,
+            overlay::drawString(buf, width, height, pitch,
                        title_x, 2, label,
                        0, 0, 170,        // fg: dark blue
                        255, 255, 255);   // bg: white (inverted)
         } else {
-            drawString(rgb_buffer, width, height, pitch,
+            overlay::drawString(buf, width, height, pitch,
                        title_x, 2, label,
                        255, 255, 255,    // fg: white
                        0, 0, 170);       // bg: dark blue
@@ -598,13 +520,11 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
 
     const auto& menu = menus_[static_cast<size_t>(selected_menu_)];
 
-    // Compute dropdown X position
     int drop_x = 0;
     for (int i = 0; i < selected_menu_; ++i) {
         drop_x += static_cast<int>(menus_[static_cast<size_t>(i)].title.size() + 2) * kCharW;
     }
 
-    // Compute dropdown width (widest item + padding)
     int max_label = 0;
     for (const auto& item : menu.items) {
         if (!item.separator) {
@@ -615,7 +535,6 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
     int drop_w = (max_label + kItemPadX * 2) * kCharW;
     if (drop_w < 80) drop_w = 80;
 
-    // Compute dropdown height
     int drop_h = 0;
     for (const auto& item : menu.items) {
         drop_h += item.separator ? 4 : kCharH;
@@ -623,19 +542,11 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
 
     int drop_y = kMenuBarH;
 
-    // Clamp to screen bounds
     if (drop_x + drop_w > width) drop_x = width - drop_w;
     if (drop_x < 0) drop_x = 0;
 
     // Fill dropdown background (black)
-    for (int py = drop_y; py < drop_y + drop_h && py < height; ++py) {
-        for (int px = drop_x; px < drop_x + drop_w && px < width; ++px) {
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb_buffer[idx]     = 0;
-            rgb_buffer[idx + 1] = 0;
-            rgb_buffer[idx + 2] = 0;
-        }
-    }
+    overlay::fillRect(buf, width, height, pitch, drop_x, drop_y, drop_w, drop_h, 0, 0, 0);
 
     // Draw items
     int item_y = drop_y;
@@ -643,16 +554,10 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
         const auto& item = menu.items[i];
 
         if (item.separator) {
-            // Draw horizontal line
             int line_y = item_y + 2;
             if (line_y >= 0 && line_y < height) {
-                for (int px = drop_x + 4; px < drop_x + drop_w - 4 && px < width; ++px) {
-                    if (px < 0) continue;
-                    size_t idx = static_cast<size_t>(line_y) * pitch + static_cast<size_t>(px) * 3;
-                    rgb_buffer[idx]     = 128;
-                    rgb_buffer[idx + 1] = 128;
-                    rgb_buffer[idx + 2] = 128;
-                }
+                overlay::fillRect(buf, width, height, pitch,
+                                  drop_x + 4, line_y, drop_w - 8, 1, 128, 128, 128);
             }
             item_y += 4;
             continue;
@@ -660,19 +565,18 @@ void MenuSystem::render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
 
         bool highlighted = (static_cast<int>(i) == selected_item_);
         std::string padded = std::string(kItemPadX, ' ') + item.label;
-        // Pad to full width
         while (static_cast<int>(padded.size()) * kCharW < drop_w) {
             padded += ' ';
         }
 
         if (highlighted) {
-            drawString(rgb_buffer, width, height, pitch,
+            overlay::drawString(buf, width, height, pitch,
                        drop_x, item_y, padded,
                        0, 0, 0,              // fg: black
                        200, 200, 200);       // bg: light gray
         } else {
             bool disabled = (item.action_id < 0);
-            drawString(rgb_buffer, width, height, pitch,
+            overlay::drawString(buf, width, height, pitch,
                        drop_x, item_y, padded,
                        disabled ? static_cast<uint8_t>(128) : static_cast<uint8_t>(255),
                        disabled ? static_cast<uint8_t>(128) : static_cast<uint8_t>(255),

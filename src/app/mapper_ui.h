@@ -91,24 +91,6 @@ public:
 
 private:
     // ─────────────────────────────────────────────────────────────────────
-    // Rendering helpers (match MenuSystem patterns)
-    // ─────────────────────────────────────────────────────────────────────
-
-    void drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-                  int x, int y, uint8_t ch,
-                  uint8_t fr, uint8_t fg, uint8_t fb,
-                  uint8_t br, uint8_t bg, uint8_t bb) const;
-    void drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-                    int x, int y, const std::string& text,
-                    uint8_t fr, uint8_t fg, uint8_t fb,
-                    uint8_t br, uint8_t bg, uint8_t bb) const;
-    void darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-                    int x, int y, int w, int h) const;
-    void fillRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-                  int x, int y, int w, int h,
-                  uint8_t r, uint8_t g, uint8_t b) const;
-
-    // ─────────────────────────────────────────────────────────────────────
     // Data
     // ─────────────────────────────────────────────────────────────────────
 

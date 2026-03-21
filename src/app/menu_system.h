@@ -79,18 +79,6 @@ private:
     void buildMenus();
     void activateItem();
 
-    // Text rendering helpers (pitch = row stride in bytes)
-    void drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-                  int x, int y, uint8_t ch,
-                  uint8_t fr, uint8_t fg, uint8_t fb,
-                  uint8_t br, uint8_t bg, uint8_t bb) const;
-    void drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-                    int x, int y, const std::string& text,
-                    uint8_t fr, uint8_t fg, uint8_t fb,
-                    uint8_t br, uint8_t bg, uint8_t bb) const;
-    void darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h, uint32_t pitch,
-                    int x, int y, int w, int h) const;
-
     ActionBus* bus_ = nullptr;
     bool open_ = false;
     bool fullscreen_ = false;

@@ -7,10 +7,11 @@
 #include "app/mapper_ui.h"
 #include "app/action_bus.h"
 #include "app/input_mapper.h"
-#include "legends/internal/cp437_font_8x16.h"
+#include "app/overlay_render.h"
 
 #include <algorithm>
 #include <cstring>
+#include <span>
 
 namespace legends {
 
@@ -213,80 +214,6 @@ void MapperUI::discardRemaps() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Rendering Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-void MapperUI::darkenRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                           uint32_t pitch,
-                           int x, int y, int w, int h) const {
-    for (int py = y; py < y + h && py < buf_h; ++py) {
-        if (py < 0) continue;
-        for (int px = x; px < x + w && px < buf_w; ++px) {
-            if (px < 0) continue;
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb[idx]     = static_cast<uint8_t>(rgb[idx] / 3);
-            rgb[idx + 1] = static_cast<uint8_t>(rgb[idx + 1] / 3);
-            rgb[idx + 2] = static_cast<uint8_t>(rgb[idx + 2] / 3);
-        }
-    }
-}
-
-void MapperUI::fillRect(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                          uint32_t pitch,
-                          int x, int y, int w, int h,
-                          uint8_t r, uint8_t g, uint8_t b) const {
-    for (int py = y; py < y + h && py < buf_h; ++py) {
-        if (py < 0) continue;
-        for (int px = x; px < x + w && px < buf_w; ++px) {
-            if (px < 0) continue;
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            rgb[idx]     = r;
-            rgb[idx + 1] = g;
-            rgb[idx + 2] = b;
-        }
-    }
-}
-
-void MapperUI::drawChar(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                          uint32_t pitch,
-                          int x, int y, uint8_t ch,
-                          uint8_t fr, uint8_t fg, uint8_t fb,
-                          uint8_t br, uint8_t bg, uint8_t bb) const {
-    const auto& font = internal::CP437_FONT_8x16;
-    int glyph_offset = static_cast<int>(ch) * 16;
-
-    for (int row = 0; row < 16; ++row) {
-        int py = y + row;
-        if (py < 0 || py >= buf_h) continue;
-
-        uint8_t bits = font[static_cast<size_t>(glyph_offset + row)];
-        for (int col = 0; col < 8; ++col) {
-            int px = x + col;
-            if (px < 0 || px >= buf_w) continue;
-
-            size_t idx = static_cast<size_t>(py) * pitch + static_cast<size_t>(px) * 3;
-            bool set = (bits & (0x80 >> col)) != 0;
-            rgb[idx]     = set ? fr : br;
-            rgb[idx + 1] = set ? fg : bg;
-            rgb[idx + 2] = set ? fb : bb;
-        }
-    }
-}
-
-void MapperUI::drawString(uint8_t* rgb, uint16_t buf_w, uint16_t buf_h,
-                            uint32_t pitch,
-                            int x, int y, const std::string& text,
-                            uint8_t fr, uint8_t fg, uint8_t fb,
-                            uint8_t br, uint8_t bg, uint8_t bb) const {
-    for (size_t i = 0; i < text.size(); ++i) {
-        drawChar(rgb, buf_w, buf_h, pitch,
-                 x + static_cast<int>(i) * kCharW, y,
-                 static_cast<uint8_t>(text[i]),
-                 fr, fg, fb, br, bg, bb);
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main Render
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -296,9 +223,10 @@ void MapperUI::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) cons
     gsl_Expects(rgb != nullptr);
 
     if (pitch == 0) pitch = static_cast<uint32_t>(w) * 3;
+    std::span<uint8_t> buf{rgb, static_cast<size_t>(pitch) * h};
 
     // Darken full background
-    darkenRect(const_cast<uint8_t*>(rgb), w, h, pitch, 0, 0, w, h);
+    overlay::darkenRect(buf, w, h, pitch, 0, 0, w, h);
 
     // Panel dimensions
     int panel_x = kPanelMargin;
@@ -309,7 +237,7 @@ void MapperUI::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) cons
     if (panel_w <= 0 || panel_h <= 0) return;
 
     // Fill panel background (dark blue)
-    fillRect(const_cast<uint8_t*>(rgb), w, h, pitch,
+    overlay::fillRect(buf, w, h, pitch,
              panel_x, panel_y, panel_w, panel_h,
              0, 0, 80);
 
@@ -317,10 +245,10 @@ void MapperUI::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) cons
     std::string title = (state_ == State::Capturing)
         ? " Key Mapper - Press any key... "
         : " Key Mapper ";
-    fillRect(const_cast<uint8_t*>(rgb), w, h, pitch,
+    overlay::fillRect(buf, w, h, pitch,
              panel_x, panel_y, panel_w, kTitleH,
              0, 0, 170);
-    drawString(const_cast<uint8_t*>(rgb), w, h, pitch,
+    overlay::drawString(buf, w, h, pitch,
                panel_x + kCharW, panel_y + 4, title,
                255, 255, 255,  // white
                0, 0, 170);     // dark blue
@@ -337,7 +265,7 @@ void MapperUI::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) cons
         const auto& entry = entries_[static_cast<size_t>(entry_idx)];
         bool selected = (entry_idx == selected_index_);
 
-        // Build display string: "KeyName → AT 0xNN"
+        // Build display string: "KeyName -> AT 0xNN"
         auto at = mapper_ ? mapper_->translate(entry.sdl_scancode) : ATScancode{0, false};
 
         // Check pending remaps
@@ -360,12 +288,12 @@ void MapperUI::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) cons
 
         int iy = list_y + i * kCharH;
         if (selected) {
-            drawString(const_cast<uint8_t*>(rgb), w, h, pitch,
+            overlay::drawString(buf, w, h, pitch,
                        list_x, iy, line,
                        0, 0, 0,              // black text
                        200, 200, 200);       // light gray bg
         } else {
-            drawString(const_cast<uint8_t*>(rgb), w, h, pitch,
+            overlay::drawString(buf, w, h, pitch,
                        list_x, iy, line,
                        200, 200, 200,        // light gray text
                        0, 0, 80);            // dark blue bg
@@ -378,7 +306,7 @@ void MapperUI::render(uint8_t* rgb, uint16_t w, uint16_t h, uint32_t pitch) cons
     if (state_ == State::Capturing) {
         status = "Press key to assign, Esc=Cancel";
     }
-    drawString(const_cast<uint8_t*>(rgb), w, h, pitch,
+    overlay::drawString(buf, w, h, pitch,
                list_x, status_y, status,
                170, 170, 170,
                0, 0, 80);

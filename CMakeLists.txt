@@ -664,6 +664,7 @@ if(LEGENDS_BUILD_TESTS)
         src/app/video_capture.cpp
         src/app/mapper_ui.cpp
         src/app/save_browser.cpp
+        src/app/overlay_render.cpp
         # Phase 3: Enhanced Features
         src/app/joystick_mapper.cpp
         src/app/shader_renderer.cpp
@@ -1118,6 +1119,7 @@ if(PAL_BACKEND_SDL3)
         src/app/zmbv_codec.cpp
         src/app/mapper_ui.cpp
         src/app/save_browser.cpp
+        src/app/overlay_render.cpp
         # Phase 3: Enhanced Features
         src/app/joystick_mapper.cpp
         src/app/shader_renderer.cpp
