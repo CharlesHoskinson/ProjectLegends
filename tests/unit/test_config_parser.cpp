@@ -234,5 +234,66 @@ TEST_F(ConfigParserTest, LoadFileClearsPreviousData) {
     EXPECT_TRUE(parser_.hasSection("new"));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// REQ-SEC-014: Field Length Limits
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST_F(ConfigParserTest, OversizedSectionNameSkipped) {
+    std::string long_name(kMaxSectionNameLen + 1, 'x');
+    auto path = writeTempFile("[" + long_name + "]\nkey=value\n");
+    parser_.loadFile(path);
+    EXPECT_FALSE(parser_.hasSection(long_name));
+    // The key=value should land in the previous (empty) section because the
+    // section header was skipped.
+    EXPECT_EQ(parser_.get("", "key"), "value");
+}
+
+TEST_F(ConfigParserTest, MaxSectionNameAccepted) {
+    std::string name(kMaxSectionNameLen, 's');
+    auto path = writeTempFile("[" + name + "]\nkey=val\n");
+    parser_.loadFile(path);
+    EXPECT_TRUE(parser_.hasSection(name));
+    EXPECT_EQ(parser_.get(name, "key"), "val");
+}
+
+TEST_F(ConfigParserTest, OversizedKeySkipped) {
+    std::string long_key(kMaxKeyLen + 1, 'k');
+    auto path = writeTempFile("[sec]\n" + long_key + "=value\n");
+    parser_.loadFile(path);
+    EXPECT_FALSE(parser_.hasKey("sec", long_key));
+}
+
+TEST_F(ConfigParserTest, MaxKeyAccepted) {
+    std::string key(kMaxKeyLen, 'k');
+    auto path = writeTempFile("[sec]\n" + key + "=val\n");
+    parser_.loadFile(path);
+    EXPECT_TRUE(parser_.hasKey("sec", key));
+    EXPECT_EQ(parser_.get("sec", key), "val");
+}
+
+TEST_F(ConfigParserTest, OversizedValueSkipped) {
+    std::string long_val(kMaxValueLen + 1, 'v');
+    auto path = writeTempFile("[sec]\nkey=" + long_val + "\n");
+    parser_.loadFile(path);
+    // The entire key=value line should be skipped
+    EXPECT_FALSE(parser_.hasKey("sec", "key"));
+}
+
+TEST_F(ConfigParserTest, MaxValueAccepted) {
+    std::string val(kMaxValueLen, 'v');
+    auto path = writeTempFile("[sec]\nkey=" + val + "\n");
+    parser_.loadFile(path);
+    EXPECT_TRUE(parser_.hasKey("sec", "key"));
+    EXPECT_EQ(parser_.get("sec", "key"), val);
+}
+
+TEST_F(ConfigParserTest, OversizedFieldDoesNotCorruptSubsequentEntries) {
+    std::string long_key(kMaxKeyLen + 1, 'k');
+    auto path = writeTempFile("[sec]\n" + long_key + "=bad\ngood_key=good_val\n");
+    parser_.loadFile(path);
+    EXPECT_FALSE(parser_.hasKey("sec", long_key));
+    EXPECT_EQ(parser_.get("sec", "good_key"), "good_val");
+}
+
 } // namespace
 } // namespace legends
