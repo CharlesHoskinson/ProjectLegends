@@ -256,7 +256,16 @@ void FileLogger::setFilePermissions(const std::string& filepath) {
 
     PACL acl = nullptr;
     if (SetEntriesInAclW(1, &ea, nullptr, &acl) == ERROR_SUCCESS) {
-        std::wstring wpath(filepath.begin(), filepath.end());
+        // Convert UTF-8 filepath to UTF-16 using MultiByteToWideChar for
+        // correct handling of non-ASCII characters (the previous
+        // std::wstring(begin,end) constructor only works for ASCII).
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, filepath.c_str(),
+                                       static_cast<int>(filepath.size()),
+                                       nullptr, 0);
+        std::wstring wpath(static_cast<size_t>(wlen), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, filepath.c_str(),
+                            static_cast<int>(filepath.size()),
+                            wpath.data(), wlen);
         SetNamedSecurityInfoW(
             const_cast<wchar_t*>(wpath.c_str()),
             SE_FILE_OBJECT,
