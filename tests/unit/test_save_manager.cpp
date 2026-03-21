@@ -155,6 +155,23 @@ TEST(SaveManagerTest, GetSaveDirContainsSaves) {
     EXPECT_NE(dir.find("saves"), std::string::npos);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CRC-32 correctness (regression test for duplicate-row table bug)
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(SaveManagerTest, ComputeCRC32_HelloWorld) {
+    const char data[] = "Hello, World!";
+    uint32_t crc = SaveManager::computeCRC32(data, 13);
+    EXPECT_EQ(crc, 0xEC4AC3D0u)
+        << "CRC-32 of \"Hello, World!\" should be 0xEC4AC3D0 (standard CRC-32)";
+}
+
+TEST(SaveManagerTest, ComputeCRC32_EmptyInput) {
+    uint32_t crc = SaveManager::computeCRC32("", 0);
+    EXPECT_EQ(crc, 0x00000000u)
+        << "CRC-32 of empty input should be 0x00000000";
+}
+
 TEST(SaveManagerTest, AtomicWriteCleansTmpOnSuccess) {
     auto tmp_dir = std::filesystem::temp_directory_path() / "legends_save_qa2";
     std::filesystem::create_directories(tmp_dir);
