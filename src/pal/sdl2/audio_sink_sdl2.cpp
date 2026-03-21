@@ -174,7 +174,7 @@ public:
             device_id_ = 0;
         }
         ring_buffer_.reset();
-        dropped_frames_ = 0;
+        dropped_frames_.store(0, std::memory_order_relaxed);
         paused_ = false;
     }
 
@@ -205,7 +205,9 @@ public:
             size_t to_discard = sample_count - free;
             size_t discarded = ring_buffer_->discard(to_discard);
             // Track dropped frames (samples / channels)
-            dropped_frames_ += static_cast<uint32_t>(discarded / config_.channels);
+            dropped_frames_.fetch_add(
+                static_cast<uint64_t>(discarded / config_.channels),
+                std::memory_order_relaxed);
         }
 
         ring_buffer_->push(samples, sample_count);
@@ -224,7 +226,7 @@ public:
     }
 
     uint32_t getDroppedFrames() const override {
-        return dropped_frames_;
+        return static_cast<uint32_t>(dropped_frames_.load(std::memory_order_relaxed));
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -246,12 +248,12 @@ public:
     }
 
     Result setVolume(float volume) override {
-        volume_ = std::clamp(volume, 0.0f, 1.0f);
+        volume_.store(std::clamp(volume, 0.0f, 1.0f), std::memory_order_relaxed);
         return Result::Success;
     }
 
     float getVolume() const override {
-        return volume_;
+        return volume_.load(std::memory_order_relaxed);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -270,10 +272,11 @@ private:
         int16_t* output = reinterpret_cast<int16_t*>(stream);
         size_t got = sink->ring_buffer_->pull(output, sample_count);
 
-        // Apply volume
-        if (sink->volume_ < 1.0f) {
+        // Apply volume (atomic load — volume_ is shared with the main thread)
+        float vol = sink->volume_.load(std::memory_order_relaxed);
+        if (vol < 1.0f) {
             for (size_t i = 0; i < got; ++i) {
-                output[i] = static_cast<int16_t>(output[i] * sink->volume_);
+                output[i] = static_cast<int16_t>(output[i] * vol);
             }
         }
 
@@ -287,9 +290,9 @@ private:
     std::unique_ptr<AudioRingBuffer> ring_buffer_;
     AudioConfig config_{};
     uint32_t capacity_frames_ = 0;
-    uint32_t dropped_frames_ = 0;
+    std::atomic<uint64_t> dropped_frames_{0};
     bool paused_ = false;
-    float volume_ = 1.0f;
+    std::atomic<float> volume_{1.0f};
 };
 
 } // namespace sdl2

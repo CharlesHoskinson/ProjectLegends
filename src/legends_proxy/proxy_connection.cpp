@@ -18,7 +18,7 @@ std::expected<void, IpcError> ProxyConnection::connect(
     uint32_t audio_ring_frames)
 {
     std::lock_guard lock(mutex_);
-    if (connected_)
+    if (connected_.load(std::memory_order_acquire))
         return std::unexpected(IpcError::AlreadyConnected);
 
     // Create shared memory regions (server side creates them)
@@ -45,14 +45,14 @@ std::expected<void, IpcError> ProxyConnection::connect(
     channel_ = std::make_unique<ControlChannel>(std::move(*ch));
     fb_ = std::make_unique<FramebufferShm>(std::move(*fb));
     audio_ = std::make_unique<AudioRingBuffer>(std::move(*audio));
-    connected_ = true;
+    connected_.store(true, std::memory_order_release);
     next_seq_.store(1);
     return {};
 }
 
 void ProxyConnection::disconnect() {
     std::lock_guard lock(mutex_);
-    if (connected_ && channel_) {
+    if (connected_.load(std::memory_order_acquire) && channel_) {
         msg::ShutdownMsg shutdown;
         shutdown.reason = 0;
         std::array<uint8_t, 4> buf{};
@@ -64,17 +64,17 @@ void ProxyConnection::disconnect() {
     channel_.reset();
     fb_.reset();
     audio_.reset();
-    connected_ = false;
+    connected_.store(false, std::memory_order_release);
 }
 
 bool ProxyConnection::is_connected() const {
-    return connected_;
+    return connected_.load(std::memory_order_acquire);
 }
 
 std::expected<MessageCodec::DecodedMessage, IpcError>
 ProxyConnection::send_and_recv(MsgType req_type, std::span<const uint8_t> payload) {
     std::lock_guard lock(mutex_);
-    if (!connected_ || !channel_)
+    if (!connected_.load(std::memory_order_acquire) || !channel_)
         return std::unexpected(IpcError::NotConnected);
 
     uint32_t seq = next_seq_.fetch_add(1);

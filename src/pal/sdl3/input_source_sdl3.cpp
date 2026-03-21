@@ -32,9 +32,9 @@ public:
     }
 
     void shutdown() override {
-        if (mouse_captured_) {
-            SDL_SetWindowRelativeMouseMode(nullptr, false);
-        }
+        // Note: Do NOT call SDL_SetWindowRelativeMouseMode(nullptr, false) here.
+        // Passing nullptr crashes on SDL3. On destruction, SDL cleans up mouse
+        // state automatically when the window is destroyed.
         initialized_ = false;
         mouse_captured_ = false;
         relative_mouse_ = false;

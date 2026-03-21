@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone:*)",
+      "Bash(cp -r /tmp/superpowers-skill/skills/* ~/.claude/skills/)",
+      "Read(//c/Users/charl/.claude/skills/**)",
+      "Bash(wc -l C:/projectLegends/docs/superpowers/plans/*.md)"
+    ]
+  }
+}
