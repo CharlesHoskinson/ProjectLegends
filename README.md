@@ -278,7 +278,7 @@ ProjectLegends/
 │   └── design/
 │       └── GPL2_PROCESS_ISOLATION_DESIGN.md  # TDD-LIC-001
 │
-├── wasm.md                    # Wasm sandbox requirements
+├── wasm.md                    # Wasm sandbox requirements (planned)
 ├── ARCHITECTURE.md
 ├── COPYING                     # GNU GPL v2 license text
 ├── LICENSE                     # Multi-component license overview
