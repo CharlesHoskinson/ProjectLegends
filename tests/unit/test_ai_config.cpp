@@ -5,8 +5,11 @@
 
 #include <gtest/gtest.h>
 #include "app/ai_config.h"
+#include "app/config_parser.h"
 
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 namespace legends {
@@ -167,6 +170,58 @@ TEST(AIConfigTest, ApiKeyEnvPreserved) {
     AIConfig config;
     config.api_key_env = "MY_CUSTOM_API_KEY";
     EXPECT_EQ(config.api_key_env, "MY_CUSTOM_API_KEY");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REQ-SEC-006: Raw API Key Detection
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(AIConfigTest, RawApiKeyDetectedDefaultsFalse) {
+    AIConfig config;
+    EXPECT_FALSE(config.raw_api_key_detected);
+}
+
+TEST(AIConfigTest, LoadFrom_DetectsRawApiKey) {
+    auto tmp = std::filesystem::temp_directory_path() / "legends_test_raw_key.conf";
+    {
+        std::ofstream f(tmp);
+        f << "[ai]\n"
+          << "enabled=true\n"
+          << "api_key=sk-ant-1234567890abcdef\n";
+    }
+
+    ConfigParser parser;
+    ASSERT_TRUE(parser.loadFile(tmp.string()));
+
+    AIConfig config;
+    config.loadFrom(parser);
+
+    EXPECT_TRUE(config.raw_api_key_detected);
+    // The default api_key_env should remain unchanged (raw key not stored)
+    EXPECT_EQ(config.api_key_env, "ANTHROPIC_API_KEY");
+
+    std::filesystem::remove(tmp);
+}
+
+TEST(AIConfigTest, LoadFrom_AllowsEnvVarName) {
+    auto tmp = std::filesystem::temp_directory_path() / "legends_test_env_key.conf";
+    {
+        std::ofstream f(tmp);
+        f << "[ai]\n"
+          << "enabled=true\n"
+          << "api_key_env=MY_CUSTOM_KEY\n";
+    }
+
+    ConfigParser parser;
+    ASSERT_TRUE(parser.loadFile(tmp.string()));
+
+    AIConfig config;
+    config.loadFrom(parser);
+
+    EXPECT_FALSE(config.raw_api_key_detected);
+    EXPECT_EQ(config.api_key_env, "MY_CUSTOM_KEY");
+
+    std::filesystem::remove(tmp);
 }
 
 } // namespace
