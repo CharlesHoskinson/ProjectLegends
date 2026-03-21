@@ -35,6 +35,14 @@ std::expected<MessageCodec::DecodedMessage, IpcError> MessageCodec::try_decode()
         return std::unexpected(hdr_result.error());
 
     auto& hdr = *hdr_result;
+
+    // Reject payloads that exceed the maximum allowed size to prevent
+    // denial-of-service via unbounded memory allocation.
+    if (hdr.payload_size > kMaxPayloadSize) {
+        buffer_.clear();
+        return std::unexpected(IpcError::InvalidHeader);
+    }
+
     size_t total = HeaderSize + hdr.payload_size;
     if (buffer_.size() < total)
         return std::unexpected(IpcError::BufferTooSmall);

@@ -16,6 +16,11 @@ namespace legends_ipc {
 // decode messages from a byte stream (accumulating partial reads).
 class MessageCodec {
 public:
+    // Maximum allowed payload size (64 MB).  Messages claiming a larger
+    // payload are rejected immediately to prevent unbounded allocation
+    // from untrusted wire data.
+    static constexpr uint32_t kMaxPayloadSize = 64 * 1024 * 1024;
+
     struct DecodedMessage {
         MessageHeader header;
         std::vector<uint8_t> payload;
