@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace legends {
 
@@ -36,12 +37,20 @@ struct PC98Config {
     /// Check whether a GDC clock string is valid ("default" or "5mhz").
     /// @param clock  The clock string to validate.
     /// @return true if recognised.
+<<<<<<< HEAD
     [[nodiscard]] static bool isValidGDCClock(const std::string& clock);
+=======
+    static bool isValidGDCClock(std::string_view clock);
+>>>>>>> worktree-agent-a4ab30fc
 
     /// Check whether a sound board string is valid ("auto", "26k", or "86").
     /// @param board  The sound board string to validate.
     /// @return true if recognised.
+<<<<<<< HEAD
     [[nodiscard]] static bool isValidSoundBoard(const std::string& board);
+=======
+    static bool isValidSoundBoard(std::string_view board);
+>>>>>>> worktree-agent-a4ab30fc
 };
 
 } // namespace legends

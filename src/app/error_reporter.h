@@ -6,6 +6,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 namespace legends {
 
@@ -20,8 +21,8 @@ public:
     ErrorReporter()  = default;
     ~ErrorReporter() = default;
 
-    void report(const std::string& message);
-    void report(ErrorSeverity severity, const std::string& message);
+    void report(std::string_view message);
+    void report(ErrorSeverity severity, std::string_view message);
     void clear();
 };
 

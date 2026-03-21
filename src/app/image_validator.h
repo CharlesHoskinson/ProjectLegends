@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <fstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace legends {
@@ -19,22 +20,17 @@ struct ImageValidationResult {
 };
 
 /// REQ-SEC-016: Pre-mount validation for disk image files.
-/// Checks file size limits and FAT BPB header sanity before the engine
-/// attempts to parse the image, providing defense-in-depth against
-/// malformed or adversarial disk images.
 class ImageValidator {
 public:
-    static constexpr size_t kMaxFATImageSize = 2ULL * 1024 * 1024 * 1024;   // 2 GB
-    static constexpr size_t kMaxISOImageSize = 4700ULL * 1024 * 1024;       // ~4.7 GB (DVD)
+    static constexpr size_t kMaxFATImageSize = 2ULL * 1024 * 1024 * 1024;
+    static constexpr size_t kMaxISOImageSize = 4700ULL * 1024 * 1024;
     static constexpr int kMaxDirectoryDepth = 32;
 
-    /// Validate a disk image file before mounting.
-    /// Returns {true, ""} on success or {false, reason} on failure.
-    [[nodiscard]] static ImageValidationResult validate(const std::string& path);
+    [[nodiscard]] static ImageValidationResult validate(std::string_view path);
 
 private:
-    [[nodiscard]] static ImageValidationResult validateFAT(const std::string& path, size_t file_size);
-    [[nodiscard]] static ImageValidationResult validateISO(const std::string& path, size_t file_size);
+    [[nodiscard]] static ImageValidationResult validateFAT(std::string_view path, size_t file_size);
+    [[nodiscard]] static ImageValidationResult validateISO(std::string_view path, size_t file_size);
 
     [[nodiscard]] static ImageValidationResult validateFATDirectoryDepth(
         std::ifstream& file, const uint8_t* boot,

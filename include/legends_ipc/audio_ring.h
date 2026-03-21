@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <expected>
 #include <span>
+#include <string_view>
 #include <legends_ipc/ipc_error.h>
 #include <legends_ipc/shared_memory.h>
 
@@ -29,12 +30,21 @@ static_assert(sizeof(AudioRingHeader) == 32);
 // Consumer (proxy):  pop(buffer)   -> frames read
 class AudioRingBuffer {
 public:
+<<<<<<< HEAD
     [[nodiscard]] static std::expected<AudioRingBuffer, IpcError>
     create(const std::string& name, uint32_t capacity_frames,
            uint32_t channels = 2, uint32_t sample_rate = 44100);
 
     [[nodiscard]] static std::expected<AudioRingBuffer, IpcError>
     open(const std::string& name, uint32_t capacity_frames,
+=======
+    static std::expected<AudioRingBuffer, IpcError>
+    create(std::string_view name, uint32_t capacity_frames,
+           uint32_t channels = 2, uint32_t sample_rate = 44100);
+
+    static std::expected<AudioRingBuffer, IpcError>
+    open(std::string_view name, uint32_t capacity_frames,
+>>>>>>> worktree-agent-a4ab30fc
          uint32_t channels = 2, uint32_t sample_rate = 44100);
 
     // Push samples (interleaved). Returns number of frames actually written.

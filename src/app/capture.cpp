@@ -30,6 +30,8 @@
 #include <filesystem>
 #include <iomanip>
 #include <sstream>
+#include <string>
+#include <string_view>
 
 namespace legends {
 
@@ -58,13 +60,14 @@ std::string generateCaptureFilename() {
     return oss.str();
 }
 
-bool writeScreenshotPNG(const std::string& path,
+bool writeScreenshotPNG(std::string_view path,
                         const uint8_t* rgb_data,
                         uint16_t width, uint16_t height) {
     if (!rgb_data || width == 0 || height == 0) return false;
 
     // stbi_write_png: comp=3 for RGB, stride = width * 3
-    int result = stbi_write_png(path.c_str(),
+    std::string path_str(path);
+    int result = stbi_write_png(path_str.c_str(),
                                 static_cast<int>(width),
                                 static_cast<int>(height),
                                 3,

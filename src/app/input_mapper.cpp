@@ -8,11 +8,13 @@
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <string>
+#include <string_view>
 
 namespace legends {
 
-bool InputMapper::loadFromFile(const std::string& path) {
-    std::ifstream file(path);
+bool InputMapper::loadFromFile(std::string_view path) {
+    std::ifstream file(std::string(path));
     if (!file.is_open()) return false;
 
     remaps_.clear();
@@ -45,8 +47,8 @@ bool InputMapper::loadFromFile(const std::string& path) {
     return true;
 }
 
-bool InputMapper::saveToFile(const std::string& path) const {
-    std::ofstream file(path);
+bool InputMapper::saveToFile(std::string_view path) const {
+    std::ofstream file(std::string(path));
     if (!file.is_open()) return false;
 
     file << "# Project Legends key mapper\n";

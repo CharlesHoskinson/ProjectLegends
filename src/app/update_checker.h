@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace legends {
 
@@ -64,7 +65,8 @@ public:
 
     /// Compare two version strings (e.g., "1.0.0" vs "1.1.0").
     /// Returns: -1 if a < b, 0 if a == b, 1 if a > b.
-    [[nodiscard]] static int compareVersions(const std::string& a, const std::string& b);
+    [[nodiscard]] static int compareVersions(std::string_view a, std::string_view b);
+    static int compareVersions(std::string_view a, std::string_view b);
 
     /// Get the current application version.
     [[nodiscard]] static std::string currentVersion();
@@ -75,7 +77,8 @@ protected:
     [[nodiscard]] virtual std::string fetchManifest() = 0;
 
     /// Parse the manifest JSON and populate the result.
-    [[nodiscard]] UpdateCheckResult parseManifest(const std::string& json);
+    [[nodiscard]] static int compareVersions(std::string_view a, std::string_view b);
+    UpdateCheckResult parseManifest(std::string_view json);
 
 private:
     bool        enabled_  = false;

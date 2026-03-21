@@ -4,7 +4,9 @@
       "Bash(git clone:*)",
       "Bash(cp -r /tmp/superpowers-skill/skills/* ~/.claude/skills/)",
       "Read(//c/Users/charl/.claude/skills/**)",
-      "Bash(wc -l C:/projectLegends/docs/superpowers/plans/*.md)"
+      "Bash(wc -l C:/projectLegends/docs/superpowers/plans/*.md)",
+      "Bash(sed -i:*)",
+      "Bash(sed -i '/>>>>>>> worktree-agent-a4ab30fc/d' src/app/update_checker.h)"
     ]
   }
 }

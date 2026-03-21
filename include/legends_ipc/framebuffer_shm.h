@@ -7,6 +7,7 @@
 #include <expected>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <legends_ipc/ipc_error.h>
 #include <legends_ipc/shared_memory.h>
 
@@ -37,11 +38,19 @@ struct FrameData {
 // Reader (proxy):  read_if_new(last_idx) -> optional<FrameData>
 class FramebufferShm {
 public:
+<<<<<<< HEAD
     [[nodiscard]] static std::expected<FramebufferShm, IpcError>
     create(const std::string& name, uint32_t max_width, uint32_t max_height);
 
     [[nodiscard]] static std::expected<FramebufferShm, IpcError>
     open(const std::string& name, uint32_t max_width, uint32_t max_height);
+=======
+    static std::expected<FramebufferShm, IpcError>
+    create(std::string_view name, uint32_t max_width, uint32_t max_height);
+
+    static std::expected<FramebufferShm, IpcError>
+    open(std::string_view name, uint32_t max_width, uint32_t max_height);
+>>>>>>> worktree-agent-a4ab30fc
 
     // Writer: get buffer to write into (the non-active buffer).
     [[nodiscard]] std::span<uint8_t> begin_write();
