@@ -31,6 +31,11 @@ public:
             return Result::AlreadyOpen;
         }
 
+        // Validate audio config to prevent division by zero (H4/H5 safety fix)
+        if (config.channels == 0 || config.sample_rate == 0) {
+            return Result::InvalidParameter;
+        }
+
         config_ = config;
 
         // Set up SDL3 audio spec

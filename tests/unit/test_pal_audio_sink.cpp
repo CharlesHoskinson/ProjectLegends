@@ -111,6 +111,20 @@ TEST_F(PalAudioSinkTest, ReopenAfterClose) {
     EXPECT_TRUE(sink_->isOpen());
 }
 
+TEST_F(PalAudioSinkTest, OpenWithZeroChannelsFails) {
+    AudioConfig config;
+    config.channels = 0;
+    EXPECT_EQ(sink_->open(config), Result::InvalidParameter);
+    EXPECT_FALSE(sink_->isOpen());
+}
+
+TEST_F(PalAudioSinkTest, OpenWithZeroSampleRateFails) {
+    AudioConfig config;
+    config.sample_rate = 0;
+    EXPECT_EQ(sink_->open(config), Result::InvalidParameter);
+    EXPECT_FALSE(sink_->isOpen());
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Push Model Tests
 // ═══════════════════════════════════════════════════════════════════════════

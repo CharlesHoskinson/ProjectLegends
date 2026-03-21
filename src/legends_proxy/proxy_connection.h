@@ -59,7 +59,7 @@ private:
     std::unique_ptr<legends_ipc::FramebufferShm> fb_;
     std::unique_ptr<legends_ipc::AudioRingBuffer> audio_;
     std::atomic<uint32_t> next_seq_{1};
-    bool connected_ = false;
+    std::atomic<bool> connected_{false};
 };
 
 } // namespace legends_proxy
