@@ -2,6 +2,8 @@
 #include <legends_ipc/audio_ring.h>
 #include <algorithm>
 #include <cstring>
+#include <string>
+#include <string_view>
 
 namespace legends_ipc {
 
@@ -14,13 +16,13 @@ void AudioRingBuffer::map_pointers() {
 }
 
 std::expected<AudioRingBuffer, IpcError>
-AudioRingBuffer::create(const std::string& name, uint32_t capacity_frames,
+AudioRingBuffer::create(std::string_view name, uint32_t capacity_frames,
                          uint32_t channels, uint32_t sample_rate) {
     if (capacity_frames == 0 || channels == 0)
         return std::unexpected(IpcError::InvalidArgument);
 
     size_t total = required_size(capacity_frames, channels);
-    auto region = SharedMemoryRegion::create(name + "_audio", total);
+    auto region = SharedMemoryRegion::create(std::string(name) + "_audio", total);
     if (!region.has_value())
         return std::unexpected(region.error());
 
@@ -42,13 +44,13 @@ AudioRingBuffer::create(const std::string& name, uint32_t capacity_frames,
 }
 
 std::expected<AudioRingBuffer, IpcError>
-AudioRingBuffer::open(const std::string& name, uint32_t capacity_frames,
+AudioRingBuffer::open(std::string_view name, uint32_t capacity_frames,
                        uint32_t channels, uint32_t /*sample_rate*/) {
     if (capacity_frames == 0 || channels == 0)
         return std::unexpected(IpcError::InvalidArgument);
 
     size_t total = required_size(capacity_frames, channels);
-    auto region = SharedMemoryRegion::open(name + "_audio", total);
+    auto region = SharedMemoryRegion::open(std::string(name) + "_audio", total);
     if (!region.has_value())
         return std::unexpected(region.error());
 

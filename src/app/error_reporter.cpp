@@ -3,10 +3,12 @@
 
 #include "app/error_reporter.h"
 
+#include <string_view>
+
 namespace legends {
 
-void ErrorReporter::report(const std::string& /*message*/) {}
-void ErrorReporter::report(ErrorSeverity /*severity*/, const std::string& /*message*/) {}
+void ErrorReporter::report(std::string_view /*message*/) {}
+void ErrorReporter::report(ErrorSeverity /*severity*/, std::string_view /*message*/) {}
 void ErrorReporter::clear() {}
 
 } // namespace legends

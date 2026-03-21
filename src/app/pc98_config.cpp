@@ -23,11 +23,11 @@ bool PC98Config::isValid() const {
     return isValidGDCClock(gdc_clock) && isValidSoundBoard(sound_board);
 }
 
-bool PC98Config::isValidGDCClock(const std::string& clock) {
+bool PC98Config::isValidGDCClock(std::string_view clock) {
     return clock == "default" || clock == "5mhz";
 }
 
-bool PC98Config::isValidSoundBoard(const std::string& board) {
+bool PC98Config::isValidSoundBoard(std::string_view board) {
     return board == "auto" || board == "26k" || board == "86";
 }
 

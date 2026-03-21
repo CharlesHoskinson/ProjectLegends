@@ -9,13 +9,14 @@
 #include <algorithm>
 #include <cctype>
 #include <string>
+#include <string_view>
 
 namespace legends {
 
 namespace {
 
-std::string toLowerStr(const std::string& s) {
-    std::string result = s;
+std::string toLowerStr(std::string_view s) {
+    std::string result(s);
     std::transform(result.begin(), result.end(), result.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return result;
@@ -43,7 +44,7 @@ void MIDIConfig::loadFrom(const ConfigParser& config) {
     volume = static_cast<float>(vol_int) / 100.0f;
 }
 
-MIDIDevice MIDIConfig::parseDeviceName(const std::string& name) {
+MIDIDevice MIDIConfig::parseDeviceName(std::string_view name) {
     std::string lower = toLowerStr(name);
     if (lower == "fluidsynth" || lower == "fluid") {
         return MIDIDevice::FluidSynth;

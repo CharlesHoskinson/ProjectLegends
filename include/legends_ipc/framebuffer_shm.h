@@ -7,6 +7,7 @@
 #include <expected>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <legends_ipc/ipc_error.h>
 #include <legends_ipc/shared_memory.h>
 
@@ -38,10 +39,10 @@ struct FrameData {
 class FramebufferShm {
 public:
     static std::expected<FramebufferShm, IpcError>
-    create(const std::string& name, uint32_t max_width, uint32_t max_height);
+    create(std::string_view name, uint32_t max_width, uint32_t max_height);
 
     static std::expected<FramebufferShm, IpcError>
-    open(const std::string& name, uint32_t max_width, uint32_t max_height);
+    open(std::string_view name, uint32_t max_width, uint32_t max_height);
 
     // Writer: get buffer to write into (the non-active buffer).
     std::span<uint8_t> begin_write();

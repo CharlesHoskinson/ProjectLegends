@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace legends {
 
@@ -28,11 +29,11 @@ public:
 
     /// Validate a disk image file before mounting.
     /// Returns {true, ""} on success or {false, reason} on failure.
-    static ImageValidationResult validate(const std::string& path);
+    static ImageValidationResult validate(std::string_view path);
 
 private:
-    static ImageValidationResult validateFAT(const std::string& path, size_t file_size);
-    static ImageValidationResult validateISO(const std::string& path, size_t file_size);
+    static ImageValidationResult validateFAT(std::string_view path, size_t file_size);
+    static ImageValidationResult validateISO(std::string_view path, size_t file_size);
 };
 
 } // namespace legends

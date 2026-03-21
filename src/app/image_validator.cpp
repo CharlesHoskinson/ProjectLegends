@@ -10,17 +10,20 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <string>
+#include <string_view>
 
 namespace legends {
 
-ImageValidationResult ImageValidator::validate(const std::string& path) {
+ImageValidationResult ImageValidator::validate(std::string_view path) {
+    std::string path_str(path);
     std::error_code ec;
-    auto file_size = std::filesystem::file_size(path, ec);
+    auto file_size = std::filesystem::file_size(path_str, ec);
     if (ec) return {false, "Cannot read file size: " + ec.message()};
     if (file_size == 0) return {false, "Image file is empty"};
 
     // Detect type by extension
-    std::filesystem::path p(path);
+    std::filesystem::path p(path_str);
     std::string ext = p.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -31,7 +34,7 @@ ImageValidationResult ImageValidator::validate(const std::string& path) {
     return validateFAT(path, static_cast<size_t>(file_size));
 }
 
-ImageValidationResult ImageValidator::validateFAT(const std::string& path, size_t file_size) {
+ImageValidationResult ImageValidator::validateFAT(std::string_view path, size_t file_size) {
     if (file_size > kMaxFATImageSize) {
         return {false, "FAT image exceeds 2 GB size limit"};
     }
@@ -42,7 +45,7 @@ ImageValidationResult ImageValidator::validateFAT(const std::string& path, size_
     }
 
     // Read the boot sector (first 512 bytes)
-    std::ifstream file(path, std::ios::binary);
+    std::ifstream file(std::string(path), std::ios::binary);
     if (!file.is_open()) return {false, "Cannot open image file"};
 
     uint8_t boot[512];
@@ -110,7 +113,7 @@ ImageValidationResult ImageValidator::validateFAT(const std::string& path, size_
     return {true, ""};
 }
 
-ImageValidationResult ImageValidator::validateISO(const std::string& /*path*/, size_t file_size) {
+ImageValidationResult ImageValidator::validateISO(std::string_view /*path*/, size_t file_size) {
     if (file_size > kMaxISOImageSize) {
         return {false, "ISO image exceeds 4.7 GB size limit"};
     }

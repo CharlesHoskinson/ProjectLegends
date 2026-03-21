@@ -3,11 +3,13 @@
 
 #include "app/crash_reporter.h"
 
+#include <string_view>
+
 namespace legends {
 
 void CrashReporter::install() {}
 void CrashReporter::uninstall() {}
-bool CrashReporter::enable(const std::string& /*crash_dir*/) { return true; }
+bool CrashReporter::enable(std::string_view /*crash_dir*/) { return true; }
 void CrashReporter::disable() {}
 
 CrashReporter& globalCrashReporter() {

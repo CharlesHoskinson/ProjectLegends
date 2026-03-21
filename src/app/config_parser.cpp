@@ -8,10 +8,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 
 namespace legends {
 
@@ -78,7 +80,7 @@ bool ConfigParser::loadFile(const std::string& path) {
     return true;
 }
 
-std::string ConfigParser::get(const std::string& section, const std::string& key,
+std::string ConfigParser::get(std::string_view section, std::string_view key,
                               const std::string& default_val) const {
     auto sec_it = sections_.find(toLower(section));
     if (sec_it == sections_.end()) return default_val;
@@ -89,19 +91,18 @@ std::string ConfigParser::get(const std::string& section, const std::string& key
     return key_it->second;
 }
 
-int ConfigParser::getInt(const std::string& section, const std::string& key,
+int ConfigParser::getInt(std::string_view section, std::string_view key,
                          int default_val) const {
     std::string val = get(section, key, "");
     if (val.empty()) return default_val;
 
-    try {
-        return std::stoi(val);
-    } catch (...) {
-        return default_val;
-    }
+    int result = 0;
+    auto [ptr, ec] = std::from_chars(val.data(), val.data() + val.size(), result);
+    if (ec != std::errc{}) return default_val;
+    return result;
 }
 
-bool ConfigParser::getBool(const std::string& section, const std::string& key,
+bool ConfigParser::getBool(std::string_view section, std::string_view key,
                            bool default_val) const {
     std::string val = toLower(get(section, key, ""));
     if (val.empty()) return default_val;
@@ -111,11 +112,11 @@ bool ConfigParser::getBool(const std::string& section, const std::string& key,
     return default_val;
 }
 
-bool ConfigParser::hasSection(const std::string& section) const {
+bool ConfigParser::hasSection(std::string_view section) const {
     return sections_.find(toLower(section)) != sections_.end();
 }
 
-bool ConfigParser::hasKey(const std::string& section, const std::string& key) const {
+bool ConfigParser::hasKey(std::string_view section, std::string_view key) const {
     auto sec_it = sections_.find(toLower(section));
     if (sec_it == sections_.end()) return false;
     return sec_it->second.find(toLower(key)) != sec_it->second.end();
@@ -134,18 +135,18 @@ bool ConfigParser::loadDefaults() {
     return false;
 }
 
-std::string ConfigParser::toLower(const std::string& s) {
-    std::string result = s;
+std::string ConfigParser::toLower(std::string_view s) {
+    std::string result(s);
     std::transform(result.begin(), result.end(), result.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return result;
 }
 
-std::string ConfigParser::trim(const std::string& s) {
+std::string ConfigParser::trim(std::string_view s) {
     auto start = s.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos) return {};
+    if (start == std::string_view::npos) return {};
     auto end = s.find_last_not_of(" \t\r\n");
-    return s.substr(start, end - start + 1);
+    return std::string(s.substr(start, end - start + 1));
 }
 
 } // namespace legends

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include <legends_ipc/framebuffer_shm.h>
 #include <cstring>
+#include <string>
+#include <string_view>
 
 namespace legends_ipc {
 
@@ -13,12 +15,12 @@ void FramebufferShm::map_pointers() {
 }
 
 std::expected<FramebufferShm, IpcError>
-FramebufferShm::create(const std::string& name, uint32_t max_width, uint32_t max_height) {
+FramebufferShm::create(std::string_view name, uint32_t max_width, uint32_t max_height) {
     if (max_width == 0 || max_height == 0)
         return std::unexpected(IpcError::InvalidArgument);
 
     size_t total = required_size(max_width, max_height);
-    auto region = SharedMemoryRegion::create(name + "_fb", total);
+    auto region = SharedMemoryRegion::create(std::string(name) + "_fb", total);
     if (!region.has_value())
         return std::unexpected(region.error());
 
@@ -37,12 +39,12 @@ FramebufferShm::create(const std::string& name, uint32_t max_width, uint32_t max
 }
 
 std::expected<FramebufferShm, IpcError>
-FramebufferShm::open(const std::string& name, uint32_t max_width, uint32_t max_height) {
+FramebufferShm::open(std::string_view name, uint32_t max_width, uint32_t max_height) {
     if (max_width == 0 || max_height == 0)
         return std::unexpected(IpcError::InvalidArgument);
 
     size_t total = required_size(max_width, max_height);
-    auto region = SharedMemoryRegion::open(name + "_fb", total);
+    auto region = SharedMemoryRegion::open(std::string(name) + "_fb", total);
     if (!region.has_value())
         return std::unexpected(region.error());
 

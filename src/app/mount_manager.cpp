@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <string>
+#include <string_view>
 
 namespace legends {
 
@@ -21,7 +22,7 @@ namespace legends {
 // Static Utilities
 // ─────────────────────────────────────────────────────────────────────────────
 
-int MountManager::parseDriveLetter(const std::string& letter) {
+int MountManager::parseDriveLetter(std::string_view letter) {
     if (letter.size() != 1) return -1;
     char c = letter[0];
     if (c >= 'A' && c <= 'Z') return c - 'A';
@@ -29,23 +30,23 @@ int MountManager::parseDriveLetter(const std::string& letter) {
     return -1;
 }
 
-bool MountManager::validateHostPath(const std::string& path) {
+bool MountManager::validateHostPath(std::string_view path) {
     if (path.empty()) return false;
 
     // REQ-SEC-023: Canonicalize the path to resolve "..", ".", and symlinks.
     // This replaces the naive path.find("..") string check with proper
     // filesystem resolution that handles symlink traversal attacks.
     std::error_code ec;
-    auto canonical = std::filesystem::weakly_canonical(path, ec);
+    auto canonical = std::filesystem::weakly_canonical(std::string(path), ec);
     if (ec) return false;
 
     return std::filesystem::is_directory(canonical, ec) && !ec;
 }
 
-bool MountManager::validateImageExtension(const std::string& ext) {
+bool MountManager::validateImageExtension(std::string_view ext) {
     if (ext.empty()) return false;
 
-    std::string lower = ext;
+    std::string lower(ext);
     std::transform(lower.begin(), lower.end(), lower.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
@@ -53,15 +54,16 @@ bool MountManager::validateImageExtension(const std::string& ext) {
            lower == ".cue" || lower == ".bin";
 }
 
-MountType MountManager::detectMountType(const std::string& path) {
+MountType MountManager::detectMountType(std::string_view path) {
     // Check if it's a directory first
     std::error_code ec;
-    if (std::filesystem::is_directory(path, ec) && !ec) {
+    std::string path_str(path);
+    if (std::filesystem::is_directory(path_str, ec) && !ec) {
         return MountType::Directory;
     }
 
     // Detect by file extension
-    std::filesystem::path p(path);
+    std::filesystem::path p(path_str);
     std::string ext = p.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -70,17 +72,17 @@ MountType MountManager::detectMountType(const std::string& path) {
     return MountType::FATImage;  // .img, .ima, .bin, or unknown
 }
 
-std::optional<MountArg> MountManager::parseMountArg(const std::string& arg) {
+std::optional<MountArg> MountManager::parseMountArg(std::string_view arg) {
     if (arg.empty()) return std::nullopt;
 
     // Expected format: "D:=/path/to/dir"
     auto sep = arg.find(":=");
-    if (sep == std::string::npos || sep != 1) return std::nullopt;
+    if (sep == std::string_view::npos || sep != 1) return std::nullopt;
 
     char letter = arg[0];
     if (!isValidLetter(letter)) return std::nullopt;
 
-    std::string path = arg.substr(3);  // Skip "X:="
+    std::string path(arg.substr(3));  // Skip "X:="
     if (path.empty()) return std::nullopt;
 
     return MountArg{normalizeLetter(letter), path};

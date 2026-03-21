@@ -5,6 +5,8 @@
 
 #include <charconv>
 #include <sstream>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace legends {
@@ -38,16 +40,18 @@ bool UpdateChecker::canCheckNow() const {
     return elapsed >= check_interval_;
 }
 
-int UpdateChecker::compareVersions(const std::string& a, const std::string& b) {
-    auto parse = [](const std::string& s) {
+int UpdateChecker::compareVersions(std::string_view a, std::string_view b) {
+    auto parse = [](std::string_view s) {
         std::vector<int> parts;
-        std::istringstream ss(s);
-        std::string token;
-        while (std::getline(ss, token, '.')) {
+        size_t start = 0;
+        while (start < s.size()) {
+            auto dot = s.find('.', start);
+            if (dot == std::string_view::npos) dot = s.size();
             int val = 0;
-            auto [ptr, ec] = std::from_chars(token.data(), token.data() + token.size(), val);
+            auto [ptr, ec] = std::from_chars(s.data() + start, s.data() + dot, val);
             (void)ptr; (void)ec;
             parts.push_back(val);
+            start = dot + 1;
         }
         return parts;
     };
@@ -68,7 +72,7 @@ std::string UpdateChecker::currentVersion() {
     return "0.1.0";
 }
 
-UpdateCheckResult UpdateChecker::parseManifest(const std::string& /*json*/) {
+UpdateCheckResult UpdateChecker::parseManifest(std::string_view /*json*/) {
     // Minimal stub — real implementation would parse JSON
     UpdateCheckResult r;
     r.checked = true;

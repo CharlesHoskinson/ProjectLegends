@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace legends {
@@ -26,22 +27,22 @@ public:
     bool loadFile(const std::string& path);
 
     /// Get a string value.
-    std::string get(const std::string& section, const std::string& key,
+    std::string get(std::string_view section, std::string_view key,
                     const std::string& default_val = "") const;
 
     /// Get an integer value.
-    int getInt(const std::string& section, const std::string& key,
+    int getInt(std::string_view section, std::string_view key,
                int default_val = 0) const;
 
     /// Get a boolean value (true/yes/1/on).
-    bool getBool(const std::string& section, const std::string& key,
+    bool getBool(std::string_view section, std::string_view key,
                  bool default_val = false) const;
 
     /// Check if a section exists.
-    bool hasSection(const std::string& section) const;
+    bool hasSection(std::string_view section) const;
 
     /// Check if a key exists within a section.
-    bool hasKey(const std::string& section, const std::string& key) const;
+    bool hasKey(std::string_view section, std::string_view key) const;
 
     /// Get the path of the loaded file (empty if none loaded).
     const std::string& getLoadedPath() const { return loaded_path_; }
@@ -59,8 +60,8 @@ private:
     std::unordered_map<std::string, SectionMap> sections_;
     std::string loaded_path_;
 
-    static std::string toLower(const std::string& s);
-    static std::string trim(const std::string& s);
+    static std::string toLower(std::string_view s);
+    static std::string trim(std::string_view s);
 };
 
 } // namespace legends

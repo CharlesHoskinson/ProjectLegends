@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace legends {
@@ -17,10 +18,10 @@ class InputMapper {
 public:
     /// Load custom remappings from file. Returns true if file was read.
     /// Missing file is not an error (returns false, no remaps loaded).
-    bool loadFromFile(const std::string& path);
+    bool loadFromFile(std::string_view path);
 
     /// Save current remappings to file. Returns true on success.
-    bool saveToFile(const std::string& path) const;
+    bool saveToFile(std::string_view path) const;
 
     /// Translate an SDL3 scancode to AT Set 1, applying any custom remap first.
     ATScancode translate(uint16_t sdl_scancode) const;
