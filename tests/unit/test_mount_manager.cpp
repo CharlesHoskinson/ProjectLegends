@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 #include <legends/gsl.hpp>
 #include "app/mount_manager.h"
+#include "app/image_validator.h"
 
 #include <cstring>
 #include <filesystem>
@@ -353,6 +354,26 @@ TEST(MountManagerTest, InvalidDriveLetter_IsMountedThrowsFailFast) {
 TEST(MountManagerTest, EmptyPath_MountThrowsFailFast) {
     MountManager mgr;
     EXPECT_THROW(mgr.mountLocal('D', ""), legends::gsl::fail_fast);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REQ-SEC-016: FAT Directory Depth Limit
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(MountManagerTest, ImageValidator_DepthLimit_ValidShallowImage) {
+    // A normal FAT image with no subdirectories should pass depth validation.
+    auto tmp = std::filesystem::temp_directory_path() / "legends_depth_shallow.img";
+    writeFakeFATImage(tmp);
+
+    auto result = ImageValidator::validate(tmp.string());
+    EXPECT_TRUE(result.valid) << result.error;
+
+    std::filesystem::remove(tmp);
+}
+
+TEST(MountManagerTest, ImageValidator_DepthLimitConstant) {
+    // Verify the constant is 32 as specified by REQ-SEC-016.
+    EXPECT_EQ(ImageValidator::kMaxDirectoryDepth, 32);
 }
 
 } // namespace

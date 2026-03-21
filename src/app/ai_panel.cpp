@@ -8,7 +8,9 @@
 #include "legends/internal/cp437_font_8x16.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
+#include <regex>
 
 namespace legends {
 
@@ -229,8 +231,41 @@ void AIPanel::submitQuery() {
 // Chat history management
 // ─────────────────────────────────────────────────────────────────────────────
 
+// REQ-SEC-008: Strip dangerous patterns from AI responses before display.
+std::string AIPanel::sanitizeResponse(const std::string& text) {
+    std::string result = text;
+
+    // Case-insensitive removal of <script>...</script> tags and content
+    result = std::regex_replace(result,
+        std::regex("<\\s*script[^>]*>[\\s\\S]*?<\\s*/\\s*script\\s*>",
+                   std::regex_constants::icase),
+        "");
+
+    // Remove standalone <script> or </script> tags (unclosed)
+    result = std::regex_replace(result,
+        std::regex("<\\s*/?\\s*script[^>]*>", std::regex_constants::icase),
+        "");
+
+    // Remove <img> tags (potential exfiltration vector)
+    result = std::regex_replace(result,
+        std::regex("<\\s*img[^>]*>", std::regex_constants::icase),
+        "");
+
+    // Remove javascript: URIs (case-insensitive, whitespace-tolerant)
+    result = std::regex_replace(result,
+        std::regex("javascript\\s*:", std::regex_constants::icase),
+        "");
+
+    // Remove file:// URIs
+    result = std::regex_replace(result,
+        std::regex("file\\s*://", std::regex_constants::icase),
+        "");
+
+    return result;
+}
+
 void AIPanel::addResponse(const std::string& text) {
-    history_.push_back({false, text});
+    history_.push_back({false, sanitizeResponse(text)});
     waiting_ = false;
     streaming_text_.clear();
 }

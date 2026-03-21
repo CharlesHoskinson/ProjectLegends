@@ -1090,6 +1090,8 @@ endif()
 if(PAL_BACKEND_SDL2)
     add_executable(project_legends
         src/main.cpp
+        # REQ-QA-015: Windows DPI awareness manifest
+        $<$<PLATFORM_ID:Windows>:src/app/project_legends.manifest>
     )
 
     legends_set_strict_cxx_standard(project_legends)
@@ -1140,6 +1142,7 @@ endif()
 if(PAL_BACKEND_SDL3)
     add_executable(project_legends
         src/main.cpp
+        $<$<PLATFORM_ID:Windows>:src/app/project_legends.manifest>
     )
 
     legends_set_strict_cxx_standard(project_legends)

@@ -117,6 +117,13 @@ private:
     uint16_t ctx_width_      = 640;
     uint16_t ctx_height_     = 480;
 
+    // REQ-QA-006: Dimension change debouncing — only recreate the rendering
+    // context when the new dimensions have been stable for 3 consecutive frames.
+    static constexpr int kDimStableFrames = 3;
+    uint16_t pending_width_  = 0;
+    uint16_t pending_height_ = 0;
+    int      dim_stable_count_ = 0;
+
     // ── Phase 2 state ────────────────────────────────────────────────────
 
     ActionBus    action_bus_;

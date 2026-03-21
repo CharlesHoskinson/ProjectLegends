@@ -21,6 +21,7 @@ struct AIConfig {
     uint32_t max_tokens = 4096;             ///< Maximum tokens in API response.
     uint32_t max_context_chars = 8000;      ///< Max characters of screen context to send.
     bool privacy_mode = false;              ///< When true, disables all API calls.
+    bool raw_api_key_detected = false;      ///< REQ-SEC-006: True if a raw key was found in config.
 
     /// Load from [ai] section of config.
     void loadFrom(const ConfigParser& config);

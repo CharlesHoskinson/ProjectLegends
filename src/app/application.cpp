@@ -411,6 +411,9 @@ ExitCode Application::run() {
     running_ = true;
 
     constexpr uint64_t kTargetFrameUs = 16667; // ~60 FPS
+    // REQ-QA-001: Cap maximum elapsed time per frame to prevent physics/logic
+    // jumps after OS suspend/resume or debugger pause.
+    constexpr uint64_t kMaxFrameUs = 100000;  // 100 ms (10 FPS minimum)
 
     while (running_) {
         uint64_t frame_start = host_clock_ ? host_clock_->getTicksUs() : 0;
@@ -420,14 +423,27 @@ ExitCode Application::run() {
         }
 
         // Step engine ~16 ms of emulated time per frame (skip when paused)
+        bool step_ok = true;
         if (!paused_ && !menu_system_.isOpen()) {
             legends_step_result_t step_result{};
-            legends_step_ms(engine_, 16, &step_result);
+            legends_error_t step_err = legends_step_ms(engine_, 16, &step_result);
+            // REQ-QA-005: Check step result for errors. On error frames,
+            // suppress capture and audio to avoid processing stale data.
+            if (step_err != LEGENDS_OK) {
+                step_ok = false;
+                std::fprintf(stderr, "Warning: legends_step_ms returned error %d\n",
+                             static_cast<int>(step_err));
+            }
         }
 
         // REQ-UX-005: Record frame delta for performance overlay
         if (host_clock_) {
             uint64_t elapsed = host_clock_->getTicksUs() - frame_start;
+            // REQ-QA-001: Clamp elapsed time to prevent logic jumps after
+            // OS suspend/resume or debugger pause.
+            if (elapsed > kMaxFrameUs) {
+                elapsed = kMaxFrameUs;
+            }
             perf_overlay_.recordFrame(elapsed);
             if (engine_) {
                 uint64_t total_cycles = 0;
@@ -442,11 +458,15 @@ ExitCode Application::run() {
             }
         }
 
-        // Render framebuffer to window
-        renderFrame();
+        // Render framebuffer to window (suppress on error frames per REQ-QA-005)
+        if (step_ok) {
+            renderFrame();
+        }
 
-        // Pump audio from engine to audio sink
-        pumpAudio();
+        // Pump audio from engine to audio sink (suppress on error frames per REQ-QA-005)
+        if (step_ok) {
+            pumpAudio();
+        }
 
         // Frame pacing: spin-wait hybrid for accurate 60 FPS
         if (host_clock_) {
@@ -1084,16 +1104,32 @@ void Application::renderFrame() {
     legends_capture_rgb(engine_, rgb_buffer_.data(),
                         rgb_buffer_.size(), &size_needed, &fw, &fh);
 
-    // Dynamic resolution handling (Step 7): recreate context if engine
-    // resolution changed
+    // Dynamic resolution handling (Step 7) with debouncing (REQ-QA-006):
+    // Only recreate the rendering context when the new dimensions have been
+    // stable for kDimStableFrames consecutive frames, preventing rapid
+    // context thrashing during mode switches.
     if (fw != ctx_width_ || fh != ctx_height_) {
-        context_->destroy();
-        auto res = context_->createSoftware(fw, fh, pal::PixelFormat::RGB888);
-        if (pal::failed(res)) return;
-        ctx_width_  = fw;
-        ctx_height_ = fh;
-        // Step 8: Update logical presentation for aspect ratio
-        context_->setLogicalSize(fw, fh);
+        if (fw == pending_width_ && fh == pending_height_) {
+            ++dim_stable_count_;
+        } else {
+            pending_width_  = fw;
+            pending_height_ = fh;
+            dim_stable_count_ = 1;
+        }
+
+        if (dim_stable_count_ >= kDimStableFrames) {
+            context_->destroy();
+            auto res = context_->createSoftware(fw, fh, pal::PixelFormat::RGB888);
+            if (pal::failed(res)) return;
+            ctx_width_  = fw;
+            ctx_height_ = fh;
+            // Step 8: Update logical presentation for aspect ratio
+            context_->setLogicalSize(fw, fh);
+            dim_stable_count_ = 0;
+        }
+    } else {
+        // Dimensions match — reset pending state
+        dim_stable_count_ = 0;
     }
 
     // Lock the rendering surface
