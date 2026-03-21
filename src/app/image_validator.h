@@ -28,11 +28,11 @@ public:
 
     /// Validate a disk image file before mounting.
     /// Returns {true, ""} on success or {false, reason} on failure.
-    static ImageValidationResult validate(const std::string& path);
+    [[nodiscard]] static ImageValidationResult validate(const std::string& path);
 
 private:
-    static ImageValidationResult validateFAT(const std::string& path, size_t file_size);
-    static ImageValidationResult validateISO(const std::string& path, size_t file_size);
+    [[nodiscard]] static ImageValidationResult validateFAT(const std::string& path, size_t file_size);
+    [[nodiscard]] static ImageValidationResult validateISO(const std::string& path, size_t file_size);
 };
 
 } // namespace legends

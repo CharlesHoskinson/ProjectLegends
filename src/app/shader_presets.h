@@ -21,12 +21,12 @@ struct ShaderPresetInfo {
 
 /// Look up the shader sources for a given preset.
 /// Returns the None (passthrough) preset for out-of-range values.
-const ShaderPresetInfo& getShaderPreset(ShaderPreset preset);
+[[nodiscard]] const ShaderPresetInfo& getShaderPreset(ShaderPreset preset);
 
 /// Human-readable name of the given preset.
-const char* shaderPresetName(ShaderPreset preset);
+[[nodiscard]] const char* shaderPresetName(ShaderPreset preset);
 
 /// Number of usable presets (excludes Custom and COUNT).
-uint8_t shaderPresetCount();
+[[nodiscard]] uint8_t shaderPresetCount();
 
 } // namespace legends

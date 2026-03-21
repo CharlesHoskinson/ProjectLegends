@@ -34,13 +34,13 @@ public:
 
     /// Open audio device with given configuration
     /// @return Success, DeviceNotFound, AlreadyOpen
-    virtual Result open(const AudioConfig& config) = 0;
+    [[nodiscard]] virtual Result open(const AudioConfig& config) = 0;
 
     /// Close audio device (safe to call if not open)
     virtual void close() = 0;
 
     /// Check if audio device is open
-    virtual bool isOpen() const = 0;
+    [[nodiscard]] virtual bool isOpen() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Push Model - Emulation pushes samples
@@ -56,17 +56,17 @@ public:
     ///       dropped to make room (backpressure policy). Use getDroppedFrames()
     ///       to monitor drops.
     /// @note Samples are interleaved: L0, R0, L1, R1, ... for stereo
-    virtual Result pushSamples(const int16_t* samples, uint32_t frame_count) = 0;
+    [[nodiscard]] virtual Result pushSamples(const int16_t* samples, uint32_t frame_count) = 0;
 
     /// Get number of frames currently queued in buffer
-    virtual uint32_t getQueuedFrames() const = 0;
+    [[nodiscard]] virtual uint32_t getQueuedFrames() const = 0;
 
     /// Get total buffer capacity in frames
-    virtual uint32_t getBufferCapacity() const = 0;
+    [[nodiscard]] virtual uint32_t getBufferCapacity() const = 0;
 
     /// Get number of frames dropped due to buffer overflow
     /// @note Resets to 0 when close() is called
-    virtual uint32_t getDroppedFrames() const = 0;
+    [[nodiscard]] virtual uint32_t getDroppedFrames() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Playback Control
@@ -75,25 +75,25 @@ public:
     /// Pause or resume audio playback
     /// @param pause True to pause, false to resume
     /// @return Success, NotInitialized
-    virtual Result pause(bool pause) = 0;
+    [[nodiscard]] virtual Result pause(bool pause) = 0;
 
     /// Check if playback is paused
-    virtual bool isPaused() const = 0;
+    [[nodiscard]] virtual bool isPaused() const = 0;
 
     /// Set output volume
     /// @param volume 0.0 (mute) to 1.0 (full volume), values outside clamped
     /// @return Success
-    virtual Result setVolume(float volume) = 0;
+    [[nodiscard]] virtual Result setVolume(float volume) = 0;
 
     /// Get current volume
-    virtual float getVolume() const = 0;
+    [[nodiscard]] virtual float getVolume() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Configuration Query
     // ═══════════════════════════════════════════════════════════════════════
 
     /// Get the active audio configuration
-    virtual AudioConfig getConfig() const = 0;
+    [[nodiscard]] virtual AudioConfig getConfig() const = 0;
 };
 
 } // namespace pal

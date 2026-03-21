@@ -62,17 +62,17 @@ public:
     /// @brief Parse a single-character drive letter string to index (0-25).
     /// @param letter Single character string ("A"-"Z", case-insensitive)
     /// @return Drive index (0-25) or -1 if invalid
-    static int parseDriveLetter(const std::string& letter);
+    [[nodiscard]] static int parseDriveLetter(const std::string& letter);
 
     /// @brief Check if a host path is an existing directory (no traversal).
     /// @param path Host filesystem path
     /// @return true if path exists and is a directory with no ".." components
-    static bool validateHostPath(const std::string& path);
+    [[nodiscard]] static bool validateHostPath(const std::string& path);
 
     /// @brief Check if a file extension is a supported image format.
     /// @param ext File extension including dot (e.g., ".iso")
     /// @return true if extension is supported (.iso, .img, .ima, .cue, .bin)
-    static bool validateImageExtension(const std::string& ext);
+    [[nodiscard]] static bool validateImageExtension(const std::string& ext);
 
     /// @brief Detect mount type from a host path.
     ///
@@ -81,12 +81,12 @@ public:
     ///
     /// @param path Host path (directory or image file)
     /// @return Detected mount type
-    static MountType detectMountType(const std::string& path);
+    [[nodiscard]] static MountType detectMountType(const std::string& path);
 
     /// @brief Parse a CLI mount argument string (e.g., "D:=/path/to/dir").
     /// @param arg CLI argument string
     /// @return Parsed MountArg if valid, std::nullopt otherwise
-    static std::optional<MountArg> parseMountArg(const std::string& arg);
+    [[nodiscard]] static std::optional<MountArg> parseMountArg(const std::string& arg);
 
     // ── Instance Methods ────────────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ public:
     /// @return true on success, false if already mounted or path invalid
     /// @pre letter is 'A'-'Z' (gsl_Expects)
     /// @pre path is not empty (gsl_Expects)
-    bool mountLocal(char letter, const std::string& path, uint32_t flags = 0);
+    [[nodiscard]] bool mountLocal(char letter, const std::string& path, uint32_t flags = 0);
 
     /// @brief Mount a disk image to a drive letter.
     /// @param letter Drive letter ('A'-'Z')
@@ -107,43 +107,43 @@ public:
     /// @return true on success, false if already mounted or path invalid
     /// @pre letter is 'A'-'Z' (gsl_Expects)
     /// @pre path is not empty (gsl_Expects)
-    bool mountImage(char letter, const std::string& path, MountType type,
+    [[nodiscard]] bool mountImage(char letter, const std::string& path, MountType type,
                     uint32_t flags = 0);
 
     /// @brief Unmount a drive letter.
     /// @param letter Drive letter ('A'-'Z')
     /// @return true if drive was mounted and is now unmounted, false if not mounted
     /// @pre letter is 'A'-'Z' (gsl_Expects)
-    bool unmount(char letter);
+    [[nodiscard]] bool unmount(char letter);
 
     /// @brief Check if a drive letter is currently mounted.
     /// @param letter Drive letter ('A'-'Z')
     /// @return true if mounted
     /// @pre letter is 'A'-'Z' (gsl_Expects)
-    bool isMounted(char letter) const;
+    [[nodiscard]] bool isMounted(char letter) const;
 
     /// @brief Get mount information for a drive letter.
     /// @param letter Drive letter ('A'-'Z')
     /// @return MountInfo if mounted, std::nullopt otherwise
-    std::optional<MountInfo> getMountInfo(char letter) const;
+    [[nodiscard]] std::optional<MountInfo> getMountInfo(char letter) const;
 
     /// @brief Get the last error message (for UI display).
     /// @return Last error string, empty if no error
-    const std::string& lastError() const { return last_error_; }
+    [[nodiscard]] const std::string& lastError() const { return last_error_; }
 
 private:
     /// @brief Validate that a character is a valid drive letter ('A'-'Z').
-    static bool isValidLetter(char c) {
+    [[nodiscard]] static bool isValidLetter(char c) {
         return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
     }
 
     /// @brief Normalize a drive letter to uppercase.
-    static char normalizeLetter(char c) {
+    [[nodiscard]] static char normalizeLetter(char c) {
         return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
     }
 
     /// @brief Convert drive letter to array index (0-25).
-    static size_t letterToIndex(char c) {
+    [[nodiscard]] static size_t letterToIndex(char c) {
         return static_cast<size_t>(normalizeLetter(c) - 'A');
     }
 

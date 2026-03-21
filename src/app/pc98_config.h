@@ -31,17 +31,17 @@ struct PC98Config {
 
     /// Validate GDC clock and sound board settings.
     /// @return true if the configuration is usable.
-    bool isValid() const;
+    [[nodiscard]] bool isValid() const;
 
     /// Check whether a GDC clock string is valid ("default" or "5mhz").
     /// @param clock  The clock string to validate.
     /// @return true if recognised.
-    static bool isValidGDCClock(const std::string& clock);
+    [[nodiscard]] static bool isValidGDCClock(const std::string& clock);
 
     /// Check whether a sound board string is valid ("auto", "26k", or "86").
     /// @param board  The sound board string to validate.
     /// @return true if recognised.
-    static bool isValidSoundBoard(const std::string& board);
+    [[nodiscard]] static bool isValidSoundBoard(const std::string& board);
 };
 
 } // namespace legends

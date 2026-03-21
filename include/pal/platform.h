@@ -36,19 +36,19 @@ public:
     /// Initialize the platform with specified backend
     /// @param backend The backend to use
     /// @return Success, NotSupported (backend not available), AlreadyInitialized
-    static Result initialize(Backend backend);
+    [[nodiscard]] static Result initialize(Backend backend);
 
     /// Shutdown the platform and release all resources
     static void shutdown();
 
     /// Check if platform is initialized
-    static bool isInitialized();
+    [[nodiscard]] static bool isInitialized();
 
     /// Get the active backend
-    static Backend getActiveBackend();
+    [[nodiscard]] static Backend getActiveBackend();
 
     /// Get the active backend name as string
-    static const char* getBackendName();
+    [[nodiscard]] static const char* getBackendName();
 
     // ═══════════════════════════════════════════════════════════════════════
     // Factory Methods
@@ -56,28 +56,28 @@ public:
 
     /// Create a window instance
     /// @return New window, or nullptr if not initialized
-    static std::unique_ptr<IWindow> createWindow();
+    [[nodiscard]] static std::unique_ptr<IWindow> createWindow();
 
     /// Create a rendering context for a window
     /// @param window The window to create context for
     /// @return New context, or nullptr if not initialized
-    static std::unique_ptr<IContext> createContext(IWindow& window);
+    [[nodiscard]] static std::unique_ptr<IContext> createContext(IWindow& window);
 
     /// Create an audio sink
     /// @return New audio sink, or nullptr if not initialized
-    static std::unique_ptr<IAudioSink> createAudioSink();
+    [[nodiscard]] static std::unique_ptr<IAudioSink> createAudioSink();
 
     /// Create a host clock
     /// @return New host clock, or nullptr if not initialized
-    static std::unique_ptr<IHostClock> createHostClock();
+    [[nodiscard]] static std::unique_ptr<IHostClock> createHostClock();
 
     /// Create an input source
     /// @return New input source, or nullptr if not initialized
-    static std::unique_ptr<IInputSource> createInputSource();
+    [[nodiscard]] static std::unique_ptr<IInputSource> createInputSource();
 };
 
 /// Convert Backend to string for debugging
-constexpr const char* toString(Backend backend) noexcept {
+[[nodiscard]] constexpr const char* toString(Backend backend) noexcept {
     switch (backend) {
         case Backend::None:     return "None";
         case Backend::SDL2:     return "SDL2";

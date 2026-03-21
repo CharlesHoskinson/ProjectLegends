@@ -18,6 +18,6 @@ struct ATScancode {
 
 /// Translate SDL3 (USB HID) scancode to AT Set 1 scancode.
 /// Returns {0, false} if no mapping exists.
-ATScancode sdlScancodeToAT(uint16_t sdl_scancode);
+[[nodiscard]] ATScancode sdlScancodeToAT(uint16_t sdl_scancode);
 
 } // namespace legends

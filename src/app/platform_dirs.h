@@ -14,24 +14,24 @@ namespace legends {
 /// Windows:  %APPDATA%\ProjectLegends
 /// Linux:    $XDG_CONFIG_HOME/projectlegends (fallback ~/.config/projectlegends)
 /// macOS:    ~/Library/Preferences/ProjectLegends
-std::string getConfigDir();
+[[nodiscard]] std::string getConfigDir();
 
 /// Get the platform-specific data directory.
 /// Windows:  %APPDATA%\ProjectLegends
 /// Linux:    $XDG_DATA_HOME/projectlegends (fallback ~/.local/share/projectlegends)
 /// macOS:    ~/Library/Application Support/ProjectLegends
-std::string getDataDir();
+[[nodiscard]] std::string getDataDir();
 
 /// Get the platform-specific cache directory.
 /// Windows:  %LOCALAPPDATA%\ProjectLegends
 /// Linux:    $XDG_CACHE_HOME/projectlegends (fallback ~/.cache/projectlegends)
 /// macOS:    ~/Library/Caches/ProjectLegends
-std::string getCacheDir();
+[[nodiscard]] std::string getCacheDir();
 
 /// Get the platform-specific log directory.
 /// Windows:  %LOCALAPPDATA%\ProjectLegends\logs
 /// Linux:    $XDG_CACHE_HOME/projectlegends/logs (fallback ~/.cache/projectlegends/logs)
 /// macOS:    ~/Library/Caches/ProjectLegends/logs
-std::string getLogDir();
+[[nodiscard]] std::string getLogDir();
 
 } // namespace legends

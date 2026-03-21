@@ -30,6 +30,6 @@ constexpr uint8_t kHkModAlt    = kHkModLAlt | kHkModRAlt;
 
 /// Match a scancode + modifier state against the hotkey table.
 /// Returns {action, param, true} if a hotkey matched, or {*, *, false} otherwise.
-HotkeyResult matchHotkey(uint16_t scancode, uint8_t modifiers, bool mouse_captured);
+[[nodiscard]] HotkeyResult matchHotkey(uint16_t scancode, uint8_t modifiers, bool mouse_captured);
 
 } // namespace legends

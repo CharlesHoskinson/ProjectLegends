@@ -14,7 +14,7 @@ namespace legends {
 class PerfOverlay {
 public:
     void setEnabled(bool enabled) { enabled_ = enabled; }
-    bool isEnabled() const { return enabled_; }
+    [[nodiscard]] bool isEnabled() const { return enabled_; }
     void toggle() { enabled_ = !enabled_; }
 
     /// Call once per frame with the frame delta in microseconds.

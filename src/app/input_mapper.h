@@ -17,13 +17,13 @@ class InputMapper {
 public:
     /// Load custom remappings from file. Returns true if file was read.
     /// Missing file is not an error (returns false, no remaps loaded).
-    bool loadFromFile(const std::string& path);
+    [[nodiscard]] bool loadFromFile(const std::string& path);
 
     /// Save current remappings to file. Returns true on success.
-    bool saveToFile(const std::string& path) const;
+    [[nodiscard]] bool saveToFile(const std::string& path) const;
 
     /// Translate an SDL3 scancode to AT Set 1, applying any custom remap first.
-    ATScancode translate(uint16_t sdl_scancode) const;
+    [[nodiscard]] ATScancode translate(uint16_t sdl_scancode) const;
 
     /// Add a custom remap: sdl_from key will behave as sdl_to key.
     void remap(uint16_t sdl_from, uint16_t sdl_to);
@@ -35,7 +35,7 @@ public:
     void clearAll();
 
     /// Number of custom remaps currently active.
-    size_t customCount() const;
+    [[nodiscard]] size_t customCount() const;
 
 private:
     std::unordered_map<uint16_t, uint16_t> remaps_;

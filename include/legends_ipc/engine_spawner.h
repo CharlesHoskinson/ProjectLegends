@@ -27,10 +27,10 @@ public:
     EngineProcess(EngineProcess&& other) noexcept;
     EngineProcess& operator=(EngineProcess&& other) noexcept;
 
-    bool is_alive() const;
-    int wait_for_exit(uint32_t timeout_ms = 5000);
+    [[nodiscard]] bool is_alive() const;
+    [[nodiscard]] int wait_for_exit(uint32_t timeout_ms = 5000);
     void terminate();
-    uint32_t pid() const { return pid_; }
+    [[nodiscard]] uint32_t pid() const { return pid_; }
 
 private:
     friend class EngineSpawner;
@@ -45,7 +45,7 @@ private:
 
 class EngineSpawner {
 public:
-    static std::expected<EngineProcess, IpcError>
+    [[nodiscard]] static std::expected<EngineProcess, IpcError>
     spawn(const SpawnConfig& config);
 };
 

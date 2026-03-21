@@ -51,25 +51,25 @@ public:
     void close();
 
     /// @brief Check if the browser is currently open.
-    bool isOpen() const { return open_; }
+    [[nodiscard]] bool isOpen() const { return open_; }
 
     /// @brief Get the current mode (Save or Load).
     /// @pre isOpen() must be true.
-    Mode mode() const;
+    [[nodiscard]] Mode mode() const;
 
     /// @brief Get the currently selected slot number (1-based).
     /// @pre isOpen() must be true.
-    int selectedSlot() const;
+    [[nodiscard]] int selectedSlot() const;
 
     /// @brief Handle a key event. Returns true if consumed.
     /// @param scancode SDL3 scancode.
     /// @param down     True for key-down, false for key-up.
-    bool handleKey(uint16_t scancode, bool down);
+    [[nodiscard]] bool handleKey(uint16_t scancode, bool down);
 
     /// @brief Handle a mouse click. Returns true if consumed.
     /// @param x Mouse X coordinate in pixels.
     /// @param y Mouse Y coordinate in pixels.
-    bool handleMouseClick(int32_t x, int32_t y);
+    [[nodiscard]] bool handleMouseClick(int32_t x, int32_t y);
 
     /// @brief Render the browser overlay into an RGB24 buffer.
     /// @param rgb   Destination RGB24 pixel buffer (must not be null when open).

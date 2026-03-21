@@ -24,10 +24,10 @@ public:
 
     void open();
     void close();
-    bool isOpen() const { return open_; }
+    [[nodiscard]] bool isOpen() const { return open_; }
 
     /// Handle keyboard input. Returns true if consumed.
-    bool handleKey(uint16_t scancode, bool down, uint8_t character = 0);
+    [[nodiscard]] bool handleKey(uint16_t scancode, bool down, uint8_t character = 0);
 
     /// Handle text character input.
     void handleTextInput(char ch);
@@ -45,23 +45,23 @@ public:
     void clearHistory();
 
     /// Get current input text.
-    const std::string& inputText() const { return input_text_; }
+    [[nodiscard]] const std::string& inputText() const { return input_text_; }
 
     /// Get chat history.
-    const std::vector<AIChatMessage>& history() const { return history_; }
+    [[nodiscard]] const std::vector<AIChatMessage>& history() const { return history_; }
 
     /// Get number of messages.
-    size_t messageCount() const { return history_.size(); }
+    [[nodiscard]] size_t messageCount() const { return history_.size(); }
 
     /// Render the AI panel overlay into an RGB24 buffer.
     void render(uint8_t* rgb_buffer, uint16_t width, uint16_t height,
                 uint32_t pitch = 0) const;
 
     /// Get panel width as fraction of screen (0.0-1.0).
-    float panelWidthFraction() const { return panel_width_fraction_; }
+    [[nodiscard]] float panelWidthFraction() const { return panel_width_fraction_; }
 
     /// Is the panel waiting for a response?
-    bool isWaiting() const { return waiting_; }
+    [[nodiscard]] bool isWaiting() const { return waiting_; }
 
     void setWaiting(bool w) { waiting_ = w; }
 

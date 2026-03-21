@@ -25,7 +25,7 @@ struct MenuItem {
     MenuItem(std::string lbl, int act, int p = 0)
         : label(std::move(lbl)), action_id(act), param(p), separator(false) {}
 
-    static MenuItem Separator() { return MenuItem{}; }
+    [[nodiscard]] static MenuItem Separator() { return MenuItem{}; }
 };
 
 struct Menu {
@@ -39,13 +39,13 @@ public:
 
     void open();
     void close();
-    bool isOpen() const { return open_; }
+    [[nodiscard]] bool isOpen() const { return open_; }
 
     /// Handle a key press. Returns true if consumed.
-    bool handleKey(uint16_t scancode, bool down);
+    [[nodiscard]] bool handleKey(uint16_t scancode, bool down);
 
     /// Handle a mouse click. Returns true if consumed.
-    bool handleMouseClick(int32_t x, int32_t y);
+    [[nodiscard]] bool handleMouseClick(int32_t x, int32_t y);
 
     /// Render the menu overlay into an RGB24 buffer.
     /// pitch = row stride in bytes. 0 means width * 3 (tightly packed RGB24).
@@ -55,20 +55,20 @@ public:
     // ── Bar Mode (REQ-MENU-001) ─────────────────────────────────────────
 
     /// Check if the persistent menu bar is visible (hidden in fullscreen).
-    bool isBarVisible() const { return !fullscreen_; }
+    [[nodiscard]] bool isBarVisible() const { return !fullscreen_; }
 
     /// Set fullscreen state (hides/shows the persistent bar).
     void setFullscreen(bool fs) { fullscreen_ = fs; }
 
     /// Check if a dropdown panel is currently open (bar mode).
-    bool isDropdownOpen() const { return dropdown_open_; }
+    [[nodiscard]] bool isDropdownOpen() const { return dropdown_open_; }
 
     /// Get the currently selected menu index.
-    int selectedMenuIndex() const { return selected_menu_; }
+    [[nodiscard]] int selectedMenuIndex() const { return selected_menu_; }
 
     /// Handle a mouse click in bar mode (called even when overlay is not open).
     /// Returns true if consumed.
-    bool handleBarClick(int32_t x, int32_t y);
+    [[nodiscard]] bool handleBarClick(int32_t x, int32_t y);
 
     /// Render the persistent menu bar (no full-screen darken).
     /// pitch = row stride in bytes. 0 means width * 3.

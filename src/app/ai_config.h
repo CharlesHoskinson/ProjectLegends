@@ -26,10 +26,10 @@ struct AIConfig {
     void loadFrom(const ConfigParser& config);
 
     /// Resolve API key from environment variable.
-    std::string resolveApiKey() const;
+    [[nodiscard]] std::string resolveApiKey() const;
 
     /// Validate configuration.
-    bool isValid() const;
+    [[nodiscard]] bool isValid() const;
 };
 
 } // namespace legends

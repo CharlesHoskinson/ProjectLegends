@@ -12,14 +12,14 @@
 namespace legends {
 
 /// Convert CP437 character to UTF-8 string.
-std::string cp437ToUtf8(uint8_t cp437_char);
+[[nodiscard]] std::string cp437ToUtf8(uint8_t cp437_char);
 
 /// Capture current screen text as UTF-8 context string.
 /// Truncates to max_chars if needed.
-std::string captureScreenContext(legends_handle handle, uint32_t max_chars = 8000);
+[[nodiscard]] std::string captureScreenContext(legends_handle handle, uint32_t max_chars = 8000);
 
 /// Format screen text into a structured context prompt.
-std::string formatScreenContext(const std::string& screen_text,
+[[nodiscard]] std::string formatScreenContext(const std::string& screen_text,
                                 uint8_t cursor_x, uint8_t cursor_y,
                                 uint8_t columns, uint8_t rows);
 

@@ -11,14 +11,14 @@
 namespace legends {
 
 /// Get the captures directory: <getDataDir()>/captures
-std::string getCaptureDir();
+[[nodiscard]] std::string getCaptureDir();
 
 /// Generate a unique capture filename: capture_YYYYMMDD_HHMMSS_NNN.png
-std::string generateCaptureFilename();
+[[nodiscard]] std::string generateCaptureFilename();
 
 /// Write an RGB24 buffer to a PNG file.
 /// Returns true on success.
-bool writeScreenshotPNG(const std::string& path,
+[[nodiscard]] bool writeScreenshotPNG(const std::string& path,
                         const uint8_t* rgb_data,
                         uint16_t width, uint16_t height);
 

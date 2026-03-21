@@ -33,43 +33,43 @@ public:
     static constexpr uint16_t kHeaderVersion = 1;
 
     /// Get the saves directory: <getDataDir()>/saves
-    static std::string getSaveDir();
+    [[nodiscard]] static std::string getSaveDir();
 
     /// Get the file path for a save slot (1-based).
-    static std::string slotPath(int slot);
+    [[nodiscard]] static std::string slotPath(int slot);
 
     /// Get the file path for a save slot thumbnail (1-based).
-    static std::string thumbnailPath(int slot);
+    [[nodiscard]] static std::string thumbnailPath(int slot);
 
     /// Save engine state to the given slot with optional RGB24 thumbnail.
     /// Returns true on success.
-    bool saveToSlot(legends_handle engine, int slot,
+    [[nodiscard]] bool saveToSlot(legends_handle engine, int slot,
                     const uint8_t* rgb_thumb, uint16_t w, uint16_t h);
 
     /// Load engine state from the given slot.
     /// Returns true on success.
-    bool loadFromSlot(legends_handle engine, int slot);
+    [[nodiscard]] bool loadFromSlot(legends_handle engine, int slot);
 
     /// Check if a slot has a saved state file.
-    bool isSlotOccupied(int slot) const;
+    [[nodiscard]] bool isSlotOccupied(int slot) const;
 
     /// Last error message (empty on success).
-    const std::string& lastError() const { return last_error_; }
+    [[nodiscard]] const std::string& lastError() const { return last_error_; }
 
     /// Compute CRC-32 of a data buffer (uses zlib crc32).
-    static uint32_t computeCRC32(const void* data, size_t size);
+    [[nodiscard]] static uint32_t computeCRC32(const void* data, size_t size);
 
     /// REQ-UX-010: Check if a crash autosave exists.
-    bool hasAutosave() const { return isSlotOccupied(kAutosaveSlot); }
+    [[nodiscard]] bool hasAutosave() const { return isSlotOccupied(kAutosaveSlot); }
 
     /// REQ-UX-010: Load the crash autosave and delete the file.
-    bool recoverAutosave(legends_handle engine);
+    [[nodiscard]] bool recoverAutosave(legends_handle engine);
 
 private:
     std::string last_error_;
 
     /// Write data to path atomically (write .tmp then rename).
-    static bool atomicWrite(const std::string& path, const void* data, size_t size);
+    [[nodiscard]] static bool atomicWrite(const std::string& path, const void* data, size_t size);
 };
 
 } // namespace legends

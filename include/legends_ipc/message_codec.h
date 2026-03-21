@@ -23,7 +23,7 @@ public:
 
     // Encode a header + payload into a contiguous wire buffer.
     // Returns header bytes followed by payload bytes.
-    static std::vector<uint8_t> encode(
+    [[nodiscard]] static std::vector<uint8_t> encode(
         MsgType msg_type,
         uint32_t sequence_id,
         std::span<const uint8_t> payload);
@@ -35,13 +35,13 @@ public:
     // Returns the message if enough data is available, or an error.
     // Returns IpcError::BufferTooSmall if not enough data yet (not a real error,
     // just means "call feed() more").
-    std::expected<DecodedMessage, IpcError> try_decode();
+    [[nodiscard]] std::expected<DecodedMessage, IpcError> try_decode();
 
     // Reset internal buffer state (e.g. after error).
     void reset();
 
     // How many bytes are buffered but not yet decoded.
-    size_t buffered_bytes() const { return buffer_.size(); }
+    [[nodiscard]] size_t buffered_bytes() const { return buffer_.size(); }
 
 private:
     std::vector<uint8_t> buffer_;

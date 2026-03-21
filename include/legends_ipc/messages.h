@@ -25,7 +25,7 @@ struct Handshake {
 
     static constexpr size_t serialized_size = 16;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<Handshake, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<Handshake, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct HandshakeAck {
@@ -36,7 +36,7 @@ struct HandshakeAck {
 
     static constexpr size_t serialized_size = 12;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<HandshakeAck, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<HandshakeAck, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct ShutdownMsg {
@@ -45,7 +45,7 @@ struct ShutdownMsg {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<ShutdownMsg, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<ShutdownMsg, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct ShutdownAckMsg {
@@ -54,7 +54,7 @@ struct ShutdownAckMsg {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<ShutdownAckMsg, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<ShutdownAckMsg, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct HeartbeatMsg {
@@ -63,7 +63,7 @@ struct HeartbeatMsg {
 
     static constexpr size_t serialized_size = 8;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<HeartbeatMsg, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<HeartbeatMsg, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct HeartbeatAckMsg {
@@ -72,7 +72,7 @@ struct HeartbeatAckMsg {
 
     static constexpr size_t serialized_size = 8;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<HeartbeatAckMsg, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<HeartbeatAckMsg, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct ErrorResponseMsg {
@@ -81,7 +81,7 @@ struct ErrorResponseMsg {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<ErrorResponseMsg, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<ErrorResponseMsg, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 // ── Lifecycle messages ──────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ struct GetApiVersionReq {
     static constexpr MsgType type = MsgType::GetApiVersionReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<GetApiVersionReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<GetApiVersionReq, IpcError> deserialize(std::span<const uint8_t>) {
         return GetApiVersionReq{};
     }
 };
@@ -104,7 +104,7 @@ struct GetApiVersionResp {
 
     static constexpr size_t serialized_size = 16;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<GetApiVersionResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<GetApiVersionResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct CreateReq {
@@ -121,7 +121,7 @@ struct CreateReq {
 
     static constexpr size_t serialized_size = 20;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<CreateReq, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<CreateReq, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct CreateResp {
@@ -130,14 +130,14 @@ struct CreateResp {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<CreateResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<CreateResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct DestroyReq {
     static constexpr MsgType type = MsgType::DestroyReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<DestroyReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<DestroyReq, IpcError> deserialize(std::span<const uint8_t>) {
         return DestroyReq{};
     }
 };
@@ -148,14 +148,14 @@ struct DestroyResp {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<DestroyResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<DestroyResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct ResetReq {
     static constexpr MsgType type = MsgType::ResetReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<ResetReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<ResetReq, IpcError> deserialize(std::span<const uint8_t>) {
         return ResetReq{};
     }
 };
@@ -166,7 +166,7 @@ struct ResetResp {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<ResetResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<ResetResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 // ── Stepping messages ───────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ struct StepMsReq {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<StepMsReq, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<StepMsReq, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct StepMsResp {
@@ -190,7 +190,7 @@ struct StepMsResp {
 
     static constexpr size_t serialized_size = 28;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<StepMsResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<StepMsResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct StepCyclesReq {
@@ -199,7 +199,7 @@ struct StepCyclesReq {
 
     static constexpr size_t serialized_size = 8;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<StepCyclesReq, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<StepCyclesReq, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct StepCyclesResp {
@@ -212,14 +212,14 @@ struct StepCyclesResp {
 
     static constexpr size_t serialized_size = 28;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<StepCyclesResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<StepCyclesResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct GetEmuTimeReq {
     static constexpr MsgType type = MsgType::GetEmuTimeReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<GetEmuTimeReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<GetEmuTimeReq, IpcError> deserialize(std::span<const uint8_t>) {
         return GetEmuTimeReq{};
     }
 };
@@ -231,14 +231,14 @@ struct GetEmuTimeResp {
 
     static constexpr size_t serialized_size = 12;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<GetEmuTimeResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<GetEmuTimeResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct GetTotalCyclesReq {
     static constexpr MsgType type = MsgType::GetTotalCyclesReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<GetTotalCyclesReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<GetTotalCyclesReq, IpcError> deserialize(std::span<const uint8_t>) {
         return GetTotalCyclesReq{};
     }
 };
@@ -250,7 +250,7 @@ struct GetTotalCyclesResp {
 
     static constexpr size_t serialized_size = 12;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<GetTotalCyclesResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<GetTotalCyclesResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 // ── Input messages ──────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ struct KeyEventReq {
 
     static constexpr size_t serialized_size = 2;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<KeyEventReq, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<KeyEventReq, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct KeyEventResp {
@@ -271,7 +271,7 @@ struct KeyEventResp {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<KeyEventResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<KeyEventResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct MouseEventReq {
@@ -282,7 +282,7 @@ struct MouseEventReq {
 
     static constexpr size_t serialized_size = 5;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<MouseEventReq, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<MouseEventReq, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct MouseEventResp {
@@ -291,7 +291,7 @@ struct MouseEventResp {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<MouseEventResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<MouseEventResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 // ── Save/Load messages ──────────────────────────────────────────────────────
@@ -300,7 +300,7 @@ struct SaveStateReq {
     static constexpr MsgType type = MsgType::SaveStateReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<SaveStateReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<SaveStateReq, IpcError> deserialize(std::span<const uint8_t>) {
         return SaveStateReq{};
     }
 };
@@ -313,7 +313,7 @@ struct SaveStateResp {
 
     static constexpr size_t serialized_size = 8; // fixed header part
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<SaveStateResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<SaveStateResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct LoadStateReq {
@@ -323,7 +323,7 @@ struct LoadStateReq {
 
     static constexpr size_t serialized_size = 4; // fixed header part
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<LoadStateReq, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<LoadStateReq, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct LoadStateResp {
@@ -332,14 +332,14 @@ struct LoadStateResp {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<LoadStateResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<LoadStateResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct GetStateHashReq {
     static constexpr MsgType type = MsgType::GetStateHashReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<GetStateHashReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<GetStateHashReq, IpcError> deserialize(std::span<const uint8_t>) {
         return GetStateHashReq{};
     }
 };
@@ -351,7 +351,7 @@ struct GetStateHashResp {
 
     static constexpr size_t serialized_size = 36;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<GetStateHashResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<GetStateHashResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 // ── String-carrying messages (common pattern) ───────────────────────────────
@@ -362,9 +362,9 @@ struct MountDriveReq {
     uint32_t flags        = 0;
     std::string host_path;
 
-    size_t serialized_size_dynamic() const { return 6 + host_path.size(); }
+    [[nodiscard]] size_t serialized_size_dynamic() const { return 6 + host_path.size(); }
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<MountDriveReq, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<MountDriveReq, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct MountDriveResp {
@@ -373,7 +373,7 @@ struct MountDriveResp {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<MountDriveResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<MountDriveResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct UnmountDriveReq {
@@ -382,7 +382,7 @@ struct UnmountDriveReq {
 
     static constexpr size_t serialized_size = 1;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<UnmountDriveReq, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<UnmountDriveReq, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct UnmountDriveResp {
@@ -391,7 +391,7 @@ struct UnmountDriveResp {
 
     static constexpr size_t serialized_size = 4;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<UnmountDriveResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<UnmountDriveResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 // ── Frame dirty / cursor ────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ struct IsFrameDirtyReq {
     static constexpr MsgType type = MsgType::IsFrameDirtyReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<IsFrameDirtyReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<IsFrameDirtyReq, IpcError> deserialize(std::span<const uint8_t>) {
         return IsFrameDirtyReq{};
     }
 };
@@ -412,14 +412,14 @@ struct IsFrameDirtyResp {
 
     static constexpr size_t serialized_size = 5;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<IsFrameDirtyResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<IsFrameDirtyResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 struct GetCursorReq {
     static constexpr MsgType type = MsgType::GetCursorReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<GetCursorReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<GetCursorReq, IpcError> deserialize(std::span<const uint8_t>) {
         return GetCursorReq{};
     }
 };
@@ -433,7 +433,7 @@ struct GetCursorResp {
 
     static constexpr size_t serialized_size = 7;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<GetCursorResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<GetCursorResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 // ── Audio active ────────────────────────────────────────────────────────────
@@ -442,7 +442,7 @@ struct IsAudioActiveReq {
     static constexpr MsgType type = MsgType::IsAudioActiveReq;
     static constexpr size_t serialized_size = 0;
     void serialize(std::span<uint8_t>) const {}
-    static std::expected<IsAudioActiveReq, IpcError> deserialize(std::span<const uint8_t>) {
+    [[nodiscard]] static std::expected<IsAudioActiveReq, IpcError> deserialize(std::span<const uint8_t>) {
         return IsAudioActiveReq{};
     }
 };
@@ -454,7 +454,7 @@ struct IsAudioActiveResp {
 
     static constexpr size_t serialized_size = 5;
     void serialize(std::span<uint8_t> buf) const;
-    static std::expected<IsAudioActiveResp, IpcError> deserialize(std::span<const uint8_t> buf);
+    [[nodiscard]] static std::expected<IsAudioActiveResp, IpcError> deserialize(std::span<const uint8_t> buf);
 };
 
 } // namespace legends_ipc::msg

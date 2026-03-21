@@ -36,7 +36,7 @@ public:
     static void applyVolume(int16_t* buf, size_t count, float volume);
 
     /// Clamp an int32_t to int16_t range.
-    static int16_t clampToInt16(int32_t value);
+    [[nodiscard]] static int16_t clampToInt16(int32_t value);
 
     /// Mix N sources into output.
     /// @param out     Output buffer

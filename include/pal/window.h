@@ -44,13 +44,13 @@ public:
 
     /// Create window with given configuration
     /// @return Success, InvalidParameter (bad dimensions), AlreadyExists
-    virtual Result create(const WindowConfig& config) = 0;
+    [[nodiscard]] virtual Result create(const WindowConfig& config) = 0;
 
     /// Destroy window and release resources (safe to call if not created)
     virtual void destroy() = 0;
 
     /// Check if window has been created
-    virtual bool isCreated() const = 0;
+    [[nodiscard]] virtual bool isCreated() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Properties
@@ -58,18 +58,18 @@ public:
 
     /// Resize window to new dimensions
     /// @return Success, InvalidParameter (zero dimensions), NotInitialized
-    virtual Result resize(uint32_t width, uint32_t height) = 0;
+    [[nodiscard]] virtual Result resize(uint32_t width, uint32_t height) = 0;
 
     /// Enter or exit fullscreen mode
     /// @return Success, NotSupported, NotInitialized
-    virtual Result setFullscreen(bool fullscreen) = 0;
+    [[nodiscard]] virtual Result setFullscreen(bool fullscreen) = 0;
 
     /// Set window title
     /// @return Success, InvalidParameter (null title), NotInitialized
-    virtual Result setTitle(const char* title) = 0;
+    [[nodiscard]] virtual Result setTitle(const char* title) = 0;
 
     /// Check if window is in fullscreen mode
-    virtual bool isFullscreen() const = 0;
+    [[nodiscard]] virtual bool isFullscreen() const = 0;
 
     /// Get current window size
     virtual void getSize(uint32_t& width, uint32_t& height) const = 0;
@@ -79,11 +79,11 @@ public:
     // ═══════════════════════════════════════════════════════════════════════
 
     /// Get number of available displays (always >= 1)
-    virtual uint32_t getDisplayCount() const = 0;
+    [[nodiscard]] virtual uint32_t getDisplayCount() const = 0;
 
     /// Get information about a display
     /// @return Success, InvalidParameter (bad index)
-    virtual Result getDisplayInfo(uint32_t index, DisplayInfo& info) const = 0;
+    [[nodiscard]] virtual Result getDisplayInfo(uint32_t index, DisplayInfo& info) const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Presentation
@@ -91,11 +91,11 @@ public:
 
     /// Present the current frame (swap buffers / flip surface)
     /// @return Success, NotInitialized
-    virtual Result present() = 0;
+    [[nodiscard]] virtual Result present() = 0;
 
     /// Enable or disable vertical sync
     /// @return Success, NotSupported
-    virtual Result setVsync(bool vsync) = 0;
+    [[nodiscard]] virtual Result setVsync(bool vsync) = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Native Handle
@@ -103,14 +103,14 @@ public:
 
     /// Get native window handle (SDL_Window*, HWND, etc.)
     /// @return Non-null if created, nullptr otherwise
-    virtual void* getNativeHandle() const = 0;
+    [[nodiscard]] virtual void* getNativeHandle() const = 0;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Clipboard
     // ═══════════════════════════════════════════════════════════════════════
 
     /// Get current clipboard text (empty string if unavailable)
-    virtual std::string getClipboardText() const { return {}; }
+    [[nodiscard]] virtual std::string getClipboardText() const { return {}; }
 };
 
 } // namespace pal
