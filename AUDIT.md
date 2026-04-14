@@ -699,7 +699,7 @@ The roadmap below integrates audit findings, EARS requirements, and TLA+ conform
 |---|------|---------|-----|-----------------|--------|
 | 8 | Extend `in_step` guard to all mutating APIs | M1 | REQ-EX-004 | ReentrancyMinimal | Medium |
 | 9 | Sync framebuffer from engine (replace synthetic test pattern) | H8 | REQ-CP-001 | CaptureMinimal | Medium |
-| 10 | Resolve dual runtime path divergence (`dosbox_step` vs `dosbox_lib_step_cycles`) | M10 | REQ-EX-001 | — | Medium |
+| 10 | ~~Resolve dual runtime path divergence (`dosbox_step` vs `dosbox_lib_step_cycles`)~~ **RESOLVED** (REQ-LC-005) | M10 | REQ-EX-001 | — | Medium |
 | 11 | Guard `dosbox_lib_get_context_ptr()` return in `legends_step_cycles` | M11 | REQ-ER-003 | ErrorModel | Small |
 | 12 | Exception-safe callback invocation at C ABI boundary | M6 | REQ-ER-004 | — | Small |
 

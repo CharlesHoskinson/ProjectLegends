@@ -246,9 +246,30 @@ struct EngineStateCpu {
     uint8_t nmi_active;          ///< CPU_NMI_active
     uint8_t nmi_pending;         ///< CPU_NMI_pending
     uint8_t halted;              ///< CPU in HLT state
-    uint8_t _pad[6];
+
+    // CPU General Purpose Registers (REQ-SR-002)
+    uint32_t reg_eax = 0;
+    uint32_t reg_ecx = 0;
+    uint32_t reg_edx = 0;
+    uint32_t reg_ebx = 0;
+    uint32_t reg_esp = 0;
+    uint32_t reg_ebp = 0;
+    uint32_t reg_esi = 0;
+    uint32_t reg_edi = 0;
+    uint32_t reg_eip = 0;
+    uint32_t reg_eflags = 0;
+
+    // Segment Registers
+    uint16_t seg_cs = 0;
+    uint16_t seg_ds = 0;
+    uint16_t seg_es = 0;
+    uint16_t seg_fs = 0;
+    uint16_t seg_gs = 0;
+    uint16_t seg_ss = 0;
+
+    uint8_t _pad[10];
 };
-static_assert(sizeof(EngineStateCpu) == 96, "EngineStateCpu must be 96 bytes");
+static_assert(sizeof(EngineStateCpu) == 152, "EngineStateCpu must be 152 bytes");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Memory State Section [V2]
@@ -372,7 +393,7 @@ static_assert(sizeof(EngineStateDos) == 20, "EngineStateDos must be 20 bytes");
  * @brief V5 extension header, appended after V4 data at offset ENGINE_STATE_SIZE_V4.
  *
  * V4 loaders reject V5 data via version check. V5 loaders read V4 data
- * normally, then read this extension header at offset 680.
+ * normally, then read this extension header at offset 736.
  */
 struct EngineStateV5ExtHeader {
     uint32_t ext_magic;          ///< ENGINE_STATE_V5_EXT_MAGIC
@@ -418,7 +439,7 @@ constexpr uint16_t V5_SUBTAG_VRAM    = 4;  ///< VGA VRAM contents (zero-RLE comp
 constexpr uint16_t V5_BLOCK_FLAG_COMPRESSED = 0x0001;  ///< Block is zero-RLE compressed
 
 /**
- * @brief V5 sub-block directory header, placed at offset 792 (after CpuGpr).
+ * @brief V5 sub-block directory header, placed at offset 848 (after CpuGpr).
  *
  * Contains magic and entry count. Unknown tags are skipped via offset+size.
  */
@@ -614,7 +635,7 @@ constexpr size_t ENGINE_STATE_SIZE_V3 =
     sizeof(EngineStateCpu) +
     sizeof(EngineStateMemory);
 
-static_assert(ENGINE_STATE_SIZE_V3 == 544, "V3 size must be 544 bytes");
+static_assert(ENGINE_STATE_SIZE_V3 == 600, "V3 size must be 600 bytes");
 
 /**
  * @brief Total size for V4 engine state (backward compat baseline).
@@ -630,7 +651,7 @@ constexpr size_t ENGINE_STATE_SIZE_V4 =
     sizeof(EngineStateVga) +
     sizeof(EngineStateDos);
 
-static_assert(ENGINE_STATE_SIZE_V4 == 680, "ENGINE_STATE_SIZE_V4 must be 680 bytes");
+static_assert(ENGINE_STATE_SIZE_V4 == 736, "ENGINE_STATE_SIZE_V4 must be 736 bytes");
 
 /**
  * @brief Minimum V5 state size (V4 + GPR extension, no sub-block blobs).
@@ -643,7 +664,7 @@ constexpr size_t ENGINE_STATE_SIZE_V5_BASE =
     sizeof(EngineStateV5ExtHeader) +
     sizeof(EngineStateCpuGpr);
 
-static_assert(ENGINE_STATE_SIZE_V5_BASE == 792, "ENGINE_STATE_SIZE_V5_BASE must be 792 bytes");
+static_assert(ENGINE_STATE_SIZE_V5_BASE == 848, "ENGINE_STATE_SIZE_V5_BASE must be 848 bytes");
 
 /// @deprecated Use ENGINE_STATE_SIZE_V5_BASE for compile-time minimum.
 /// Actual V5 size is dynamic — query via dosbox_lib_save_state(nullptr).

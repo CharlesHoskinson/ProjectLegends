@@ -134,6 +134,7 @@ void CpuState::hash_into(HashBuilder& builder) const {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 void MixerState::hash_into(HashBuilder& builder) const {
+    std::lock_guard<std::mutex> lock(mutex);
     // Hash determinism-relevant mixer state
     // Note: We do NOT hash start_pic_time as it's wall-clock dependent
 
@@ -970,42 +971,6 @@ int dosbox_init(dosbox_handle_t handle) {
     return DOSBOX_OK;
 }
 
-// DEPRECATED(M10): Routes through MachineContext::step() which is a counter-
-// incrementing stub. Production code uses dosbox_lib_step_cycles() instead.
-// Only called from test_dosbox_context.cpp. Will be removed in a future pass.
-int dosbox_step(dosbox_handle_t handle, uint32_t ms) {
-    auto h = dosbox::InstanceHandle::from_opaque(handle);
-    auto* ctx = dosbox::get_context(h);
-    if (!ctx) {
-        return DOSBOX_ERR_INVALID_ARGUMENT;
-    }
-
-    auto& registry = dosbox::get_instance_registry();
-
-    // Check state allows running
-    auto state = registry.get_state(h);
-    if (!state || (state.value() != dosbox::InstanceState::Initialized &&
-                   state.value() != dosbox::InstanceState::Running &&
-                   state.value() != dosbox::InstanceState::Paused)) {
-        return DOSBOX_ERR_INVALID_STATE;
-    }
-
-    // Transition to Running if not already
-    if (state.value() != dosbox::InstanceState::Running) {
-        registry.transition(h, dosbox::InstanceState::Running);
-    }
-
-    // Set current context for transitional code
-    dosbox::ContextGuard guard(*ctx);
-
-    auto result = ctx->step(ms);
-    if (!result.has_value()) {
-        return static_cast<int>(result.error().code());
-    }
-
-    return DOSBOX_OK;
-}
-
 int dosbox_pause(dosbox_handle_t handle) {
     auto h = dosbox::InstanceHandle::from_opaque(handle);
     auto& registry = dosbox::get_instance_registry();
@@ -1173,7 +1138,10 @@ Result<void> DOSBoxContext::initialize() {
 
     // Apply configuration
     cpu_state.cycle_limit = config_.cpu_cycles;
-    mixer.enabled = config_.sound_enabled;
+    {
+        std::lock_guard<std::mutex> lock(mixer.mutex);
+        mixer.enabled = config_.sound_enabled;
+    }
 
     // TODO: In future PRs, this will initialize actual DOSBox subsystems
     // For now, we just set the initialized flag
@@ -1182,27 +1150,6 @@ Result<void> DOSBoxContext::initialize() {
     stop_requested_ = false;
 
     return Ok();
-}
-
-// DEPRECATED(M10): Counter-incrementing stub — does not execute real CPU
-// instructions. Production code uses dosbox::execute_cycles() via cpu_bridge.cpp.
-Result<uint32_t> DOSBoxContext::step(uint32_t ms) {
-    if (!initialized_) {
-        return Err(Error(ErrorCode::InvalidState, "Not initialized"));
-    }
-
-    if (stop_requested_.load(std::memory_order_acquire)) {
-        return Err(Error(ErrorCode::InvalidState, "Stop requested"));
-    }
-
-    uint32_t cycles = ms * config_.cpu_cycles;
-
-    // No real CPU execution — counter increment only (see deprecation note)
-    timing.total_cycles += cycles;
-    timing.virtual_ticks_ms += ms;
-    cpu_state.cycles += cycles;
-
-    return Ok(cycles);
 }
 
 Result<void> DOSBoxContext::pause() {
@@ -1271,7 +1218,10 @@ Result<void> DOSBoxContext::reset() {
 
     // Reapply configuration
     cpu_state.cycle_limit = config_.cpu_cycles;
-    mixer.enabled = config_.sound_enabled;
+    {
+        std::lock_guard<std::mutex> lock(mixer.mutex);
+        mixer.enabled = config_.sound_enabled;
+    }
 
     stop_requested_ = false;
 

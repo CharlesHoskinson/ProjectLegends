@@ -217,8 +217,8 @@ TEST(MultiInstanceSmoke, IndependentHashesDiffer) {
     ASSERT_TRUE(hashB0.has_value());
     EXPECT_EQ(hashA0.value(), hashB0.value());
 
-    // Step A forward, leave B alone
-    ctxA.step(100);
+    // Modify A's timing directly, leave B alone
+    ctxA.timing.total_cycles += 300000;
 
     auto hashA1 = get_state_hash(&ctxA, HashMode::Fast);
     auto hashB1 = get_state_hash(&ctxB, HashMode::Fast);
@@ -243,7 +243,6 @@ TEST(MultiInstanceSmoke, HashStability) {
     skip_if_no_context();
     DOSBoxContext ctx(ContextConfig::minimal());
     ctx.initialize();
-    ctx.step(50);
 
     auto hash1 = get_state_hash(&ctx, HashMode::Fast);
     auto hash2 = get_state_hash(&ctx, HashMode::Fast);

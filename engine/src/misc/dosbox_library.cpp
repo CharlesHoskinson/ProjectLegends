@@ -25,6 +25,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <filesystem>
 
 #include <atomic>
 #include <memory>
@@ -573,7 +574,7 @@ dosbox_lib_error_t dosbox_lib_save_state(
     if (has_vga_hw) sub_block_count += 2;  // VGA_REG + VRAM
 
     // Calculate total size needed (dynamic)
-    size_t total = dosbox::ENGINE_STATE_SIZE_V5_BASE;  // 792 base
+    size_t total = dosbox::ENGINE_STATE_SIZE_V5_BASE;  // 848 base
 
     if (sub_block_count > 0) {
         total += sizeof(dosbox::V5SubBlockDir);                         // 8
@@ -739,6 +740,33 @@ dosbox_lib_error_t dosbox_lib_save_state(
     cpu.nmi_active = ctx->cpu_state.nmi_active ? 1 : 0;
     cpu.nmi_pending = ctx->cpu_state.nmi_pending ? 1 : 0;
     cpu.halted = ctx->cpu_state.halted ? 1 : 0;
+    // CPU GPR state (REQ-SR-002) — snapshot x86 register file into EngineStateCpu
+    {
+        uint32_t gpr[8] = {};
+        uint32_t eip = 0, eflags = 0;
+        uint16_t seg_val[6] = {};
+        uint32_t seg_phys[6] = {};
+        uint32_t seg_limit[6] = {};
+        dosbox::snapshot_cpu_gprs(gpr, eip, eflags, seg_val, seg_phys, seg_limit);
+        // GPR order: EAX(0), ECX(1), EDX(2), EBX(3), ESP(4), EBP(5), ESI(6), EDI(7)
+        cpu.reg_eax = gpr[0];
+        cpu.reg_ecx = gpr[1];
+        cpu.reg_edx = gpr[2];
+        cpu.reg_ebx = gpr[3];
+        cpu.reg_esp = gpr[4];
+        cpu.reg_ebp = gpr[5];
+        cpu.reg_esi = gpr[6];
+        cpu.reg_edi = gpr[7];
+        cpu.reg_eip    = eip;
+        cpu.reg_eflags = eflags;
+        // Segment order: ES(0), CS(1), SS(2), DS(3), FS(4), GS(5)
+        cpu.seg_es = seg_val[0];
+        cpu.seg_cs = seg_val[1];
+        cpu.seg_ss = seg_val[2];
+        cpu.seg_ds = seg_val[3];
+        cpu.seg_fs = seg_val[4];
+        cpu.seg_gs = seg_val[5];
+    }
     std::memcpy(ptr + header.cpu_offset, &cpu, sizeof(cpu));
 
     // Serialize Memory state (H2: local struct + memcpy)
@@ -835,7 +863,7 @@ dosbox_lib_error_t dosbox_lib_save_state(
     }
 
     // ─── Phase 3: Serialize RAM + VGA sub-blocks ────────────────────────
-    size_t actual_total = dosbox::ENGINE_STATE_SIZE_V5_BASE;  // 792
+    size_t actual_total = dosbox::ENGINE_STATE_SIZE_V5_BASE;  // 848
 
     if (sub_block_count > 0) {
         // Cursor for blob data (after directory)
@@ -907,7 +935,7 @@ dosbox_lib_error_t dosbox_lib_save_state(
         actual_total = blob_cursor;
     }
 
-    // Update ext_size in V5 extension header to cover all data from offset 680
+    // Update ext_size in V5 extension header to cover all data from offset 736
     {
         dosbox::EngineStateV5ExtHeader ext_hdr{};
         ext_hdr.ext_magic = dosbox::ENGINE_STATE_V5_EXT_MAGIC;
@@ -997,10 +1025,16 @@ dosbox_lib_error_t dosbox_lib_load_state(
         ? sizeof(dosbox::EngineStatePicV3)
         : sizeof(dosbox::EngineStatePic);
 
+    // V4 and below: EngineStateCpu was 96 bytes (no GPR fields); V5+: 152 bytes
+    constexpr size_t CPU_SECTION_SIZE_LEGACY = 96;
+    size_t cpu_section_size = (header.version <= 4)
+        ? CPU_SECTION_SIZE_LEGACY
+        : sizeof(dosbox::EngineStateCpu);
+
     if (!validate_offset(header.timing_offset, sizeof(dosbox::EngineStateTiming)) ||
         !validate_offset(header.pic_offset, pic_section_size) ||
         !validate_offset(header.keyboard_offset, sizeof(dosbox::EngineStateKeyboard)) ||
-        !validate_offset(header.cpu_offset, sizeof(dosbox::EngineStateCpu)) ||
+        !validate_offset(header.cpu_offset, cpu_section_size) ||
         !validate_offset(header.memory_offset, sizeof(dosbox::EngineStateMemory))) {
         g_last_error = "Invalid section offset";
         return DOSBOX_LIB_ERR_INVALID_STATE;
@@ -1127,8 +1161,10 @@ dosbox_lib_error_t dosbox_lib_load_state(
     ctx->keyboard.rightshift_pressed = kbd.rightshift_pressed != 0;
 
     // Deserialize CPU state (H2: memcpy into local struct)
+    // For V4 and earlier files, the CPU section is only 96 bytes (no GPR fields).
+    // Zero-initialize the struct so new GPR fields default to 0 for legacy saves.
     dosbox::EngineStateCpu cpu{};
-    std::memcpy(&cpu, ptr + header.cpu_offset, sizeof(cpu));
+    std::memcpy(&cpu, ptr + header.cpu_offset, cpu_section_size);
     ctx->cpu_state.cycles = cpu.cycles;
     ctx->cpu_state.cycle_left = cpu.cycle_left;
     ctx->cpu_state.cycle_max = cpu.cycle_max;
@@ -1146,6 +1182,24 @@ dosbox_lib_error_t dosbox_lib_load_state(
     ctx->cpu_state.nmi_active = cpu.nmi_active != 0;
     ctx->cpu_state.nmi_pending = cpu.nmi_pending != 0;
     ctx->cpu_state.halted = cpu.halted != 0;
+    // CPU GPR restore (REQ-SR-002) — write x86 register file from EngineStateCpu
+    {
+        uint32_t gpr[8] = {
+            cpu.reg_eax, cpu.reg_ecx, cpu.reg_edx, cpu.reg_ebx,
+            cpu.reg_esp, cpu.reg_ebp, cpu.reg_esi, cpu.reg_edi
+        };
+        // Segment order: ES(0), CS(1), SS(2), DS(3), FS(4), GS(5)
+        uint16_t seg_val[6] = {
+            cpu.seg_es, cpu.seg_cs, cpu.seg_ss,
+            cpu.seg_ds, cpu.seg_fs, cpu.seg_gs
+        };
+        // seg_phys and seg_limit are not stored in EngineStateCpu; pass zeros
+        // (the V5 CpuGpr extension preserves them when available)
+        uint32_t seg_phys[6]  = {};
+        uint32_t seg_limit[6] = {};
+        dosbox::restore_cpu_gprs(gpr, cpu.reg_eip, cpu.reg_eflags,
+                                 seg_val, seg_phys, seg_limit);
+    }
 
     // Deserialize Memory state (H2: memcpy into local struct)
     dosbox::EngineStateMemory mem{};
@@ -1254,7 +1308,7 @@ dosbox_lib_error_t dosbox_lib_load_state(
         }
 
         // ── Phase 3: Deserialize RAM + VGA sub-blocks ───────────────────
-        // Sub-block directory starts at offset 792 (after GPR data)
+        // Sub-block directory starts at offset 848 (after GPR data)
         size_t dir_offset = dosbox::ENGINE_STATE_SIZE_V5_BASE;
         if (header.total_size > dir_offset + sizeof(dosbox::V5SubBlockDir)) {
             dosbox::V5SubBlockDir dir{};
@@ -1937,6 +1991,13 @@ dosbox_lib_error_t dosbox_lib_midi_set_soundfont(dosbox_lib_handle_t handle, con
     LIB_CHECK_THREAD();
     LIB_REQUIRE(sf2_path != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
 
+    constexpr std::uintmax_t kMaxSf2Size = 256ULL * 1024 * 1024;  // 256 MB
+    std::error_code ec;
+    auto sz = std::filesystem::file_size(sf2_path, ec);
+    if (ec || sz > kMaxSf2Size) {
+        return DOSBOX_LIB_ERR_INVALID_ARGUMENT;
+    }
+
     dosbox_midi_set_soundfont(sf2_path);
     return DOSBOX_LIB_OK;
 }
@@ -1945,6 +2006,20 @@ dosbox_lib_error_t dosbox_lib_midi_set_romdir(dosbox_lib_handle_t handle, const 
     LIB_VALIDATE_HANDLE(handle);
     LIB_CHECK_THREAD();
     LIB_REQUIRE(rom_dir != nullptr, DOSBOX_LIB_ERR_NULL_POINTER);
+
+    constexpr std::uintmax_t kMaxRomFileSize = 1ULL * 1024 * 1024;  // 1 MB
+    std::error_code ec;
+    if (!std::filesystem::is_directory(rom_dir, ec) || ec) {
+        return DOSBOX_LIB_ERR_INVALID_ARGUMENT;
+    }
+    for (const auto& entry : std::filesystem::directory_iterator(rom_dir, ec)) {
+        if (entry.is_regular_file()) {
+            auto sz = entry.file_size(ec);
+            if (!ec && sz > kMaxRomFileSize) {
+                return DOSBOX_LIB_ERR_INVALID_ARGUMENT;
+            }
+        }
+    }
 
     dosbox_midi_set_romdir(rom_dir);
     return DOSBOX_LIB_OK;

@@ -136,123 +136,16 @@ Result<void> MachineContext::initialize() {
     }
     init_stage_ = InitStage::Cpu;
 
-    result = init_pic();
+    result = init_dma();
     if (!result.has_value()) {
         cleanup_to_stage(InitStage::Cpu);
         return result;
     }
-    init_stage_ = InitStage::Pic;
-
-    result = init_pit();
-    if (!result.has_value()) {
-        cleanup_to_stage(InitStage::Pic);
-        return result;
-    }
-    init_stage_ = InitStage::Pit;
-
-    result = init_dma();
-    if (!result.has_value()) {
-        cleanup_to_stage(InitStage::Pit);
-        return result;
-    }
     init_stage_ = InitStage::Dma;
 
-    result = init_vga();
-    if (!result.has_value()) {
-        cleanup_to_stage(InitStage::Dma);
-        return result;
-    }
-    init_stage_ = InitStage::Vga;
-
-    result = init_input();
-    if (!result.has_value()) {
-        cleanup_to_stage(InitStage::Vga);
-        return result;
-    }
-    init_stage_ = InitStage::Input;
-
-    if (config_.sound_enabled) {
-        result = init_sound();
-        if (!result.has_value()) {
-            cleanup_to_stage(InitStage::Input);
-            return result;
-        }
-    }
-    init_stage_ = InitStage::Sound;
-
-    result = init_dos();
-    if (!result.has_value()) {
-        cleanup_to_stage(InitStage::Sound);
-        return result;
-    }
-    init_stage_ = InitStage::Dos;
-
-    result = init_bios();
-    if (!result.has_value()) {
-        cleanup_to_stage(InitStage::Dos);
-        return result;
-    }
     init_stage_ = InitStage::Complete;
 
     state_ = MachineState::Initialized;
-    return Ok();
-}
-
-// DEPRECATED(M10): This stub does not execute real CPU instructions.
-// All production step execution routes through dosbox_lib_step_cycles() ->
-// dosbox::execute_cycles() in cpu_bridge.cpp. This stub only increments
-// counters and will be removed in a future cleanup pass.
-Result<uint32_t> MachineContext::step(uint32_t ms) {
-    // Check precondition (REQ-GSE-020, REQ-GSE-021)
-    if (state_ != MachineState::Initialized &&
-        state_ != MachineState::Running &&
-        state_ != MachineState::Paused) {
-        auto err = Error(ErrorCode::InvalidState,
-            "Cannot step in current state");
-        set_error(err);
-        return Err(std::move(err));
-    }
-
-    // Set this as current context for compatibility shim (REQ-GSE-013)
-    compat::ContextGuard guard(*this);
-
-    state_ = MachineState::Running;
-
-    uint32_t steps = 0;
-    try {
-        for (uint32_t t = 0; t < ms && !stop_requested_.load(std::memory_order_acquire); t++) {
-            virtual_ticks_ms_++;
-
-            uint32_t cycles_this_ms = config_.cpu_cycles;
-            total_cycles_ += cycles_this_ms;
-
-            // No real CPU execution — counter increment only (see deprecation note)
-
-            steps++;
-        }
-    } catch (const EmulatorException& e) {
-        auto err = Error(ErrorCode::CpuError, e.what());
-        set_error(err);
-        state_ = MachineState::Stopped;
-        return Err(std::move(err));
-    }
-
-    if (stop_requested_.load(std::memory_order_acquire)) {
-        state_ = MachineState::Stopped;
-        stop_requested_.store(false, std::memory_order_release);
-    }
-
-    return Ok(steps);
-}
-
-Result<void> MachineContext::run() {
-    while (state_ == MachineState::Running ||
-           state_ == MachineState::Initialized) {
-        auto result = step(100);  // 100ms chunks
-        if (!result.has_value()) {
-            return Err(result.error());
-        }
-    }
     return Ok();
 }
 
@@ -318,30 +211,8 @@ Result<void> MachineContext::reset() {
 
 void MachineContext::cleanup_to_stage(InitStage target) noexcept {
     // Cleanup from current stage down to target (REQ-GSE-012, REQ-GSE-043)
-    if (init_stage_ >= InitStage::Complete && target < InitStage::Complete) {
-        // Cleanup BIOS - nothing to do for now
-    }
-    if (init_stage_ >= InitStage::Dos && target < InitStage::Dos) {
-        // dos.reset();
-    }
-    if (init_stage_ >= InitStage::Sound && target < InitStage::Sound) {
-        // sound.reset();
-    }
-    if (init_stage_ >= InitStage::Input && target < InitStage::Input) {
-        // keyboard.reset();
-        // mouse.reset();
-    }
-    if (init_stage_ >= InitStage::Vga && target < InitStage::Vga) {
-        // vga.reset();
-    }
     if (init_stage_ >= InitStage::Dma && target < InitStage::Dma) {
         dma.reset();
-    }
-    if (init_stage_ >= InitStage::Pit && target < InitStage::Pit) {
-        // pit.reset();
-    }
-    if (init_stage_ >= InitStage::Pic && target < InitStage::Pic) {
-        // pic.reset();
     }
     if (init_stage_ >= InitStage::Cpu && target < InitStage::Cpu) {
         cpu.reset();
@@ -373,47 +244,8 @@ Result<void> MachineContext::init_cpu() {
     return Ok();
 }
 
-// H4/M5: These init stubs delegate to DOSBox-X engine bridge.
-// Initialization is handled by dosbox_lib_init() -> DOSBoxContext.
-// Kept for MachineContext interface compatibility but are intentional no-ops.
-
-Result<void> MachineContext::init_pic() {
-    // Initialization handled by DOSBox-X engine bridge
-    return Ok();
-}
-
-Result<void> MachineContext::init_pit() {
-    // Initialization handled by DOSBox-X engine bridge
-    return Ok();
-}
-
 Result<void> MachineContext::init_dma() {
     dma = std::make_unique<DmaSubsystem>();
-    return Ok();
-}
-
-Result<void> MachineContext::init_vga() {
-    // Initialization handled by DOSBox-X engine bridge
-    return Ok();
-}
-
-Result<void> MachineContext::init_input() {
-    // Initialization handled by DOSBox-X engine bridge
-    return Ok();
-}
-
-Result<void> MachineContext::init_sound() {
-    // Initialization handled by DOSBox-X engine bridge
-    return Ok();
-}
-
-Result<void> MachineContext::init_dos() {
-    // Initialization handled by DOSBox-X engine bridge
-    return Ok();
-}
-
-Result<void> MachineContext::init_bios() {
-    // Initialization handled by DOSBox-X engine bridge
     return Ok();
 }
 

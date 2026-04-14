@@ -72,27 +72,6 @@ TEST(DOSBoxContextTest, DoubleInitializeFails) {
     EXPECT_FALSE(ctx.initialize().has_value());  // Second init fails
 }
 
-TEST(DOSBoxContextTest, StepRequiresInit) {
-    DOSBoxContext ctx;
-
-    auto result = ctx.step(10);
-    EXPECT_FALSE(result.has_value());  // Fails without init
-}
-
-TEST(DOSBoxContextTest, StepUpdatesState) {
-    DOSBoxContext ctx;
-    ctx.initialize();
-
-    EXPECT_EQ(ctx.timing.virtual_ticks_ms, 0u);
-    EXPECT_EQ(ctx.timing.total_cycles, 0u);
-
-    auto result = ctx.step(10);
-    ASSERT_TRUE(result.has_value());
-
-    EXPECT_EQ(ctx.timing.virtual_ticks_ms, 10u);
-    EXPECT_GT(ctx.timing.total_cycles, 0u);
-}
-
 TEST(DOSBoxContextTest, RequestStop) {
     DOSBoxContext ctx;
     ctx.initialize();
@@ -101,10 +80,6 @@ TEST(DOSBoxContextTest, RequestStop) {
 
     ctx.request_stop();
     EXPECT_TRUE(ctx.stop_requested());
-
-    // Step should fail when stop requested
-    auto result = ctx.step(10);
-    EXPECT_FALSE(result.has_value());
 }
 
 TEST(DOSBoxContextTest, Shutdown) {
@@ -120,18 +95,13 @@ TEST(DOSBoxContextTest, Shutdown) {
 TEST(DOSBoxContextTest, Reset) {
     DOSBoxContext ctx;
     ctx.initialize();
-    ctx.step(100);
-
-    EXPECT_GT(ctx.timing.virtual_ticks_ms, 0u);
 
     auto result = ctx.reset();
     ASSERT_TRUE(result.has_value());
 
-    // State should be reset
+    // State should be reset and still initialized
     EXPECT_EQ(ctx.timing.virtual_ticks_ms, 0u);
     EXPECT_EQ(ctx.timing.total_cycles, 0u);
-
-    // But still initialized
     EXPECT_TRUE(ctx.is_initialized());
 }
 
@@ -378,10 +348,6 @@ TEST(DOSBoxContextCApiTest, FullLifecycle) {
     int result = dosbox_init(handle);
     EXPECT_EQ(result, DOSBOX_OK);
 
-    // Step
-    result = dosbox_step(handle, 10);
-    EXPECT_EQ(result, DOSBOX_OK);
-
     // Pause
     result = dosbox_pause(handle);
     EXPECT_EQ(result, DOSBOX_OK);
@@ -401,7 +367,6 @@ TEST(DOSBoxContextCApiTest, FullLifecycle) {
 
 TEST(DOSBoxContextCApiTest, NullHandleReturnsError) {
     EXPECT_NE(dosbox_init(nullptr), DOSBOX_OK);
-    EXPECT_NE(dosbox_step(nullptr, 10), DOSBOX_OK);
     EXPECT_NE(dosbox_destroy(nullptr), DOSBOX_OK);
 }
 
@@ -412,15 +377,11 @@ TEST(DOSBoxContextCApiTest, NullHandleReturnsError) {
 TEST(DOSBoxContextTest, MoveConstruction) {
     DOSBoxContext ctx1;
     ctx1.initialize();
-    ctx1.step(50);
-
-    uint64_t cycles_before = ctx1.timing.total_cycles;
 
     DOSBoxContext ctx2(std::move(ctx1));
 
     // ctx2 should have the state
     EXPECT_TRUE(ctx2.is_initialized());
-    EXPECT_EQ(ctx2.timing.total_cycles, cycles_before);
 
     // ctx1 should be uninitialized
     EXPECT_FALSE(ctx1.is_initialized());
@@ -429,7 +390,6 @@ TEST(DOSBoxContextTest, MoveConstruction) {
 TEST(DOSBoxContextTest, MoveAssignment) {
     DOSBoxContext ctx1;
     ctx1.initialize();
-    ctx1.step(50);
 
     DOSBoxContext ctx2;
 

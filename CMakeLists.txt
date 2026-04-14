@@ -696,6 +696,7 @@ if(LEGENDS_BUILD_TESTS)
         tests/unit/test_fullscreen_toggle.cpp
         tests/unit/test_joystick_mapper.cpp
         tests/unit/test_shader_presets.cpp
+        tests/unit/test_shader_size_limit.cpp
         tests/unit/test_ai_config.cpp
         tests/unit/test_ai_screen_context.cpp
         tests/unit/test_ai_http_client.cpp

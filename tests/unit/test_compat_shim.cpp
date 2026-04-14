@@ -187,24 +187,16 @@ TEST_F(CompatShimTest, NestedContextGuards) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Step Integration Tests
+// Initialization Context Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_F(CompatShimTest, StepSetsContext) {
+TEST_F(CompatShimTest, NoContextAfterInit) {
     MachineConfig config = MachineConfig::minimal();
     MachineContext ctx(config);
     ctx.initialize();
 
-    // Before step, no context should be set
+    // No context should be set on an initialized context
     EXPECT_FALSE(compat::has_context());
-
-    // Step should set context internally
-    // (Note: After step returns, context may or may not be set
-    // depending on implementation - step uses ContextGuard)
-    ctx.step(1);
-
-    // After step, the ContextGuard in step() should have cleaned up
-    // This tests that the guard properly restores the previous (null) state
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

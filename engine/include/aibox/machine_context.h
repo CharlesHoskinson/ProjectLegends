@@ -29,16 +29,6 @@
 
 namespace aibox {
 
-// Forward declarations for subsystem types used in MachineContext interface.
-// These are intentionally unimplemented — initialization delegates to DOSBox-X engine bridge.
-class VgaContext;
-class DosKernel;
-class PicController;
-class PitTimer;
-class KeyboardController;
-class MouseController;
-class SoundSubsystem;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Machine State
 // ─────────────────────────────────────────────────────────────────────────────
@@ -165,13 +155,13 @@ struct MachineConfig {
  * ## Lifecycle
  * 1. Create: `MachineContext ctx(config)`
  * 2. Initialize: `ctx.initialize()`
- * 3. Run: `ctx.step(ms)` or `ctx.run()`
+ * 3. Run: via `dosbox_lib_step_cycles()` (production path)
  * 4. Shutdown: `ctx.shutdown()`
  *
  * ## State Machine
  * @verbatim
  *   Created -> [initialize] -> Initialized
- *   Initialized -> [step/run] -> Running
+ *   Initialized -> [dosbox_lib_step_cycles] -> Running
  *   Running -> [pause] -> Paused
  *   Running -> [stop] -> Stopped
  *   Paused -> [resume] -> Running
@@ -194,9 +184,7 @@ struct MachineConfig {
  *       return;
  *   }
  *
- *   while (ctx.state() == MachineState::Running) {
- *       ctx.step(10);  // Run 10ms
- *   }
+ *   // Execution is driven by dosbox_lib_step_cycles() (production path)
  *
  *   ctx.shutdown();
  * @endcode
@@ -256,36 +244,9 @@ public:
     Result<void> initialize();
 
     /**
-     * @brief Execute emulation for specified duration.
-     *
-     * Executes the specified number of milliseconds of emulated
-     * time. The actual execution time depends on host performance.
-     *
-     * @param ms Milliseconds of emulated time to execute
-     * @return Result with actual steps executed or error
-     *
-     * @pre state() == Initialized, Running, or Paused
-     * @post state() == Running (or Stopped if stop requested)
-     */
-    Result<uint32_t> step(uint32_t ms);
-
-    /**
-     * @brief Run until stop requested.
-     *
-     * Blocks until request_stop() is called or error occurs.
-     * Suitable for simple use cases without external event loop.
-     *
-     * @return Result indicating completion reason
-     *
-     * @pre state() == Initialized
-     * @post state() == Stopped
-     */
-    Result<void> run();
-
-    /**
      * @brief Request stop from another thread.
      *
-     * Thread-safe. Sets flag checked by run/step loop.
+     * Thread-safe. Sets flag checked by the execution loop.
      * The emulator will stop at the next safe point.
      *
      * @note This is the ONLY thread-safe method.
@@ -350,15 +311,6 @@ public:
 
     /** @brief DMA subsystem (nullptr until initialized) */
     std::unique_ptr<DmaSubsystem> dma;
-
-    // Future subsystems (nullptr until implemented)
-    // std::unique_ptr<VgaContext> vga;
-    // std::unique_ptr<DosKernel> dos;
-    // std::unique_ptr<PicController> pic;
-    // std::unique_ptr<PitTimer> pit;
-    // std::unique_ptr<KeyboardController> keyboard;
-    // std::unique_ptr<MouseController> mouse;
-    // std::unique_ptr<SoundSubsystem> sound;
 
     // ─────────────────────────────────────────────────────────────────────────
     // State Queries
@@ -453,14 +405,7 @@ private:
         None,
         Memory,
         Cpu,
-        Pic,
-        Pit,
         Dma,
-        Vga,
-        Input,
-        Sound,
-        Dos,
-        Bios,
         Complete
     };
 
@@ -472,14 +417,7 @@ private:
 
     Result<void> init_memory();
     Result<void> init_cpu();
-    Result<void> init_pic();
-    Result<void> init_pit();
     Result<void> init_dma();
-    Result<void> init_vga();
-    Result<void> init_input();
-    Result<void> init_sound();
-    Result<void> init_dos();
-    Result<void> init_bios();
 
     /**
      * @brief Cleanup subsystems down to specified stage.

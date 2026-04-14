@@ -1050,6 +1050,7 @@ legends_error_t legends_get_config(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(config_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     *config_out = inst->config;
@@ -1206,6 +1207,7 @@ legends_error_t legends_get_emu_time(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(time_us_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     *time_us_out = inst->time_state.emu_time_us;
@@ -1219,6 +1221,7 @@ legends_error_t legends_get_total_cycles(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(cycles_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     *cycles_out = inst->time_state.total_cycles;
@@ -1239,6 +1242,7 @@ legends_error_t legends_capture_text(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(cells_count_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     size_t required_cells = inst->frame_state.text_cell_count();
@@ -1285,6 +1289,7 @@ legends_error_t legends_capture_rgb(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(size_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     uint16_t width, height;
@@ -1423,6 +1428,7 @@ legends_error_t legends_is_frame_dirty(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(dirty_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     *dirty_out = inst->frame_state.dirty ? 1 : 0;
@@ -1438,6 +1444,7 @@ legends_error_t legends_get_cursor(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
 
     if (x_out != nullptr) { *x_out = inst->frame_state.cursor_x; }
     if (y_out != nullptr) { *y_out = inst->frame_state.cursor_y; }
@@ -1459,6 +1466,7 @@ legends_error_t legends_capture_audio(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(count_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     if (!inst->engine_handle) {
@@ -1477,6 +1485,7 @@ legends_error_t legends_is_audio_active(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(active_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     // Audio is active if the engine was created with audio enabled
@@ -1552,12 +1561,17 @@ legends_error_t legends_text_input(
             const ScancodeMapping& mapping = ASCII_TO_SCANCODE[ch];
 
             if (mapping.scancode != 0) {
+                // REQ-IN-004: Atomicity — verify ALL slots for this character are
+                // available BEFORE enqueueing ANY events. Unshifted chars need 2
+                // slots (key-down + key-up); shifted chars need 4 (shift-down +
+                // key-down + key-up + shift-up). Using addition to avoid unsigned
+                // underflow if size() ever exceeds EFFECTIVE_CAPACITY.
                 size_t slots_needed = mapping.needs_shift ? 4 : 2;
-                size_t available = InputState::EFFECTIVE_CAPACITY - inst->input_state.size();
-                if (available < slots_needed) {
+                if (inst->input_state.size() + slots_needed > InputState::EFFECTIVE_CAPACITY) {
                     LEGENDS_ERROR(LEGENDS_ERR_BUFFER_TOO_SMALL, "Keyboard event queue full");
                 }
 
+                // Capacity confirmed — enqueue the complete sequence atomically.
                 if (mapping.needs_shift) {
                     inst->input_state.enqueue_key(SCANCODE_LSHIFT, true, false);
                 }
@@ -2556,6 +2570,7 @@ legends_error_t legends_get_state_hash(
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
     LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(hash_out != nullptr, LEGENDS_ERR_NULL_POINTER);
 
     // Sync state from engine first to ensure hash consistency
@@ -3183,6 +3198,8 @@ legends_error_t legends_has_capability(
 ) {
     auto* inst = get_instance(handle);
     LEGENDS_REQUIRE(inst != nullptr, LEGENDS_ERR_NULL_HANDLE);
+    LEGENDS_CHECK_THREAD();
+    if (inst->in_step) { return LEGENDS_ERR_REENTRANT_CALL; }
     LEGENDS_REQUIRE(capability_name != nullptr, LEGENDS_ERR_NULL_POINTER);
     LEGENDS_REQUIRE(out != nullptr, LEGENDS_ERR_NULL_POINTER);
 

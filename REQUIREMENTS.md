@@ -72,7 +72,7 @@ The system shall route all step execution through the CPU bridge (`dosbox::execu
 |---|---|
 | Source | AUDIT M10 (dual runtime path), H3 (MachineContext.step stub) |
 | Evidence | `dosbox_context.cpp:920` routes through stub; `dosbox_library.cpp:371` routes through bridge |
-| Status | **GAP** — `dosbox_step()` routes through TODO stub, `dosbox_lib_step_cycles()` uses real bridge |
+| Status | **RESOLVED** — `dosbox_step()`, `DOSBoxContext::step()`, `MachineContext::step()`, and `MachineContext::run()` removed (REQ-LC-005). Single execution path via `dosbox_lib_step_cycles()`. |
 
 ### REQ-LC-006 No Phantom Definitions [Ubiquitous]
 

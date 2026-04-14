@@ -163,81 +163,8 @@ TEST_F(MachineContextTest, IsInitializedAfterInit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Step/Run Tests
+// Stop/Run Tests
 // ─────────────────────────────────────────────────────────────────────────────
-
-TEST_F(MachineContextTest, StepRequiresInitialization) {
-    MachineContext ctx(config_);
-
-    auto result = ctx.step(10);
-
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error().code(), ErrorCode::InvalidState);
-}
-
-TEST_F(MachineContextTest, StepSucceedsAfterInit) {
-    MachineContext ctx(config_);
-    ctx.initialize();
-
-    auto result = ctx.step(10);
-
-    EXPECT_TRUE(result.has_value());
-}
-
-TEST_F(MachineContextTest, StepReturnsStepCount) {
-    MachineContext ctx(config_);
-    ctx.initialize();
-
-    auto result = ctx.step(10);
-
-    EXPECT_TRUE(result.has_value());
-    EXPECT_EQ(result.value(), 10u);
-}
-
-TEST_F(MachineContextTest, StepUpdatesVirtualTicks) {
-    MachineContext ctx(config_);
-    ctx.initialize();
-
-    EXPECT_EQ(ctx.virtual_ticks(), 0u);
-
-    ctx.step(5);
-    EXPECT_EQ(ctx.virtual_ticks(), 5u);
-
-    ctx.step(10);
-    EXPECT_EQ(ctx.virtual_ticks(), 15u);
-}
-
-TEST_F(MachineContextTest, StepUpdatesTotalCycles) {
-    MachineContext ctx(config_);
-    ctx.initialize();
-
-    EXPECT_EQ(ctx.total_cycles(), 0u);
-
-    ctx.step(10);
-
-    EXPECT_GT(ctx.total_cycles(), 0u);
-}
-
-TEST_F(MachineContextTest, StepSetsRunningState) {
-    MachineContext ctx(config_);
-    ctx.initialize();
-
-    ctx.step(1);
-
-    // After step completes (without stop), state may be Running
-    EXPECT_TRUE(ctx.state() == MachineState::Running ||
-                ctx.state() == MachineState::Initialized);
-}
-
-TEST_F(MachineContextTest, RequestStopStopsExecution) {
-    MachineContext ctx(config_);
-    ctx.initialize();
-
-    ctx.request_stop();
-    ctx.step(1000);
-
-    EXPECT_EQ(ctx.state(), MachineState::Stopped);
-}
 
 TEST_F(MachineContextTest, StopRequestedQueryWorks) {
     MachineContext ctx(config_);
@@ -347,8 +274,6 @@ TEST_F(MachineContextTest, DestructorCallsShutdown) {
 TEST_F(MachineContextTest, ResetReinitializes) {
     MachineContext ctx(config_);
     ctx.initialize();
-    ctx.step(100);
-    EXPECT_GT(ctx.virtual_ticks(), 0u);
 
     auto result = ctx.reset();
 
@@ -420,8 +345,8 @@ TEST_F(MachineContextTest, LastErrorInitiallyEmpty) {
 TEST_F(MachineContextTest, LastErrorSetOnFailure) {
     MachineContext ctx(config_);
 
-    // Try to step without init (will fail)
-    ctx.step(10);
+    // Try to pause without being in Running state (will fail)
+    ctx.pause();
 
     EXPECT_TRUE(ctx.last_error().has_value());
 }
@@ -439,17 +364,6 @@ TEST_F(MachineContextTest, RepeatedInitShutdown) {
     // ASan will catch any leaks
 }
 
-TEST_F(MachineContextTest, ManySteps) {
-    MachineContext ctx(config_);
-    ctx.initialize();
-
-    for (int i = 0; i < 100; i++) {
-        auto result = ctx.step(1);
-        EXPECT_TRUE(result.has_value());
-    }
-
-    EXPECT_EQ(ctx.virtual_ticks(), 100u);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IsRunning Query Tests

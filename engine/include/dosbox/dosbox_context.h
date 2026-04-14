@@ -37,6 +37,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,21 +83,12 @@ dosbox_handle_t dosbox_create(const dosbox_config* config);
 /**
  * @brief Initialize a created instance.
  *
- * Must be called before step/run.
+ * Must be called before run.
  *
  * @param handle Instance handle
  * @return DOSBOX_OK on success, error code on failure
  */
 int dosbox_init(dosbox_handle_t handle);
-
-/**
- * @brief Execute emulation for specified duration.
- *
- * @param handle Instance handle
- * @param ms Milliseconds of emulated time
- * @return DOSBOX_OK on success, error code on failure
- */
-int dosbox_step(dosbox_handle_t handle, uint32_t ms);
 
 /**
  * @brief Pause execution.
@@ -397,6 +389,7 @@ struct MixerState {
     MixerState& operator=(const MixerState&) = delete;
 
     MixerState(MixerState&& o) noexcept
+        // mutex intentionally not moved — destination gets a fresh default-constructed mutex
         : freq(o.freq), blocksize(o.blocksize)
         , mastervol{o.mastervol[0], o.mastervol[1]}
         , recordvol{o.recordvol[0], o.recordvol[1]}
@@ -415,6 +408,7 @@ struct MixerState {
     {}
 
     MixerState& operator=(MixerState&& o) noexcept {
+        // mutex intentionally not assigned — each instance owns its own mutex
         freq = o.freq; blocksize = o.blocksize;
         mastervol[0] = o.mastervol[0]; mastervol[1] = o.mastervol[1];
         recordvol[0] = o.recordvol[0]; recordvol[1] = o.recordvol[1];
@@ -432,6 +426,14 @@ struct MixerState {
         start_pic_time = o.start_pic_time;
         return *this;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Synchronization
+    // Acquired before any other lock in the system (mutex ordering rule).
+    // mutable so const methods (hash_into) can lock it.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    mutable std::mutex mutex;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Core Configuration (from mixer struct, lines 94-95)
@@ -497,6 +499,7 @@ struct MixerState {
      * @brief Reset to initial state.
      */
     void reset() noexcept {
+        std::lock_guard<std::mutex> lock(mutex);
         freq = 44100;
         blocksize = 1024;
         mastervol[0] = mastervol[1] = 1.0f;
@@ -1591,11 +1594,6 @@ public:
      * @brief Initialize all subsystems.
      */
     [[nodiscard]] Result<void> initialize();
-
-    /**
-     * @brief Execute emulation for specified duration.
-     */
-    [[nodiscard]] Result<uint32_t> step(uint32_t ms);
 
     /**
      * @brief Pause execution.

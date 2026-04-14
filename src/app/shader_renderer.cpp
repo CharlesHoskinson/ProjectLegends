@@ -11,6 +11,7 @@
 #include <glad/glad.h>
 
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -107,6 +108,14 @@ bool ShaderRenderer::loadPreset(ShaderPreset preset) {
 }
 
 bool ShaderRenderer::loadCustomShader(const std::string& glsl_path) {
+    static constexpr std::uintmax_t kMaxShaderBytes = 65536; // 64 KB (REQ-SEC-038)
+
+    std::error_code ec;
+    auto file_size = std::filesystem::file_size(glsl_path, ec);
+    if (ec || file_size > kMaxShaderBytes) {
+        return false;
+    }
+
     std::ifstream file(glsl_path);
     if (!file.is_open()) {
         return false;
