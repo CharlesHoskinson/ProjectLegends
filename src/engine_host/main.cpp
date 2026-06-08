@@ -59,7 +59,11 @@ int main(int argc, char* argv[]) {
 
     std::array<uint8_t, msg::HandshakeAck::serialized_size> ack_buf{};
     ack.serialize(ack_buf);
-    channel->send(MsgType::HandshakeAck, 0, ack_buf);
+    auto ack_send = channel->send(MsgType::HandshakeAck, 0, ack_buf);
+    if (!ack_send.has_value()) {
+        std::fprintf(stderr, "Error: failed to send handshake acknowledgement\n");
+        return 1;
+    }
 
     // Message loop
     while (channel->is_connected()) {
@@ -78,11 +82,21 @@ int main(int argc, char* argv[]) {
             err.error_code = LEGENDS_ERR_INTERNAL;
             std::array<uint8_t, 4> err_buf{};
             err.serialize(err_buf);
-            channel->send(MsgType::ErrorResponse, msg->header.sequence_id, err_buf);
+            auto err_send = channel->send(MsgType::ErrorResponse,
+                                           msg->header.sequence_id,
+                                           err_buf);
+            if (!err_send.has_value()) {
+                break;
+            }
             continue;
         }
 
-        channel->send(result->response_type, msg->header.sequence_id, result->payload);
+        auto response_send = channel->send(result->response_type,
+                                           msg->header.sequence_id,
+                                           result->payload);
+        if (!response_send.has_value()) {
+            break;
+        }
 
         // Check for shutdown
         if (msg->header.msg_type == MsgType::Shutdown) {

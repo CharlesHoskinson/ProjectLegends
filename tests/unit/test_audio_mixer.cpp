@@ -128,8 +128,8 @@ TEST(AudioMixerTest, MixSingleSample) {
 }
 
 TEST(AudioMixerTest, MixZeroCount_NoOp) {
-    int16_t a = 123;
-    int16_t b = 456;
+    [[maybe_unused]] int16_t a = 123;
+    [[maybe_unused]] int16_t b = 456;
     int16_t out = 999;
 
     AudioMixer::mix(std::span<int16_t>{}, std::span<const int16_t>{},

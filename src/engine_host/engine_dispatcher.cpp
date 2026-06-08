@@ -173,6 +173,24 @@ dispatch(MsgType msg_type, std::span<const uint8_t> payload) {
         return DispatchResult{MsgType::GetStateHashResp, serialize_resp(resp)};
     }
 
+    case MsgType::MountDriveReq: {
+        auto req = MountDriveReq::deserialize(payload);
+        if (!req) return std::unexpected(req.error());
+        auto err = legends_mount_drive(g_handle, req->drive_letter, req->host_path.c_str(), req->flags);
+        MountDriveResp resp;
+        resp.error_code = err;
+        return DispatchResult{MsgType::MountDriveResp, serialize_resp(resp)};
+    }
+
+    case MsgType::UnmountDriveReq: {
+        auto req = UnmountDriveReq::deserialize(payload);
+        if (!req) return std::unexpected(req.error());
+        auto err = legends_unmount_drive(g_handle, req->drive_letter);
+        UnmountDriveResp resp;
+        resp.error_code = err;
+        return DispatchResult{MsgType::UnmountDriveResp, serialize_resp(resp)};
+    }
+
     case MsgType::Shutdown: {
         if (g_handle) {
             legends_destroy(g_handle);

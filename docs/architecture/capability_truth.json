@@ -1,0 +1,302 @@
+{
+  "legends_get_api_version": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends GetApiVersionReq; dispatcher handles it."
+  },
+  "legends_create": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends CreateReq; dispatcher creates engine singleton."
+  },
+  "legends_destroy": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends DestroyReq; dispatcher destroys g_handle."
+  },
+  "legends_force_destroy": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy maps to DestroyReq; no distinct force semantics in proxy."
+  },
+  "legends_reset": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends ResetReq; dispatcher handles it."
+  },
+  "legends_get_config": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_step_ms": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends StepMsReq; dispatcher handles it."
+  },
+  "legends_step_cycles": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends StepCyclesReq; dispatcher handles it."
+  },
+  "legends_get_emu_time": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends GetEmuTimeReq; dispatcher handles it."
+  },
+  "legends_get_total_cycles": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends GetTotalCyclesReq; dispatcher handles it."
+  },
+  "legends_capture_text": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_capture_rgb": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-partial",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy reads framebuffer SHM, but engine host does not open/write framebuffer SHM."
+  },
+  "legends_is_frame_dirty": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends IsFrameDirtyReq; dispatcher handles it."
+  },
+  "legends_get_cursor": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends GetCursorReq; dispatcher handles it."
+  },
+  "legends_key_event": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends KeyEventReq; dispatcher handles it."
+  },
+  "legends_key_event_ext": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-partial",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy aliases to legends_key_event; extended E0 semantics are not represented in IPC."
+  },
+  "legends_text_input": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_mouse_event": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends MouseEventReq; dispatcher handles it."
+  },
+  "legends_capture_audio": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-partial",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy reads audio ring SHM, but engine host does not open/write the audio ring."
+  },
+  "legends_is_audio_active": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends IsAudioActiveReq; dispatcher handles it."
+  },
+  "legends_start_video_capture": {
+    "direct_status": "unsupported",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_stop_video_capture": {
+    "direct_status": "stub-success",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_is_video_capturing": {
+    "direct_status": "stub-success",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_save_state": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_load_state": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_get_state_hash": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends GetStateHashReq; dispatcher handles it."
+  },
+  "legends_verify_determinism": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_get_last_error": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_mount_drive": {
+    "direct_status": "partial",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends MountDriveReq, and dispatcher handles it and forwards to legends_mount_drive."
+  },
+  "legends_unmount_drive": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-supported",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp", "src/engine_host/engine_dispatcher.cpp"],
+    "notes": "Proxy sends UnmountDriveReq, and dispatcher handles it and forwards to legends_unmount_drive."
+  },
+  "legends_joystick_event": {
+    "direct_status": "partial",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_midi_set_device": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_midi_set_soundfont": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_midi_set_romdir": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_capture_midi_audio": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_printer_set_output": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_printer_is_active": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_printer_flush": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_set_ttf_font": {
+    "direct_status": "unsupported",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_ipx_enable": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_ipx_connect": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_ipx_disconnect": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_ipx_is_connected": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_glide_enable": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_glide_set_resolution": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_set_machine_pc98": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_is_pc98_mode": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_set_log_callback": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_register_event_callback": {
+    "direct_status": "implemented",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  },
+  "legends_has_capability": {
+    "direct_status": "partial",
+    "proxy_status": "proxy-missing",
+    "evidence_files": ["src/legends/legends_embed_api.cpp", "src/legends_proxy/proxy_api.cpp"],
+    "notes": "Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly."
+  }
+}

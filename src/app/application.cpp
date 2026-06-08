@@ -33,8 +33,8 @@ static void crash_autosave_handler(int sig) {
     // Attempt a best-effort save — this is async-signal-unsafe but better
     // than losing all progress. The save path uses atomic writes.
     if (g_crash_engine && g_crash_save_mgr) {
-        g_crash_save_mgr->saveToSlot(g_crash_engine, SaveManager::kAutosaveSlot,
-                                      nullptr, 0, 0);
+        (void)g_crash_save_mgr->saveToSlot(g_crash_engine, SaveManager::kAutosaveSlot,
+                                           nullptr, 0, 0);
     }
     // Re-raise the signal with default handler
     std::signal(sig, SIG_DFL);
@@ -72,7 +72,7 @@ ExitCode Application::init(int argc, char** argv) {
                          cli.conf_path.c_str());
         }
     } else {
-        config.loadDefaults(); // non-fatal if none found
+        (void)config.loadDefaults(); // non-fatal if none found
     }
 
     // ── Platform ─────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ ExitCode Application::init(int argc, char** argv) {
     }
 
     if (cli.fullscreen) {
-        window_->setFullscreen(true);
+        (void)window_->setFullscreen(true);
     }
 
     // ── Rendering context ─────────────────────────────────────────────────
@@ -279,7 +279,7 @@ ExitCode Application::init(int argc, char** argv) {
         update_checker_ = createPlatformUpdateChecker();
         if (update_checker_) {
             update_checker_->setEnabled(true);
-            update_checker_->checkForUpdate();
+            (void)update_checker_->checkForUpdate();
         }
     }
 
@@ -307,7 +307,7 @@ ExitCode Application::init(int argc, char** argv) {
     // ── Input mapper ─────────────────────────────────────────────────────
     {
         std::string mapper_path = getConfigDir() + "/mapper.txt";
-        input_mapper_.loadFromFile(mapper_path); // non-fatal if missing
+        (void)input_mapper_.loadFromFile(mapper_path); // non-fatal if missing
     }
 
     // ── Menu system ──────────────────────────────────────────────────────
@@ -381,7 +381,7 @@ ExitCode Application::init(int argc, char** argv) {
         std::string ttf_path = config.get("ttf", "font", "");
         if (!ttf_path.empty()) {
             uint32_t ttf_size = static_cast<uint32_t>(config.getInt("ttf", "size", 16));
-            ttf_renderer_.loadFont(ttf_path, ttf_size);
+            (void)ttf_renderer_.loadFont(ttf_path, ttf_size);
             ttf_renderer_.setEnabled(config.getBool("ttf", "enabled", false));
             if (ttf_renderer_.isEnabled() && engine_) {
                 legends_set_ttf_font(engine_, ttf_path.c_str(), ttf_size);
@@ -558,7 +558,7 @@ bool Application::processEvents() {
                 // ── AI panel input routing (when panel is open) ─────
                 if (ai_panel_.isOpen() && !menu_system_.isOpen()) {
                     if (down) {
-                        ai_panel_.handleKey(ev.key.scancode, true);
+                        (void)ai_panel_.handleKey(ev.key.scancode, true);
                     }
                     break; // Don't forward to engine while AI panel is open
                 }
@@ -566,7 +566,7 @@ bool Application::processEvents() {
                 // ── Mapper UI input routing (when mapper is open) ────
                 if (mapper_ui_.isOpen()) {
                     if (down) {
-                        mapper_ui_.handleKey(ev.key.scancode, true);
+                        (void)mapper_ui_.handleKey(ev.key.scancode, true);
                     }
                     break; // Don't forward to engine while mapper is open
                 }
@@ -574,7 +574,7 @@ bool Application::processEvents() {
                 // ── Save browser input routing (when browser is open) ─
                 if (save_browser_.isOpen()) {
                     if (down) {
-                        save_browser_.handleKey(ev.key.scancode, true);
+                        (void)save_browser_.handleKey(ev.key.scancode, true);
                     }
                     break; // Don't forward to engine while browser is open
                 }
@@ -582,7 +582,7 @@ bool Application::processEvents() {
                 // ── Menu input routing (when menu is open) ──────────
                 if (menu_system_.isOpen()) {
                     if (down) {
-                        menu_system_.handleKey(ev.key.scancode, true);
+                        (void)menu_system_.handleKey(ev.key.scancode, true);
                     }
                     break; // Don't forward to engine while menu is open
                 }
@@ -623,7 +623,7 @@ bool Application::processEvents() {
             case pal::InputEventType::MouseButtonUp: {
                 // Menu click routing
                 if (menu_system_.isOpen() && ev.type == pal::InputEventType::MouseButtonDown) {
-                    menu_system_.handleMouseClick(ev.mouse_button.x, ev.mouse_button.y);
+                    (void)menu_system_.handleMouseClick(ev.mouse_button.x, ev.mouse_button.y);
                     break;
                 }
 
@@ -845,14 +845,14 @@ void Application::registerActionHandlers() {
     action_bus_.registerHandler(Action::VolumeUp, [this](int) {
         volume_ = std::min(1.0f, volume_ + 0.1f);
         muted_ = false;
-        if (audio_sink_) audio_sink_->setVolume(volume_);
+        if (audio_sink_) (void)audio_sink_->setVolume(volume_);
     });
 
     // Volume down
     action_bus_.registerHandler(Action::VolumeDown, [this](int) {
         volume_ = std::max(0.0f, volume_ - 0.1f);
         muted_ = false;
-        if (audio_sink_) audio_sink_->setVolume(volume_);
+        if (audio_sink_) (void)audio_sink_->setVolume(volume_);
     });
 
     // Toggle mute
@@ -865,7 +865,7 @@ void Application::registerActionHandlers() {
             pre_mute_vol_ = volume_;
             volume_ = 0.0f;
         }
-        if (audio_sink_) audio_sink_->setVolume(volume_);
+        if (audio_sink_) (void)audio_sink_->setVolume(volume_);
     });
 
     // Release mouse capture
@@ -951,7 +951,7 @@ void Application::registerActionHandlers() {
     action_bus_.registerHandler(Action::ToggleFullscreen, [this](int) {
         fullscreen_ = !fullscreen_;
         if (window_) {
-            window_->setFullscreen(fullscreen_);
+            (void)window_->setFullscreen(fullscreen_);
         }
         menu_system_.setFullscreen(fullscreen_);
     });
@@ -1081,7 +1081,7 @@ void Application::updateWindowTitle() {
     if (!window_) return;
     std::string title = base_title_;
     if (paused_) title += " - PAUSED";
-    window_->setTitle(title.c_str());
+    (void)window_->setTitle(title.c_str());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1091,8 +1091,8 @@ void Application::updateWindowTitle() {
 void Application::setMouseCaptured(bool captured) {
     mouse_captured_ = captured;
     if (input_source_) {
-        input_source_->setMouseCapture(captured);
-        input_source_->setRelativeMouseMode(captured);
+        (void)input_source_->setMouseCapture(captured);
+        (void)input_source_->setRelativeMouseMode(captured);
     }
 }
 
@@ -1341,7 +1341,7 @@ void Application::pumpAudio() {
 
     // actual is int16_t element count; stereo frames = actual / 2
     uint32_t frames = static_cast<uint32_t>(actual) / 2;
-    audio_sink_->pushSamples(audio_buffer_.data(), frames);
+    (void)audio_sink_->pushSamples(audio_buffer_.data(), frames);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

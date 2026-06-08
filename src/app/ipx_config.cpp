@@ -6,7 +6,7 @@
 #include "app/ipx_config.h"
 #include "app/config_parser.h"
 
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 
 namespace legends {
 

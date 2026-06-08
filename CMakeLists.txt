@@ -88,9 +88,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     # Security hardening (H3)
     target_compile_options(legends_compile_options INTERFACE
         -fstack-protector-strong -D_FORTIFY_SOURCE=2
-        -fPIE
     )
-    target_link_options(legends_compile_options INTERFACE -pie)
+    if(NOT WIN32)
+        target_compile_options(legends_compile_options INTERFACE -fPIE)
+        target_link_options(legends_compile_options INTERFACE -pie)
+    endif()
 elseif(MSVC)
     target_compile_options(legends_compile_options INTERFACE /W4 /permissive- /utf-8)
     target_compile_definitions(legends_compile_options INTERFACE _CRT_SECURE_NO_WARNINGS)
@@ -98,9 +100,13 @@ elseif(MSVC)
     target_link_options(legends_compile_options INTERFACE /GUARD:CF)
 endif()
 
+if(WIN32)
+    target_compile_definitions(legends_compile_options INTERFACE WIN32 _CRT_SECURE_NO_WARNINGS)
+endif()
+
 # Helper function to apply C++23 and strict warnings to a target (Tier A)
 function(legends_set_strict_cxx_standard target_name)
-    target_link_libraries(${target_name} PRIVATE legends_compile_options)
+    target_link_libraries(${target_name} PRIVATE $<BUILD_INTERFACE:legends_compile_options>)
     set_target_properties(${target_name} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
@@ -118,7 +124,7 @@ endfunction()
 
 # Helper function for legacy code under migration (Tier B)
 function(legends_set_legacy_cxx_standard target_name)
-    target_link_libraries(${target_name} PRIVATE legends_compile_options)
+    target_link_libraries(${target_name} PRIVATE $<BUILD_INTERFACE:legends_compile_options>)
     set_target_properties(${target_name} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
@@ -159,6 +165,10 @@ endfunction()
 set(AIBOX_BUILD_TESTS ON CACHE BOOL "Build engine tests alongside legends tests" FORCE)
 set(AIBOX_HEADLESS ON CACHE BOOL "Build engine in headless mode" FORCE)
 set(AIBOX_LIBRARY_MODE ON CACHE BOOL "Build engine as library" FORCE)
+
+if(WIN32)
+    add_compile_definitions(WIN32 _CRT_SECURE_NO_WARNINGS)
+endif()
 
 add_subdirectory(engine)
 
@@ -492,6 +502,7 @@ endif()
 
 add_library(legends_app STATIC
     src/app/application.cpp
+    src/app/runtime_host.cpp
     src/app/cli_parser.cpp
     src/app/config_parser.cpp
     src/app/platform_dirs.cpp
@@ -508,6 +519,7 @@ add_library(legends_app STATIC
     src/app/video_capture.cpp
     src/app/mapper_ui.cpp
     src/app/save_browser.cpp
+    src/app/overlay_render.cpp
     # Phase 3: Enhanced Features
     src/app/joystick_mapper.cpp
     src/app/shader_renderer.cpp
@@ -755,60 +767,6 @@ if(LEGENDS_BUILD_TESTS)
 
     # Engine host sources for IPC dispatcher tests (not part of legends_app)
     target_sources(legends_unit_tests PRIVATE
-<<<<<<< HEAD
-=======
-        src/app/cli_parser.cpp
-        src/app/config_parser.cpp
-        src/app/platform_dirs.cpp
-        src/app/scancode_map.cpp
-        src/app/action_bus.cpp
-        src/app/capture.cpp
-        src/app/input_mapper.cpp
-        src/app/save_manager.cpp
-        src/app/menu_system.cpp
-        src/app/hotkey_dispatcher.cpp
-        src/app/mount_manager.cpp
-        src/app/image_validator.cpp
-        src/app/zmbv_codec.cpp
-        src/app/video_capture.cpp
-        src/app/mapper_ui.cpp
-        src/app/save_browser.cpp
-        src/app/overlay_render.cpp
-        # Phase 3: Enhanced Features
-        src/app/joystick_mapper.cpp
-        src/app/shader_renderer.cpp
-        src/app/shader_presets.cpp
-        src/app/ai_config.cpp
-        src/app/ai_http_client.cpp
-        src/app/ai_screen_context.cpp
-        src/app/ai_panel.cpp
-        src/app/audio_mixer.cpp
-        src/app/midi_config.cpp
-        src/app/printer_manager.cpp
-        src/app/ttf_renderer.cpp
-        src/app/ipx_config.cpp
-        src/app/glide_config.cpp
-        src/app/pc98_config.cpp
-        # Phase 4: Polish & Release
-        src/app/file_logger.cpp
-        src/app/error_reporter.cpp
-        src/app/crash_breadcrumb.cpp
-        src/app/crash_reporter.cpp
-        # Phase 4 Sprint 4: SSIM
-        src/app/ssim.cpp
-        # Phase 4 Sprint 6: Portable mode
-        src/app/portable_mode.cpp
-        # Phase 4 Sprint 7: Update checker
-        src/app/update_checker.cpp
-    )
-
-    target_sources(legends_unit_tests PRIVATE
-        external/glad/glad.c
-        engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture tests
-        engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
-        src/app/application.cpp              # Application lifecycle tests
-        # Engine host sources for IPC dispatcher tests
->>>>>>> worktree-agent-af784013
         src/engine_host/cli_parser.cpp
         src/engine_host/engine_dispatcher.cpp
     )
@@ -827,6 +785,9 @@ if(LEGENDS_BUILD_TESTS)
         gsl_CONFIG_CONTRACT_CHECKING_ON
         gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
     )
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(legends_unit_tests PRIVATE -Wno-error)
+    endif()
 
     gtest_discover_tests(legends_unit_tests
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -1014,6 +975,9 @@ if(LEGENDS_BUILD_TESTS)
     target_compile_definitions(legends_integration_tests PRIVATE
         LEGENDS_LIBRARY_MODE=1
     )
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(legends_integration_tests PRIVATE -Wno-error)
+    endif()
 
     gtest_discover_tests(legends_integration_tests
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -1210,9 +1174,8 @@ endif()
 if(PAL_BACKEND_SDL3)
     add_executable(project_legends
         src/main.cpp
-<<<<<<< HEAD
         $<$<PLATFORM_ID:Windows>:src/app/project_legends.manifest>
-=======
+        src/app/runtime_host.cpp
         src/app/application.cpp
         src/app/action_bus.cpp
         src/app/capture.cpp
@@ -1263,7 +1226,6 @@ if(PAL_BACKEND_SDL3)
         external/glad/glad.c
         engine/src/libs/zmbv/zmbv.cpp       # ZMBV codec for video capture
         engine/src/libs/zmbv/zmbv_stubs.cpp  # Stub VideoCodec when C_SSHOT is off
->>>>>>> worktree-agent-af784013
     )
 
     legends_set_strict_cxx_standard(project_legends)

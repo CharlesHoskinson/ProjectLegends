@@ -63,20 +63,17 @@ public:
     /// @brief Parse a single-character drive letter string to index (0-25).
     /// @param letter Single character string ("A"-"Z", case-insensitive)
     /// @return Drive index (0-25) or -1 if invalid
-    [[nodiscard]] static int parseDriveLetter(const std::string& letter);
-    static int parseDriveLetter(std::string_view letter);
+    [[nodiscard]] static int parseDriveLetter(std::string_view letter);
 
     /// @brief Check if a host path is an existing directory (no traversal).
     /// @param path Host filesystem path
     /// @return true if path exists and is a directory with no ".." components
-    [[nodiscard]] static bool validateHostPath(const std::string& path);
-    static bool validateHostPath(std::string_view path);
+    [[nodiscard]] static bool validateHostPath(std::string_view path);
 
     /// @brief Check if a file extension is a supported image format.
     /// @param ext File extension including dot (e.g., ".iso")
     /// @return true if extension is supported (.iso, .img, .ima, .cue, .bin)
-    [[nodiscard]] static bool validateImageExtension(const std::string& ext);
-    static bool validateImageExtension(std::string_view ext);
+    [[nodiscard]] static bool validateImageExtension(std::string_view ext);
 
     /// @brief Detect mount type from a host path.
     ///
@@ -85,14 +82,12 @@ public:
     ///
     /// @param path Host path (directory or image file)
     /// @return Detected mount type
-    [[nodiscard]] static MountType detectMountType(const std::string& path);
-    static MountType detectMountType(std::string_view path);
+    [[nodiscard]] static MountType detectMountType(std::string_view path);
 
     /// @brief Parse a CLI mount argument string (e.g., "D:=/path/to/dir").
     /// @param arg CLI argument string
     /// @return Parsed MountArg if valid, std::nullopt otherwise
-    [[nodiscard]] static std::optional<MountArg> parseMountArg(const std::string& arg);
-    static std::optional<MountArg> parseMountArg(std::string_view arg);
+    [[nodiscard]] static std::optional<MountArg> parseMountArg(std::string_view arg);
 
     // ── Instance Methods ────────────────────────────────────────────────────
 

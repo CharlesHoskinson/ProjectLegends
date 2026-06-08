@@ -43,14 +43,9 @@ struct FrameData {
 class FramebufferShm {
 public:
     [[nodiscard]] static std::expected<FramebufferShm, IpcError>
-    create(const std::string& name, uint32_t max_width, uint32_t max_height);
-
-    [[nodiscard]] static std::expected<FramebufferShm, IpcError>
-    open(const std::string& name, uint32_t max_width, uint32_t max_height);
-    static std::expected<FramebufferShm, IpcError>
     create(std::string_view name, uint32_t max_width, uint32_t max_height);
 
-    static std::expected<FramebufferShm, IpcError>
+    [[nodiscard]] static std::expected<FramebufferShm, IpcError>
     open(std::string_view name, uint32_t max_width, uint32_t max_height);
 
     // Writer: get buffer to write into (the non-active buffer).

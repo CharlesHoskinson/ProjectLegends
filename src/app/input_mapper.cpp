@@ -5,7 +5,7 @@
 
 #include "app/input_mapper.h"
 
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 
 #include <cstdio>
 #include <fstream>
@@ -13,9 +13,9 @@
 
 namespace legends {
 
-bool InputMapper::loadFromFile(const std::string& path) {
+bool InputMapper::loadFromFile(std::string_view path) {
     gsl_Expects(!path.empty());
-    std::ifstream file(path);
+    std::ifstream file((std::string(path)));
     if (!file.is_open()) return false;
 
     remaps_.clear();
@@ -48,9 +48,9 @@ bool InputMapper::loadFromFile(const std::string& path) {
     return true;
 }
 
-bool InputMapper::saveToFile(const std::string& path) const {
+bool InputMapper::saveToFile(std::string_view path) const {
     gsl_Expects(!path.empty());
-    std::ofstream file(path);
+    std::ofstream file((std::string(path)));
     if (!file.is_open()) return false;
 
     file << "# Project Legends key mapper\n";

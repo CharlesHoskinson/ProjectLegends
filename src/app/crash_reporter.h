@@ -17,8 +17,7 @@ public:
 
     void install();
     void uninstall();
-    [[nodiscard]] bool enable(const std::string& crash_dir);
-    bool enable(std::string_view crash_dir);
+    [[nodiscard]] bool enable(std::string_view crash_dir);
     void disable();
 };
 

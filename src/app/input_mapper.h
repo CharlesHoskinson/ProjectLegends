@@ -16,16 +16,10 @@ namespace legends {
 
 class InputMapper {
 public:
-    /// Load custom remappings from file. Returns true if file was read.
-    /// Missing file is not an error (returns false, no remaps loaded).
-    [[nodiscard]] bool loadFromFile(const std::string& path);
+    [[nodiscard]] bool loadFromFile(std::string_view path);
 
     /// Save current remappings to file. Returns true on success.
-    [[nodiscard]] bool saveToFile(const std::string& path) const;
-    bool loadFromFile(std::string_view path);
-
-    /// Save current remappings to file. Returns true on success.
-    bool saveToFile(std::string_view path) const;
+    [[nodiscard]] bool saveToFile(std::string_view path) const;
 
     /// Translate an SDL3 scancode to AT Set 1, applying any custom remap first.
     [[nodiscard]] ATScancode translate(uint16_t sdl_scancode) const;

@@ -149,6 +149,7 @@ int dosbox_reset(dosbox_handle_t handle);
 #ifdef __cplusplus
 
 #include <atomic>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -492,6 +493,8 @@ struct MixerState {
 
     uint64_t sample_counter = 0;     ///< Total samples rendered since start
     double start_pic_time = 0.0;     ///< PIC timer value at mixer init
+
+    mutable std::mutex mixer_mutex;  ///< Mutex for thread-safe state access
 
     /**
      * @brief Reset to initial state.

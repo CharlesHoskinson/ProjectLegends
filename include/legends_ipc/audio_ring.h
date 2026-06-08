@@ -33,16 +33,10 @@ static_assert(std::atomic<uint32_t>::is_always_lock_free,
 class AudioRingBuffer {
 public:
     [[nodiscard]] static std::expected<AudioRingBuffer, IpcError>
-    create(const std::string& name, uint32_t capacity_frames,
-           uint32_t channels = 2, uint32_t sample_rate = 44100);
-
-    [[nodiscard]] static std::expected<AudioRingBuffer, IpcError>
-    open(const std::string& name, uint32_t capacity_frames,
-    static std::expected<AudioRingBuffer, IpcError>
     create(std::string_view name, uint32_t capacity_frames,
            uint32_t channels = 2, uint32_t sample_rate = 44100);
 
-    static std::expected<AudioRingBuffer, IpcError>
+    [[nodiscard]] static std::expected<AudioRingBuffer, IpcError>
     open(std::string_view name, uint32_t capacity_frames,
          uint32_t channels = 2, uint32_t sample_rate = 44100);
 

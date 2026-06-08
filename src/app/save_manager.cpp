@@ -9,7 +9,7 @@
 #include "app/capture.h"
 #include "app/platform_dirs.h"
 
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 
 #include <cstdio>
 #include <cstring>
@@ -80,8 +80,14 @@ uint32_t SaveManager::computeCRC32(const void* data, size_t size) {
 
 bool SaveManager::saveToSlot(legends_handle engine, int slot,
                              const uint8_t* rgb_thumb, uint16_t w, uint16_t h) {
-    gsl_Expects(engine != nullptr);
-    gsl_Expects(slot >= 0 && slot <= kMaxSlots);
+    if (engine == nullptr) {
+        last_error_ = "Engine handle is null";
+        return false;
+    }
+    if (slot < 1 || slot > kMaxSlots) {
+        last_error_ = "Invalid save slot: " + std::to_string(slot);
+        return false;
+    }
 
     // Create saves directory
     std::string dir = getSaveDir();
@@ -133,7 +139,7 @@ bool SaveManager::saveToSlot(legends_handle engine, int slot,
 
     // Write thumbnail PNG (non-fatal if it fails)
     if (rgb_thumb && w > 0 && h > 0) {
-        writeScreenshotPNG(thumbnailPath(slot), rgb_thumb, w, h);
+        (void)writeScreenshotPNG(thumbnailPath(slot), rgb_thumb, w, h);
     }
 
     last_error_.clear();
@@ -141,8 +147,14 @@ bool SaveManager::saveToSlot(legends_handle engine, int slot,
 }
 
 bool SaveManager::loadFromSlot(legends_handle engine, int slot) {
-    gsl_Expects(engine != nullptr);
-    gsl_Expects(slot >= 0 && slot <= kMaxSlots);
+    if (engine == nullptr) {
+        last_error_ = "Engine handle is null";
+        return false;
+    }
+    if (slot < 1 || slot > kMaxSlots) {
+        last_error_ = "Invalid save slot: " + std::to_string(slot);
+        return false;
+    }
 
     std::string path = slotPath(slot);
     if (!std::filesystem::exists(path)) {

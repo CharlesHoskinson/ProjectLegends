@@ -33,38 +33,22 @@ public:
     [[nodiscard]] bool loadFile(const std::string& path);
 
     /// Get a string value.
-    [[nodiscard]] std::string get(const std::string& section, const std::string& key,
+    [[nodiscard]] std::string get(std::string_view section, std::string_view key,
                     const std::string& default_val = "") const;
 
     /// Get an integer value.
-    [[nodiscard]] int getInt(const std::string& section, const std::string& key,
+    [[nodiscard]] int getInt(std::string_view section, std::string_view key,
                int default_val = 0) const;
 
     /// Get a boolean value (true/yes/1/on).
-    [[nodiscard]] bool getBool(const std::string& section, const std::string& key,
+    [[nodiscard]] bool getBool(std::string_view section, std::string_view key,
                  bool default_val = false) const;
 
     /// Check if a section exists.
-    [[nodiscard]] bool hasSection(const std::string& section) const;
+    [[nodiscard]] bool hasSection(std::string_view section) const;
 
     /// Check if a key exists within a section.
-    [[nodiscard]] bool hasKey(const std::string& section, const std::string& key) const;
-    std::string get(std::string_view section, std::string_view key,
-                    const std::string& default_val = "") const;
-
-    /// Get an integer value.
-    int getInt(std::string_view section, std::string_view key,
-               int default_val = 0) const;
-
-    /// Get a boolean value (true/yes/1/on).
-    bool getBool(std::string_view section, std::string_view key,
-                 bool default_val = false) const;
-
-    /// Check if a section exists.
-    bool hasSection(std::string_view section) const;
-
-    /// Check if a key exists within a section.
-    bool hasKey(std::string_view section, std::string_view key) const;
+    [[nodiscard]] bool hasKey(std::string_view section, std::string_view key) const;
 
     /// Get the path of the loaded file (empty if none loaded).
     [[nodiscard]] const std::string& getLoadedPath() const { return loaded_path_; }
@@ -82,10 +66,8 @@ private:
     std::unordered_map<std::string, SectionMap> sections_;
     std::string loaded_path_;
 
-    [[nodiscard]] static std::string toLower(const std::string& s);
-    [[nodiscard]] static std::string trim(const std::string& s);
-    static std::string toLower(std::string_view s);
-    static std::string trim(std::string_view s);
+    [[nodiscard]] static std::string toLower(std::string_view s);
+    [[nodiscard]] static std::string trim(std::string_view s);
 };
 
 } // namespace legends

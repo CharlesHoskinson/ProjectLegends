@@ -33,11 +33,7 @@ struct MIDIConfig {
     /// @param config  Parsed configuration source.
     void loadFrom(const ConfigParser& config);
 
-    /// Parse a device name string (e.g. "fluidsynth", "mt32") into a MIDIDevice enum.
-    /// @param name  Case-insensitive device name.
-    /// @return Corresponding MIDIDevice value; MIDIDevice::None for unrecognised names.
-    [[nodiscard]] static MIDIDevice parseDeviceName(const std::string& name);
-    static MIDIDevice parseDeviceName(std::string_view name);
+    [[nodiscard]] static MIDIDevice parseDeviceName(std::string_view name);
 
     /// Get the canonical string name for a MIDIDevice enum value.
     /// @param device  The device enum.

@@ -6,7 +6,7 @@
 #include "app/cli_parser.h"
 #include <legends/legends_version.h>
 
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 
 #include <climits>
 #include <cstdio>

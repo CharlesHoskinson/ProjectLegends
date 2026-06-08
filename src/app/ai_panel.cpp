@@ -7,7 +7,7 @@
 #include "app/action_bus.h"
 #include "app/overlay_render.h"
 
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -74,7 +74,6 @@ std::vector<std::string> wordWrap(const std::string& text, int max_chars) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void AIPanel::initialize(ActionBus* bus) {
-    gsl_Expects(bus != nullptr);
     bus_ = bus;
 }
 

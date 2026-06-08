@@ -61,8 +61,7 @@ public:
     /// @return Encoded frame data (empty on failure)
     /// @pre !pixels.empty() (gsl_Expects)
     /// @pre isInitialized() (gsl_Expects)
-    [[nodiscard]] std::vector<uint8_t> encodeFrame(const uint8_t* pixels,
-    std::vector<uint8_t> encodeFrame(std::span<const uint8_t> pixels,
+    [[nodiscard]] std::vector<uint8_t> encodeFrame(std::span<const uint8_t> pixels,
                                       uint16_t width, uint16_t height,
                                       bool keyframe);
 

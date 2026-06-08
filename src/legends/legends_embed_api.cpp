@@ -934,8 +934,6 @@ legends_error_t legends_create(
         // will overwrite these with actual engine state.
         inst->frame_state.reset();
         inst->frame_state.init_test_pattern();
-        inst->frame_state.cursor_x = 0;
-        inst->frame_state.cursor_y = 0;
         inst->frame_state.load_embedded_font();
 
         // Initialize input state
@@ -1031,8 +1029,6 @@ legends_error_t legends_reset(legends_handle handle) {
 
         // Reinitialize frame state with test pattern
         inst->frame_state.init_test_pattern();
-        inst->frame_state.cursor_x = 0;
-        inst->frame_state.cursor_y = 0;
 
         inst->last_error.clear();
         return LEGENDS_OK;

@@ -6,7 +6,7 @@
 #include "app/ai_config.h"
 #include "app/config_parser.h"
 
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 
 #include <cstdlib>
 
@@ -26,6 +26,7 @@ void AIConfig::loadFrom(const ConfigParser& config) {
     max_context_chars = gsl::narrow<uint32_t>(
         config.getInt("ai", "max_context_chars", static_cast<int>(max_context_chars)));
     privacy_mode = config.getBool("ai", "privacy_mode", privacy_mode);
+    raw_api_key_detected = config.hasKey("ai", "api_key");
 }
 
 std::string AIConfig::resolveApiKey() const {

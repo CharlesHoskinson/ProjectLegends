@@ -140,6 +140,9 @@ TEST(IpcAudioRingTest, ConcurrentSPSCStress) {
         int frames_pushed = 0;
         while (frames_pushed < kTotalFrames) {
             int to_push = std::min(32, kTotalFrames - frames_pushed);
+            while (ring->capacity_frames() - ring->available() < static_cast<uint32_t>(to_push)) {
+                std::this_thread::yield();
+            }
             for (int i = 0; i < to_push * 2; ++i)
                 chunk[i] = static_cast<int16_t>((frames_pushed + i / 2) & 0x7FFF);
             ring->push(std::span<const int16_t>(chunk.data(), to_push * 2));

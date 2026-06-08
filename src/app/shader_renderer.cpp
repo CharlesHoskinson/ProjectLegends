@@ -132,14 +132,14 @@ void ShaderRenderer::nextPreset() {
     auto idx = static_cast<uint8_t>(current_preset_);
     uint8_t count = shaderPresetCount();
     idx = static_cast<uint8_t>((idx + 1) % count);
-    loadPreset(static_cast<ShaderPreset>(idx));
+    (void)loadPreset(static_cast<ShaderPreset>(idx));
 }
 
 void ShaderRenderer::prevPreset() {
     auto idx = static_cast<uint8_t>(current_preset_);
     uint8_t count = shaderPresetCount();
     idx = static_cast<uint8_t>((idx + count - 1) % count);
-    loadPreset(static_cast<ShaderPreset>(idx));
+    (void)loadPreset(static_cast<ShaderPreset>(idx));
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +157,7 @@ void ShaderRenderer::render(const uint8_t* rgb_data,
     // If shaders are disabled, fall back to a plain passthrough blit.
     if (!shaders_enabled_ &&
         current_preset_ != ShaderPreset::None) {
-        loadPreset(ShaderPreset::None);
+        (void)loadPreset(ShaderPreset::None);
     }
 
     // Upload the frame as a GL_RGB texture.

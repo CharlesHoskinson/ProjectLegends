@@ -68,7 +68,8 @@ TEST_F(IpcIntegrationTest, DISABLED_FullE2E) {
         }
 
         // Wait for it to exit
-        proc->wait_for_exit(30000);
+        auto exit_result = proc->wait_for_exit(30000);
+        (void)exit_result;
     });
 
     // Create pipe server and wait for connection
@@ -89,7 +90,8 @@ TEST_F(IpcIntegrationTest, DISABLED_FullE2E) {
     create_req.deterministic = 1;
     std::vector<uint8_t> cbuf(msg::CreateReq::serialized_size);
     create_req.serialize(cbuf);
-    channel->send(MsgType::CreateReq, 1, cbuf);
+    auto create_send = channel->send(MsgType::CreateReq, 1, cbuf);
+    ASSERT_TRUE(create_send.has_value());
 
     auto create_resp = channel->recv(5000);
     ASSERT_TRUE(create_resp.has_value());
@@ -100,14 +102,16 @@ TEST_F(IpcIntegrationTest, DISABLED_FullE2E) {
     step_req.ms = 10;
     std::vector<uint8_t> sbuf(msg::StepMsReq::serialized_size);
     step_req.serialize(sbuf);
-    channel->send(MsgType::StepMsReq, 2, sbuf);
+    auto step_send = channel->send(MsgType::StepMsReq, 2, sbuf);
+    ASSERT_TRUE(step_send.has_value());
 
     auto step_resp = channel->recv(5000);
     ASSERT_TRUE(step_resp.has_value());
     EXPECT_EQ(step_resp->header.msg_type, MsgType::StepMsResp);
 
     // Send Destroy
-    channel->send(MsgType::DestroyReq, 3, {});
+    auto destroy_send = channel->send(MsgType::DestroyReq, 3, {});
+    ASSERT_TRUE(destroy_send.has_value());
     auto destroy_resp = channel->recv(5000);
     ASSERT_TRUE(destroy_resp.has_value());
 
@@ -116,7 +120,8 @@ TEST_F(IpcIntegrationTest, DISABLED_FullE2E) {
     shutdown.reason = 0;
     std::vector<uint8_t> shutbuf(msg::ShutdownMsg::serialized_size);
     shutdown.serialize(shutbuf);
-    channel->send(MsgType::Shutdown, 4, shutbuf);
+    auto shutdown_send = channel->send(MsgType::Shutdown, 4, shutbuf);
+    ASSERT_TRUE(shutdown_send.has_value());
 
     auto shutdown_resp = channel->recv(5000);
     ASSERT_TRUE(shutdown_resp.has_value());

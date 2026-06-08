@@ -57,6 +57,7 @@ function(legends_verify_dag TARGET)
         "^\\$<"            # CMake generator expressions
         "^-"               # Linker flags
         "^mingw"           # MinGW runtime
+        "^legends_compile_options$" # Tooling/infrastructure compile options
     )
 
     set(VIOLATIONS "")

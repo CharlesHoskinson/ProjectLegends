@@ -3,29 +3,21 @@
 //
 // Screenshot capture implementation.
 
-// stb_image_write generates static helper functions that may not all be
-// referenced — suppress the corresponding unused-function warnings.
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable: 4505)
-#elif defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic push
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wunused-function"
+#elif defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wunused-function"
+#elif defined(_MSC_VER)
+#pragma warning(disable: 4505)
 #endif
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image_write.h"
 
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#elif defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-
 #include "app/capture.h"
 #include "app/platform_dirs.h"
 
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 
 #include <chrono>
 #include <cstdio>
@@ -65,9 +57,9 @@ std::string generateCaptureFilename() {
 bool writeScreenshotPNG(std::string_view path,
                         const uint8_t* rgb_data,
                         uint16_t width, uint16_t height) {
-    gsl_Expects(rgb_data != nullptr);
-    gsl_Expects(width > 0);
-    gsl_Expects(height > 0);
+    if (rgb_data == nullptr || width == 0 || height == 0 || path.empty()) {
+        return false;
+    }
 
     // stbi_write_png: comp=3 for RGB, stride = width * 3
     std::string path_str(path);

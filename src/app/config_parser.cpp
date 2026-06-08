@@ -6,7 +6,7 @@
 #include "app/config_parser.h"
 #include "app/platform_dirs.h"
 
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 
 #include <algorithm>
 #include <cctype>

@@ -19,8 +19,7 @@ namespace legends {
 
 /// Write an RGB24 buffer to a PNG file.
 /// Returns true on success.
-[[nodiscard]] bool writeScreenshotPNG(const std::string& path,
-bool writeScreenshotPNG(std::string_view path,
+[[nodiscard]] bool writeScreenshotPNG(std::string_view path,
                         const uint8_t* rgb_data,
                         uint16_t width, uint16_t height);
 
