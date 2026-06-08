@@ -157,6 +157,7 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y cmake ninja-build ${{ matrix.pkg }} \
             libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev libxss-dev \
+            libxtst-dev \
             libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
             libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev
 
@@ -706,11 +707,11 @@ jobs:
       - name: Generate coverage report
         run: |
           lcov --capture --directory build --output-file coverage.info \
-            --gcov-tool gcov-13 --ignore-errors mismatch
+            --gcov-tool gcov-13 --ignore-errors mismatch,gcov,negative
           lcov --remove coverage.info \
             '/usr/*' '*/build/_deps/*' '*/tests/*' \
             --output-file coverage.filtered.info \
-            --ignore-errors unused
+            --ignore-errors unused,empty
           lcov --list coverage.filtered.info
           echo "Coverage policy: report-only; no minimum threshold is enforced by CI yet." > coverage-policy.txt
 
@@ -873,8 +874,10 @@ jobs:
       - name: Check coverage
         run: |
           cd build
-          lcov --capture --directory . --output-file coverage.info --quiet
-          lcov --extract coverage.info "*/src/app/*" --output-file coverage_app.info --quiet
+          lcov --capture --directory . --output-file coverage.info --quiet \
+            --ignore-errors mismatch,gcov,negative
+          lcov --extract coverage.info "*/src/app/*" --output-file coverage_app.info --quiet \
+            --ignore-errors unused,empty
           COVERAGE=$(lcov --summary coverage_app.info 2>&1 | grep -oP "lines\.\.\.\.\.\.\:\s+\K[0-9.]+")
           echo "Coverage: ${COVERAGE}%"
           # Check >= 80%

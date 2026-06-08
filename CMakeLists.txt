@@ -1140,12 +1140,15 @@ if(PAL_BACKEND_SDL2)
 
     target_include_directories(project_legends PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/include
     )
 
-    target_link_directories(project_legends PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/lib
-    )
+    if(WIN32)
+        target_link_directories(project_legends PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/lib
+        )
+    endif()
 
     # In IPC mode, link the proxy (MIT) instead of legends_core (GPL).
     # In monolithic mode (default), link legends_core directly.
@@ -1153,29 +1156,34 @@ if(PAL_BACKEND_SDL2)
         target_link_libraries(project_legends PRIVATE
             legends_proxy
             legends_pal
-            mingw32
-            SDL2main
-            SDL2
         )
         target_compile_definitions(project_legends PRIVATE
             LEGENDS_USE_IPC=1
         )
     else()
         target_link_libraries(project_legends PRIVATE
-            legends_core
+            legends_app
             legends_pal
-            mingw32
-            SDL2main
-            SDL2
         )
     endif()
 
-    # Copy SDL2.dll to output directory
-    add_custom_command(TARGET project_legends POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/bin/SDL2.dll"
-            "$<TARGET_FILE_DIR:project_legends>"
-    )
+    if(WIN32)
+        target_link_libraries(project_legends PRIVATE mingw32 SDL2main SDL2)
+    elseif(TARGET SDL2::SDL2)
+        target_link_libraries(project_legends PRIVATE SDL2::SDL2)
+    else()
+        target_link_libraries(project_legends PRIVATE ${SDL2_LIBRARIES})
+    endif()
+
+    # Copy SDL2.dll to output directory for local Windows builds that use the
+    # bundled SDL2 binary layout.
+    if(WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/bin/SDL2.dll")
+        add_custom_command(TARGET project_legends POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/bin/SDL2.dll"
+                "$<TARGET_FILE_DIR:project_legends>"
+        )
+    endif()
 
     message(STATUS "Building project_legends executable with SDL2")
 endif()

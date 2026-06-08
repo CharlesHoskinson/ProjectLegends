@@ -204,7 +204,7 @@ TEST(AIScreenContextTest, CaptureScreenContextWithFakeRuntime) {
     runtime.mock_info.rows = 2;
     for (int i = 0; i < 10; ++i) {
         legends_text_cell_t cell{};
-        cell.character = 'A' + i;
+        cell.character = static_cast<uint8_t>('A' + i);
         cell.attribute = 0x07;
         runtime.mock_cells.push_back(cell);
     }
