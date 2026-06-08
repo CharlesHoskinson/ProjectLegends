@@ -1,0 +1,106 @@
+<project_legends_gemini_flash_sprint>
+  <role>
+    You are Gemini 3.5 Flash acting as the implementation worker for ProjectLegends.
+    Codex is the auditor. Your job is to implement the OpenSpec changes and return a QA artifact for Codex to audit gate by gate.
+  </role>
+
+  <repository_state>
+    <repo>CharlesHoskinson/ProjectLegends</repo>
+    <branch>master</branch>
+    <baseline_commit>46e6bd53a86070c396417132583df175920d5257</baseline_commit>
+    <important_fact>Application RuntimeHost direct app bypasses must remain exactly two: legends_create and legends_destroy.</important_fact>
+    <important_fact>Transport routing is not functional support. Do not mark an API proxy-supported merely because a proxy request and dispatcher case exist.</important_fact>
+    <important_fact>Codex previously had to fix ABI guard behavior, hostile IPC payload parsing, dispatcher allocation safety, and an overclaimed legends_joystick_event capability. Treat those as standing requirements.</important_fact>
+  </repository_state>
+
+  <openspec_changes>
+    <change id="abi-parity-negative-gates" path="openspec/changes/abi-parity-negative-gates"/>
+    <change id="ipc-wire-adversarial-gates" path="openspec/changes/ipc-wire-adversarial-gates"/>
+    <change id="capability-truth-semantics-v2" path="openspec/changes/capability-truth-semantics-v2"/>
+  </openspec_changes>
+
+  <phase_0_validate_designs>
+    <command>openspec.cmd validate abi-parity-negative-gates --strict --json</command>
+    <command>openspec.cmd validate ipc-wire-adversarial-gates --strict --json</command>
+    <command>openspec.cmd validate capability-truth-semantics-v2 --strict --json</command>
+    <instruction>Stop and report if any OpenSpec validation fails before implementation.</instruction>
+  </phase_0_validate_designs>
+
+  <phase_1_abi_parity_negative_gates>
+    <goal>Create enforceable ABI parity contracts and tests for public legends_* APIs touched by RuntimeHost and proxy work.</goal>
+    <required_artifacts>
+      <file>docs/architecture/abi_parity_contracts.json</file>
+      <file>scripts/check_abi_parity_contracts.py</file>
+    </required_artifacts>
+    <requirements>
+      <item>The checker must be dependency-free and runnable with Python from the repository root.</item>
+      <item>The checker must parse include/legends/legends_embed.h and reject manifest entries for unknown exports.</item>
+      <item>The manifest must require or explicitly waive null_handle, null_required_out, query_fill, undersized_buffer, default_initialized_output, and direct_proxy_return_parity cases where applicable.</item>
+      <item>Every not_applicable case must include a reason.</item>
+      <item>Add focused tests for missing ABI edge cases before marking this phase PASS.</item>
+    </requirements>
+  </phase_1_abi_parity_negative_gates>
+
+  <phase_2_ipc_wire_adversarial_gates>
+    <goal>Expand IPC message and dispatcher tests to prove malformed dynamic payloads are rejected safely.</goal>
+    <requirements>
+      <item>Add malformed payload tests for truncated, oversized, declared-size-mismatched, and odd typed-array payloads.</item>
+      <item>Cover save/load state payloads, text capture cells, MIDI audio samples, and string-backed requests.</item>
+      <item>Add dispatcher tests proving capture handlers query required size before allocation and return LEGENDS_ERR_BUFFER_TOO_SMALL for too-small caller counts.</item>
+      <item>Do not introduce heavyweight fuzzing dependencies into required CI.</item>
+      <item>Add or update a concise docs/architecture IPC safety note listing dynamic message families and test coverage.</item>
+    </requirements>
+  </phase_2_ipc_wire_adversarial_gates>
+
+  <phase_3_capability_truth_semantics_v2>
+    <goal>Separate proxy routing from public proxy support in capability truth and validation.</goal>
+    <requirements>
+      <item>Extend docs/architecture/capability_truth.json with route-vs-support semantics while preserving Markdown matrix sync.</item>
+      <item>Update scripts/check_capability_matrix.py to validate proxy_status and proxy_route_status separately.</item>
+      <item>Reject proxy-supported claims for direct partial or unsupported APIs unless explicit notes and test evidence prove proxy mode is functionally complete.</item>
+      <item>Keep legends_joystick_event proxy-partial unless its underlying direct behavior becomes fully implemented and tested.</item>
+      <item>Emit summary counts by proxy support status and proxy route status.</item>
+    </requirements>
+  </phase_3_capability_truth_semantics_v2>
+
+  <phase_4_ci_and_graphify>
+    <goal>Wire only fast deterministic gates into CI and verify architecture reports remain consistent.</goal>
+    <requirements>
+      <item>Wire the ABI parity checker into .github/workflows/sprint2-checks.yml if it runs quickly without external dependencies.</item>
+      <item>Keep existing capability, conflict marker, and Graphify checks passing.</item>
+      <item>Refresh Graphify source overlay only if source files changed in a way that affects the graph.</item>
+      <item>Verify RuntimeHost app bypass count remains exactly 2.</item>
+    </requirements>
+  </phase_4_ci_and_graphify>
+
+  <verification_commands>
+    <command>openspec.cmd validate abi-parity-negative-gates --strict --json</command>
+    <command>openspec.cmd validate ipc-wire-adversarial-gates --strict --json</command>
+    <command>openspec.cmd validate capability-truth-semantics-v2 --strict --json</command>
+    <command>python scripts/check_abi_parity_contracts.py --repo .</command>
+    <command>python scripts/check_capability_matrix.py --repo .</command>
+    <command>python scripts/check_conflict_markers.py --path .</command>
+    <command>cmake --preset dev</command>
+    <command>cmake --build --preset dev</command>
+    <command>build/dev/legends_abi_test.exe</command>
+    <command>build/dev/legends_unit_tests.exe</command>
+    <command>python scripts/graphify_projectlegends.py runtimehost-bypasses --repo .</command>
+    <command>git diff --check</command>
+  </verification_commands>
+
+  <qa_artifact>
+    <path>docs/superpowers/reviews/2026-06-08-gemini-35-flash-openspec-quality-gates-qa.md</path>
+    <required_sections>
+      <section>OpenSpec change paths and validation results</section>
+      <section>Gate status table</section>
+      <section>Files changed</section>
+      <section>ABI parity manifest summary and uncovered/waived cases</section>
+      <section>IPC adversarial test matrix</section>
+      <section>Capability support-vs-route summary counts</section>
+      <section>Commands passed with exact counts where applicable</section>
+      <section>Commands failed or blocked with reasons</section>
+      <section>Remaining risks</section>
+      <section>Top five Codex audit targets</section>
+    </required_sections>
+  </qa_artifact>
+</project_legends_gemini_flash_sprint>
