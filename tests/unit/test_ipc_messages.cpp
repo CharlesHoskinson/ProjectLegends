@@ -338,20 +338,27 @@ TEST_F(IpcMessagesTest, IsAudioActiveRespRoundTrip) {
 
 TEST_F(IpcMessagesTest, SaveStateRespRoundTrip) {
     SaveStateResp m;
-    m.error_code = 0; m.data_size = 680;
-    m.serialize(buf());
-    auto r = SaveStateResp::deserialize(cbuf());
+    m.error_code = 0;
+    m.data_size = 4;
+    m.state_bytes = {0xDE, 0xAD, 0xBE, 0xEF};
+    std::vector<uint8_t> local_buf(m.serialized_size_dynamic());
+    m.serialize(local_buf);
+    auto r = SaveStateResp::deserialize(local_buf);
     ASSERT_TRUE(r.has_value());
-    EXPECT_EQ(r->data_size, 680u);
+    EXPECT_EQ(r->data_size, 4u);
+    EXPECT_EQ(r->state_bytes, m.state_bytes);
 }
 
 TEST_F(IpcMessagesTest, LoadStateReqRoundTrip) {
     LoadStateReq m;
-    m.data_size = 1024;
-    m.serialize(buf());
-    auto r = LoadStateReq::deserialize(cbuf());
+    m.data_size = 4;
+    m.state_bytes = {1, 2, 3, 4};
+    std::vector<uint8_t> local_buf(m.serialized_size_dynamic());
+    m.serialize(local_buf);
+    auto r = LoadStateReq::deserialize(local_buf);
     ASSERT_TRUE(r.has_value());
-    EXPECT_EQ(r->data_size, 1024u);
+    EXPECT_EQ(r->data_size, 4u);
+    EXPECT_EQ(r->state_bytes, m.state_bytes);
 }
 
 // ── Zero-payload request round-trips ────────────────────────────────────────
@@ -405,4 +412,136 @@ TEST_F(IpcMessagesTest, StepCyclesRespRoundTrip) {
     EXPECT_EQ(r->emu_time_us, 67890ull);
     EXPECT_EQ(r->stop_reason, 1u);
     EXPECT_EQ(r->events_processed, 7u);
+}
+
+TEST_F(IpcMessagesTest, SaveStateRespDynamicRoundTrip) {
+    SaveStateResp m;
+    m.error_code = 0;
+    m.data_size = 4;
+    m.state_bytes = {1, 2, 3, 4};
+    std::vector<uint8_t> local_buf(m.serialized_size_dynamic());
+    m.serialize(local_buf);
+    auto r = SaveStateResp::deserialize(local_buf);
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->error_code, 0);
+    EXPECT_EQ(r->data_size, 4u);
+    EXPECT_EQ(r->state_bytes.size(), 4u);
+    EXPECT_EQ(r->state_bytes[2], 3);
+}
+
+TEST_F(IpcMessagesTest, SaveStateRespRejectsTruncatedPayload) {
+    std::array<uint8_t, 10> local_buf{};
+    SaveStateResp m;
+    m.error_code = 0;
+    m.data_size = 4;
+    m.state_bytes = {1, 2};
+
+    // Write an intentionally inconsistent header by hand: declared payload is
+    // four bytes, but only two bytes are present.
+    local_buf[4] = 4;
+    auto r = SaveStateResp::deserialize(
+        std::span<const uint8_t>(local_buf.data(), local_buf.size()));
+    ASSERT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), IpcError::BufferTooSmall);
+}
+
+TEST_F(IpcMessagesTest, GetConfigRespRoundTrip) {
+    GetConfigResp m;
+    m.error_code = 0;
+    m.struct_size = 32;
+    m.api_version = 1;
+    m.memory_kb = 640;
+    m.cpu_cycles = 1000;
+    m.cpu_type = 3;
+    m.machine_type = 1;
+    m.deterministic = 1;
+
+    m.serialize(buf());
+    auto r = GetConfigResp::deserialize(cbuf());
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->error_code, 0);
+    EXPECT_EQ(r->struct_size, 32u);
+    EXPECT_EQ(r->api_version, 1u);
+    EXPECT_EQ(r->memory_kb, 640u);
+    EXPECT_EQ(r->cpu_cycles, 1000u);
+    EXPECT_EQ(r->cpu_type, 3);
+    EXPECT_EQ(r->machine_type, 1);
+    EXPECT_EQ(r->deterministic, 1);
+}
+
+TEST_F(IpcMessagesTest, CaptureTextRespRoundTrip) {
+    CaptureTextResp m;
+    m.error_code = 0;
+    m.required_count = 2;
+    m.columns = 80;
+    m.rows = 25;
+    m.cells = {{'A', 0x07}, {'B', 0x0F}};
+
+    std::vector<uint8_t> local_buf(m.serialized_size_dynamic());
+    m.serialize(local_buf);
+    auto r = CaptureTextResp::deserialize(local_buf);
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->error_code, 0);
+    EXPECT_EQ(r->required_count, 2u);
+    EXPECT_EQ(r->columns, 80);
+    EXPECT_EQ(r->rows, 25);
+    ASSERT_EQ(r->cells.size(), 2u);
+    EXPECT_EQ(r->cells[0].character, 'A');
+    EXPECT_EQ(r->cells[1].attribute, 0x0F);
+}
+
+TEST_F(IpcMessagesTest, CaptureTextRespRejectsOddCellPayload) {
+    CaptureTextResp m;
+    m.error_code = 0;
+    m.required_count = 1;
+
+    std::vector<uint8_t> local_buf(17);
+    m.serialize(std::span<uint8_t>(local_buf.data(), 16));
+    local_buf[16] = 'A';
+
+    auto r = CaptureTextResp::deserialize(local_buf);
+    ASSERT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), IpcError::InvalidArgument);
+}
+
+TEST_F(IpcMessagesTest, GetLastErrorRespRoundTrip) {
+    GetLastErrorResp m;
+    m.error_code = 0;
+    m.required_len = 12;
+    m.error_msg = "Hello World";
+
+    std::vector<uint8_t> local_buf(m.serialized_size_dynamic());
+    m.serialize(local_buf);
+    auto r = GetLastErrorResp::deserialize(local_buf);
+    ASSERT_TRUE(r.has_value());
+    EXPECT_EQ(r->error_code, 0);
+    EXPECT_EQ(r->required_len, 12u);
+    EXPECT_EQ(r->error_msg, "Hello World");
+}
+
+TEST_F(IpcMessagesTest, LoadStateReqRejectsMismatchedPayloadSize) {
+    std::array<uint8_t, 6> local_buf{};
+    // data_size = 4, but only two payload bytes follow.
+    local_buf[0] = 4;
+    local_buf[4] = 0xAA;
+    local_buf[5] = 0xBB;
+
+    auto r = LoadStateReq::deserialize(
+        std::span<const uint8_t>(local_buf.data(), local_buf.size()));
+    ASSERT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), IpcError::BufferTooSmall);
+}
+
+TEST_F(IpcMessagesTest, CaptureMidiAudioRespRejectsOddPayload) {
+    CaptureMidiAudioResp m;
+    m.error_code = 0;
+    m.required_count = 1;
+
+    std::vector<uint8_t> local_buf(9);
+    m.serialize(std::span<uint8_t>(local_buf.data(), 8));
+    local_buf[8] = 0x7F;
+
+    auto r = CaptureMidiAudioResp::deserialize(local_buf);
+    ASSERT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), IpcError::InvalidArgument);
 }

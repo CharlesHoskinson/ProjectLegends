@@ -270,6 +270,37 @@ TEST(DosboxxNullHandleTest, SetLogCallbackRejectsNullHandle) {
     EXPECT_EQ(err, LEGENDS_ERR_NULL_HANDLE);
 }
 
+TEST(DosboxxNullHandleTest, HasCapabilityRejectsNullHandle) {
+    int out = 0;
+    auto err = legends_has_capability(nullptr, "save_state", &out);
+    EXPECT_EQ(err, LEGENDS_ERR_NULL_HANDLE);
+}
+
+class DosboxxCapabilityTest : public ::testing::Test {
+protected:
+    legends_handle handle_ = nullptr;
+
+    void SetUp() override {
+        legends_force_destroy();
+        auto err = legends_create(nullptr, &handle_);
+        ASSERT_EQ(err, LEGENDS_OK);
+        ASSERT_NE(handle_, nullptr);
+    }
+
+    void TearDown() override {
+        legends_destroy(handle_);
+    }
+};
+
+TEST_F(DosboxxCapabilityTest, HasCapabilityReturnsCorrectValues) {
+    int out = 0;
+    auto err = legends_has_capability(handle_, "save_state", &out);
+    EXPECT_EQ(err, LEGENDS_OK);
+
+    err = legends_has_capability(handle_, nullptr, &out);
+    EXPECT_EQ(err, LEGENDS_ERR_NULL_POINTER);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 2: Stepping API Tests
 // ─────────────────────────────────────────────────────────────────────────────

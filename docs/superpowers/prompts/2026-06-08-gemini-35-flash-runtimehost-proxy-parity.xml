@@ -1,0 +1,117 @@
+<project_legends_gemini_flash_sprint>
+  <role>
+    You are Gemini 3.5 Flash acting as the implementation worker for ProjectLegends.
+    Codex is the auditor and will verify your work gate by gate after you return the QA artifact.
+  </role>
+
+  <repository_state>
+    <repo>CharlesHoskinson/ProjectLegends</repo>
+    <branch>master</branch>
+    <baseline_commit>6900e7a3766a1b0d8843c0537ae8baf50f632957</baseline_commit>
+    <important_fact>Application RuntimeHost bypasses must remain exactly two: legends_create and legends_destroy.</important_fact>
+    <important_fact>Do not mark callback, video capture, or TTF APIs proxy-supported unless you implement direct/proxy/dispatcher/tests end to end.</important_fact>
+  </repository_state>
+
+  <openspec_changes>
+    <change id="runtimehost-proxy-core-parity" path="openspec/changes/runtimehost-proxy-core-parity"/>
+    <change id="runtimehost-proxy-device-command-parity" path="openspec/changes/runtimehost-proxy-device-command-parity"/>
+    <change id="runtimehost-proxy-parity-quality-gates" path="openspec/changes/runtimehost-proxy-parity-quality-gates"/>
+  </openspec_changes>
+
+  <phase_0_validate_designs>
+    <command>openspec.cmd validate runtimehost-proxy-core-parity --strict --json</command>
+    <command>openspec.cmd validate runtimehost-proxy-device-command-parity --strict --json</command>
+    <command>openspec.cmd validate runtimehost-proxy-parity-quality-gates --strict --json</command>
+    <instruction>Stop and report if any of these three changes fail validation before coding.</instruction>
+  </phase_0_validate_designs>
+
+  <phase_1_core_proxy_parity>
+    <goal>Implement IPC proxy parity for core RuntimeHost-dependent APIs.</goal>
+    <apis>
+      <api>legends_get_config</api>
+      <api>legends_capture_text</api>
+      <api>legends_save_state</api>
+      <api>legends_load_state</api>
+      <api>legends_verify_determinism</api>
+      <api>legends_get_last_error</api>
+    </apis>
+    <requirements>
+      <item>Add missing message structs and serialization/deserialization with bounds checks.</item>
+      <item>Add proxy implementations that preserve null-pointer, null-handle, and two-call buffer semantics.</item>
+      <item>Add engine dispatcher cases that forward to direct legends_* APIs.</item>
+      <item>Add message and dispatcher tests.</item>
+    </requirements>
+  </phase_1_core_proxy_parity>
+
+  <phase_2_device_command_proxy_parity>
+    <goal>Implement request/response proxy parity for direct-supported command APIs.</goal>
+    <apis>
+      <api>legends_key_event_ext</api>
+      <api>legends_text_input</api>
+      <api>legends_joystick_event</api>
+      <api>legends_midi_set_device</api>
+      <api>legends_midi_set_soundfont</api>
+      <api>legends_midi_set_romdir</api>
+      <api>legends_capture_midi_audio</api>
+      <api>legends_printer_set_output</api>
+      <api>legends_printer_is_active</api>
+      <api>legends_printer_flush</api>
+      <api>legends_ipx_enable</api>
+      <api>legends_ipx_connect</api>
+      <api>legends_ipx_disconnect</api>
+      <api>legends_ipx_is_connected</api>
+      <api>legends_glide_enable</api>
+      <api>legends_glide_set_resolution</api>
+      <api>legends_set_machine_pc98</api>
+      <api>legends_is_pc98_mode</api>
+      <api>legends_has_capability</api>
+    </apis>
+    <requirements>
+      <item>Use distinct KeyEventExtReq routing for legends_key_event_ext.</item>
+      <item>Use null-terminated owning strings before direct C ABI calls in dispatcher code.</item>
+      <item>Preserve query/fill behavior for legends_capture_midi_audio.</item>
+      <item>Leave callback, video capture, and TTF APIs truthful unless implemented completely.</item>
+    </requirements>
+  </phase_2_device_command_proxy_parity>
+
+  <phase_3_truth_gates>
+    <goal>Update capability truth and prevent future proxy parity drift.</goal>
+    <requirements>
+      <item>Update docs/architecture/capability_truth.json.</item>
+      <item>Update docs/architecture/2026-06-08-public-capability-truth-matrix.md.</item>
+      <item>Refresh or add a proxy parity report listing remaining proxy-missing/proxy-partial APIs.</item>
+      <item>Refresh Graphify source overlay and verify RuntimeHost app bypass count remains exactly 2.</item>
+      <item>Wire any new deterministic validator into Sprint 2 Checks only if it is fast and dependency-free.</item>
+    </requirements>
+  </phase_3_truth_gates>
+
+  <verification_commands>
+    <command>openspec.cmd validate runtimehost-proxy-core-parity --strict --json</command>
+    <command>openspec.cmd validate runtimehost-proxy-device-command-parity --strict --json</command>
+    <command>openspec.cmd validate runtimehost-proxy-parity-quality-gates --strict --json</command>
+    <command>cmake --preset dev</command>
+    <command>cmake --build --preset dev</command>
+    <command>build/dev/legends_abi_test.exe</command>
+    <command>build/dev/legends_unit_tests.exe</command>
+    <command>python scripts/check_capability_matrix.py --repo .</command>
+    <command>python scripts/check_conflict_markers.py --path .</command>
+    <command>python scripts/graphify_projectlegends.py update --repo . --source-only</command>
+    <command>python scripts/graphify_projectlegends.py runtimehost-bypasses --repo .</command>
+    <command>python scripts/check_graphify_enrichment.py --repo . --overlay graphify-out/projectlegends-enrichment.json --strict --strict-tests fail --allow-missing-graphify</command>
+    <command>git diff --check</command>
+  </verification_commands>
+
+  <qa_artifact>
+    <path>docs/superpowers/reviews/2026-06-08-gemini-35-flash-openspec-runtimehost-proxy-parity-qa.md</path>
+    <required_sections>
+      <section>OpenSpec change paths and validation results</section>
+      <section>Gate status table</section>
+      <section>Before/after proxy capability counts</section>
+      <section>Files changed</section>
+      <section>Commands passed</section>
+      <section>Commands failed or blocked</section>
+      <section>Remaining proxy-missing/proxy-partial APIs with reasons</section>
+      <section>Top five Codex audit targets</section>
+    </required_sections>
+  </qa_artifact>
+</project_legends_gemini_flash_sprint>

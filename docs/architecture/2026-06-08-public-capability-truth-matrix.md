@@ -27,86 +27,86 @@ The proxy column is intentionally conservative. A proxy wrapper that only reads 
 
 | Exported C API | Direct Mode Status | IPC/Proxy Mode Status | Evidence / Notes |
 | :--- | :--- | :--- | :--- |
-| `legends_get_api_version` | `implemented` | `proxy-supported` | Proxy sends `GetApiVersionReq`; dispatcher handles it. |
-| `legends_create` | `implemented` | `proxy-supported` | Proxy sends `CreateReq`; dispatcher creates one engine singleton. |
-| `legends_destroy` | `implemented` | `proxy-supported` | Proxy sends `DestroyReq`; dispatcher destroys `g_handle`. |
-| `legends_force_destroy` | `implemented` | `proxy-supported` | Proxy maps to `DestroyReq`; no distinct force semantics in proxy. |
-| `legends_reset` | `implemented` | `proxy-supported` | Proxy sends `ResetReq`; dispatcher handles it. |
-| `legends_get_config` | `implemented` | `proxy-missing` | Proxy returns `LEGENDS_ERR_NOT_SUPPORTED`. |
+| `legends_get_api_version` | `implemented` | `proxy-supported` | Proxy sends GetApiVersionReq; dispatcher handles it. |
+| `legends_create` | `implemented` | `proxy-supported` | Proxy sends CreateReq; dispatcher creates engine singleton. |
+| `legends_destroy` | `implemented` | `proxy-supported` | Proxy sends DestroyReq; dispatcher destroys g_handle. |
+| `legends_force_destroy` | `implemented` | `proxy-supported` | Proxy maps to DestroyReq; no distinct force semantics in proxy. |
+| `legends_reset` | `implemented` | `proxy-supported` | Proxy sends ResetReq; dispatcher handles it. |
+| `legends_get_config` | `implemented` | `proxy-supported` | Proxy sends GetConfigReq; dispatcher handles it. |
 
 ## Emulation Control
 
 | Exported C API | Direct Mode Status | IPC/Proxy Mode Status | Evidence / Notes |
 | :--- | :--- | :--- | :--- |
-| `legends_step_ms` | `implemented` | `proxy-supported` | Proxy sends `StepMsReq`; dispatcher handles it. |
-| `legends_step_cycles` | `implemented` | `proxy-supported` | Proxy sends `StepCyclesReq`; dispatcher handles it. |
-| `legends_get_emu_time` | `implemented` | `proxy-supported` | Proxy sends `GetEmuTimeReq`; dispatcher handles it. |
-| `legends_get_total_cycles` | `implemented` | `proxy-supported` | Proxy sends `GetTotalCyclesReq`; dispatcher handles it. |
+| `legends_step_ms` | `implemented` | `proxy-supported` | Proxy sends StepMsReq; dispatcher handles it. |
+| `legends_step_cycles` | `implemented` | `proxy-supported` | Proxy sends StepCyclesReq; dispatcher handles it. |
+| `legends_get_emu_time` | `implemented` | `proxy-supported` | Proxy sends GetEmuTimeReq; dispatcher handles it. |
+| `legends_get_total_cycles` | `implemented` | `proxy-supported` | Proxy sends GetTotalCyclesReq; dispatcher handles it. |
 
 ## Screen & Frame Capture
 
 | Exported C API | Direct Mode Status | IPC/Proxy Mode Status | Evidence / Notes |
 | :--- | :--- | :--- | :--- |
-| `legends_capture_text` | `implemented` | `proxy-missing` | Proxy returns `LEGENDS_ERR_NOT_SUPPORTED`. |
+| `legends_capture_text` | `implemented` | `proxy-supported` | Proxy sends CaptureTextReq; dispatcher handles it. |
 | `legends_capture_rgb` | `implemented` | `proxy-partial` | Proxy reads framebuffer SHM, but engine host does not open/write framebuffer SHM. |
-| `legends_is_frame_dirty` | `implemented` | `proxy-supported` | Proxy sends `IsFrameDirtyReq`; dispatcher handles it. |
-| `legends_get_cursor` | `implemented` | `proxy-supported` | Proxy sends `GetCursorReq`; dispatcher handles it. |
+| `legends_is_frame_dirty` | `implemented` | `proxy-supported` | Proxy sends IsFrameDirtyReq; dispatcher handles it. |
+| `legends_get_cursor` | `implemented` | `proxy-supported` | Proxy sends GetCursorReq; dispatcher handles it. |
 
 ## Input Injection
 
 | Exported C API | Direct Mode Status | IPC/Proxy Mode Status | Evidence / Notes |
 | :--- | :--- | :--- | :--- |
-| `legends_key_event` | `implemented` | `proxy-supported` | Proxy sends `KeyEventReq`; dispatcher handles it. |
-| `legends_key_event_ext` | `implemented` | `proxy-partial` | Proxy aliases to `legends_key_event`; extended E0 semantics are not represented in IPC. |
-| `legends_text_input` | `implemented` | `proxy-missing` | Proxy returns `LEGENDS_ERR_NOT_SUPPORTED`. |
-| `legends_mouse_event` | `implemented` | `proxy-supported` | Proxy sends `MouseEventReq`; dispatcher handles it. |
+| `legends_key_event` | `implemented` | `proxy-supported` | Proxy sends KeyEventReq; dispatcher handles it. |
+| `legends_key_event_ext` | `implemented` | `proxy-supported` | Proxy sends KeyEventExtReq; dispatcher handles it. |
+| `legends_text_input` | `implemented` | `proxy-supported` | Proxy sends TextInputReq; dispatcher handles it. |
+| `legends_mouse_event` | `implemented` | `proxy-supported` | Proxy sends MouseEventReq; dispatcher handles it. |
 
 ## Audio & Media Capture
 
 | Exported C API | Direct Mode Status | IPC/Proxy Mode Status | Evidence / Notes |
 | :--- | :--- | :--- | :--- |
 | `legends_capture_audio` | `implemented` | `proxy-partial` | Proxy reads audio ring SHM, but engine host does not open/write the audio ring. |
-| `legends_is_audio_active` | `implemented` | `proxy-supported` | Proxy sends `IsAudioActiveReq`; dispatcher handles it. |
-| `legends_start_video_capture` | `unsupported` | `proxy-missing` | Direct returns `LEGENDS_ERR_NOT_SUPPORTED`; proxy also returns unsupported. |
-| `legends_stop_video_capture` | `stub-success` | `proxy-missing` | Direct returns `LEGENDS_OK` without stopping an app capture controller; proxy returns unsupported. |
-| `legends_is_video_capturing` | `stub-success` | `proxy-missing` | Direct always reports `0`; proxy returns unsupported. |
+| `legends_is_audio_active` | `implemented` | `proxy-supported` | Proxy sends IsAudioActiveReq; dispatcher handles it. |
+| `legends_start_video_capture` | `unsupported` | `proxy-missing` | Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly. |
+| `legends_stop_video_capture` | `stub-success` | `proxy-missing` | Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly. |
+| `legends_is_video_capturing` | `stub-success` | `proxy-missing` | Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly. |
 
 ## Save State & Determinism
 
 | Exported C API | Direct Mode Status | IPC/Proxy Mode Status | Evidence / Notes |
 | :--- | :--- | :--- | :--- |
-| `legends_save_state` | `implemented` | `proxy-missing` | Proxy returns `LEGENDS_ERR_NOT_SUPPORTED`; dispatcher has no `SaveStateReq` case. |
-| `legends_load_state` | `implemented` | `proxy-missing` | Proxy returns `LEGENDS_ERR_NOT_SUPPORTED`; dispatcher has no `LoadStateReq` case. |
-| `legends_get_state_hash` | `implemented` | `proxy-supported` | Proxy sends `GetStateHashReq`; dispatcher handles it. |
-| `legends_verify_determinism` | `implemented` | `proxy-missing` | Proxy returns `LEGENDS_ERR_NOT_SUPPORTED`. |
+| `legends_save_state` | `implemented` | `proxy-supported` | Proxy sends SaveStateReq; dispatcher handles it. |
+| `legends_load_state` | `implemented` | `proxy-supported` | Proxy sends LoadStateReq; dispatcher handles it. |
+| `legends_get_state_hash` | `implemented` | `proxy-supported` | Proxy sends GetStateHashReq; dispatcher handles it. |
+| `legends_verify_determinism` | `implemented` | `proxy-supported` | Proxy sends VerifyDeterminismReq; dispatcher handles it. |
 
 ## Storage, Peripheral, Network, And Diagnostics
 
 | Exported C API | Direct Mode Status | IPC/Proxy Mode Status | Evidence / Notes |
 | :--- | :--- | :--- | :--- |
-| `legends_get_last_error` | `implemented` | `proxy-missing` | Proxy returns `LEGENDS_ERR_NOT_SUPPORTED`. |
-| `legends_mount_drive` | `partial` | `proxy-supported` | Direct supports only directory mounts; proxy sends `MountDriveReq`, which is dispatched to the engine host. |
-| `legends_unmount_drive` | `implemented` | `proxy-supported` | Proxy sends `UnmountDriveReq`, which is dispatched to the engine host. |
-| `legends_joystick_event` | `partial` | `proxy-missing` | Direct mutates BDA then returns `LEGENDS_ERR_NOT_SUPPORTED`; proxy returns unsupported. |
-| `legends_midi_set_device` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_midi_set_soundfont` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_midi_set_romdir` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_capture_midi_audio` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_printer_set_output` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_printer_is_active` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_printer_flush` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_set_ttf_font` | `unsupported` | `proxy-missing` | Direct returns unsupported because TTF is app-layer owned. |
-| `legends_ipx_enable` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_ipx_connect` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_ipx_disconnect` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_ipx_is_connected` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_glide_enable` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_glide_set_resolution` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_set_machine_pc98` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_is_pc98_mode` | `implemented` | `proxy-missing` | Proxy returns unsupported. |
-| `legends_set_log_callback` | `implemented` | `proxy-missing` | Proxy returns `LEGENDS_ERR_NOT_SUPPORTED`. |
-| `legends_register_event_callback` | `implemented` | `proxy-missing` | Proxy returns `LEGENDS_ERR_NOT_SUPPORTED`. |
-| `legends_has_capability` | `partial` | `proxy-missing` | Direct table is stale/incomplete; proxy returns unsupported. |
+| `legends_get_last_error` | `implemented` | `proxy-supported` | Proxy sends GetLastErrorReq; dispatcher handles it. |
+| `legends_mount_drive` | `partial` | `proxy-supported` | Proxy sends MountDriveReq, and dispatcher handles it and forwards to legends_mount_drive. |
+| `legends_unmount_drive` | `implemented` | `proxy-supported` | Proxy sends UnmountDriveReq, and dispatcher handles it and forwards to legends_unmount_drive. |
+| `legends_joystick_event` | `partial` | `proxy-partial` | Proxy sends JoystickEventReq and dispatcher routes it, but the underlying direct API remains partial. |
+| `legends_midi_set_device` | `implemented` | `proxy-supported` | Proxy sends MidiSetDeviceReq; dispatcher handles it. |
+| `legends_midi_set_soundfont` | `implemented` | `proxy-supported` | Proxy sends MidiSetSoundfontReq; dispatcher handles it. |
+| `legends_midi_set_romdir` | `implemented` | `proxy-supported` | Proxy sends MidiSetRomdirReq; dispatcher handles it. |
+| `legends_capture_midi_audio` | `implemented` | `proxy-supported` | Proxy sends CaptureMidiAudioReq; dispatcher handles it. |
+| `legends_printer_set_output` | `implemented` | `proxy-supported` | Proxy sends PrinterSetOutputReq; dispatcher handles it. |
+| `legends_printer_is_active` | `implemented` | `proxy-supported` | Proxy sends PrinterIsActiveReq; dispatcher handles it. |
+| `legends_printer_flush` | `implemented` | `proxy-supported` | Proxy sends PrinterFlushReq; dispatcher handles it. |
+| `legends_set_ttf_font` | `unsupported` | `proxy-missing` | Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly. |
+| `legends_ipx_enable` | `implemented` | `proxy-supported` | Proxy sends IpxEnableReq; dispatcher handles it. |
+| `legends_ipx_connect` | `implemented` | `proxy-supported` | Proxy sends IpxConnectReq; dispatcher handles it. |
+| `legends_ipx_disconnect` | `implemented` | `proxy-supported` | Proxy sends IpxDisconnectReq; dispatcher handles it. |
+| `legends_ipx_is_connected` | `implemented` | `proxy-supported` | Proxy sends IpxIsConnectedReq; dispatcher handles it. |
+| `legends_glide_enable` | `implemented` | `proxy-supported` | Proxy sends GlideEnableReq; dispatcher handles it. |
+| `legends_glide_set_resolution` | `implemented` | `proxy-supported` | Proxy sends GlideSetResolutionReq; dispatcher handles it. |
+| `legends_set_machine_pc98` | `implemented` | `proxy-supported` | Proxy sends SetMachinePc98Req; dispatcher handles it. |
+| `legends_is_pc98_mode` | `implemented` | `proxy-supported` | Proxy sends IsPc98ModeReq; dispatcher handles it. |
+| `legends_set_log_callback` | `implemented` | `proxy-missing` | Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly. |
+| `legends_register_event_callback` | `implemented` | `proxy-missing` | Proxy returns LEGENDS_ERR_NOT_SUPPORTED directly. |
+| `legends_has_capability` | `partial` | `proxy-supported` | Proxy sends HasCapabilityReq; dispatcher handles it. |
 
 ## Auditor Notes
 

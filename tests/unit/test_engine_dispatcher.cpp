@@ -118,3 +118,57 @@ TEST_F(EngineDispatcherTest, DispatchHeartbeat) {
     ASSERT_TRUE(resp.has_value());
     EXPECT_EQ(resp->timestamp_us, 42u);
 }
+
+TEST_F(EngineDispatcherTest, DispatchGetConfig) {
+    // Create
+    CreateReq create_req;
+    create_req.deterministic = 1;
+    create_req.memory_kb = 640;
+    std::vector<uint8_t> cpayload(CreateReq::serialized_size);
+    create_req.serialize(cpayload);
+    (void)dispatch(MsgType::CreateReq, cpayload);
+
+    // Get config
+    auto result = dispatch(MsgType::GetConfigReq, {});
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->response_type, MsgType::GetConfigResp);
+
+    auto resp = GetConfigResp::deserialize(result->payload);
+    ASSERT_TRUE(resp.has_value());
+    EXPECT_EQ(resp->error_code, LEGENDS_OK);
+    EXPECT_EQ(resp->memory_kb, 640u);
+    EXPECT_EQ(resp->deterministic, 1);
+}
+
+TEST_F(EngineDispatcherTest, DispatchVerifyDeterminism) {
+    // Create
+    CreateReq create_req;
+    create_req.deterministic = 1;
+    std::vector<uint8_t> cpayload(CreateReq::serialized_size);
+    create_req.serialize(cpayload);
+    (void)dispatch(MsgType::CreateReq, cpayload);
+
+    // Verify determinism
+    VerifyDeterminismReq req;
+    req.test_cycles = 100;
+    std::vector<uint8_t> payload(VerifyDeterminismReq::serialized_size);
+    req.serialize(payload);
+
+    auto result = dispatch(MsgType::VerifyDeterminismReq, payload);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->response_type, MsgType::VerifyDeterminismResp);
+
+    auto resp = VerifyDeterminismResp::deserialize(result->payload);
+    ASSERT_TRUE(resp.has_value());
+}
+
+TEST_F(EngineDispatcherTest, DispatchGetLastError) {
+    // Get last error
+    auto result = dispatch(MsgType::GetLastErrorReq, {});
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->response_type, MsgType::GetLastErrorResp);
+
+    auto resp = GetLastErrorResp::deserialize(result->payload);
+    ASSERT_TRUE(resp.has_value());
+    EXPECT_EQ(resp->error_code, LEGENDS_OK);
+}
