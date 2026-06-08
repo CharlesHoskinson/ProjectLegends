@@ -934,6 +934,8 @@ legends_error_t legends_create(
         // will overwrite these with actual engine state.
         inst->frame_state.reset();
         inst->frame_state.init_test_pattern();
+        inst->frame_state.cursor_x = 0;
+        inst->frame_state.cursor_y = 0;
         inst->frame_state.load_embedded_font();
 
         // Initialize input state
@@ -1029,6 +1031,8 @@ legends_error_t legends_reset(legends_handle handle) {
 
         // Reinitialize frame state with test pattern
         inst->frame_state.init_test_pattern();
+        inst->frame_state.cursor_x = 0;
+        inst->frame_state.cursor_y = 0;
 
         inst->last_error.clear();
         return LEGENDS_OK;
@@ -2010,8 +2014,6 @@ legends_error_t legends_save_state(
             return LEGENDS_ERR_INTERNAL;
         }
 
-        // Use actual size written, not pre-computed size
-        // This ensures header and checksum match actual data
         header.engine_size = static_cast<uint32_t>(actual_engine_size);
         offset += actual_engine_size;
     } else {
@@ -2019,17 +2021,19 @@ legends_error_t legends_save_state(
         header.engine_size = 0;
     }
 
-    // Calculate checksum based on actual written data (offset),
-    // not pre-computed required_size, in case actual sizes differed
-    const size_t actual_data_size = offset - sizeof(SaveStateHeader);
-    header.total_size = static_cast<uint32_t>(offset);
+    if (offset < required_size) {
+        std::memset(ptr + offset, 0, required_size - offset);
+        offset = required_size;
+    }
+
+    const size_t actual_data_size = required_size - sizeof(SaveStateHeader);
+    header.total_size = static_cast<uint32_t>(required_size);
     header.checksum = crc32(data_start, actual_data_size);
 
     // Write header to buffer (memcpy avoids unaligned access on caller buffer)
     std::memcpy(ptr, &header, sizeof(header));
 
-    // Update size_out to actual written size
-    *size_out = offset;
+    *size_out = required_size;
 
     return LEGENDS_OK;
 }

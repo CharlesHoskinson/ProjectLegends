@@ -65,9 +65,14 @@ uint32_t AudioRingBuffer::push(std::span<const int16_t> samples) {
     if (frames_to_write == 0) return 0;
 
     uint32_t wi = header_->write_index.load(std::memory_order_relaxed);
+    uint32_t ri = header_->read_index.load(std::memory_order_acquire);
     uint32_t samples_per_frame = channels_;
 
     for (uint32_t f = 0; f < frames_to_write; ++f) {
+        if (wi - ri >= capacity_) {
+            ++ri;
+            header_->read_index.store(ri, std::memory_order_release);
+        }
         uint32_t pos = (wi % capacity_) * samples_per_frame;
         for (uint32_t c = 0; c < samples_per_frame; ++c)
             samples_[pos + c] = samples[f * samples_per_frame + c];
@@ -105,7 +110,7 @@ uint32_t AudioRingBuffer::pop(std::span<int16_t> buffer) {
 }
 
 uint32_t AudioRingBuffer::available() const {
-    uint32_t ri = header_->read_index.load(std::memory_order_relaxed);
+    uint32_t ri = header_->read_index.load(std::memory_order_acquire);
     uint32_t wi = header_->write_index.load(std::memory_order_acquire);
     uint32_t avail = wi - ri;
     return std::min(avail, capacity_);

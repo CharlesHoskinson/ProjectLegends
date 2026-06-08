@@ -45,6 +45,11 @@ MSGTYPES_PATH = "include/legends_ipc/message_types.h"
 MESSAGES_PATH = "include/legends_ipc/messages.h"
 CAPABILITY_PATH = "docs/architecture/capability_truth.json"
 MATRIX_PATH = "docs/architecture/2026-06-08-public-capability-truth-matrix.md"
+APPLICATION_PATH = "src/app/application.cpp"
+APP_ROOT = "src/app"
+RUNTIME_HOST_PATH = "include/legends/runtime_host.h"
+RUNTIME_HOST_IMPL_PATH = "src/app/runtime_host.cpp"
+RUNTIMEHOST_ALLOWLIST_PATH = "docs/architecture/runtimehost-bypass-allowlist.json"
 CMAKE_PATH = "CMakeLists.txt"
 PRESETS_PATH = "CMakePresets.json"
 
@@ -57,6 +62,10 @@ CRITICAL_INPUTS = [
     MESSAGES_PATH,
     CAPABILITY_PATH,
     MATRIX_PATH,
+    APPLICATION_PATH,
+    RUNTIME_HOST_PATH,
+    RUNTIME_HOST_IMPL_PATH,
+    RUNTIMEHOST_ALLOWLIST_PATH,
     CMAKE_PATH,
     PRESETS_PATH,
 ]
@@ -507,6 +516,254 @@ def parse_presets(repo: Path) -> dict[str, dict[str, Any]]:
     return presets
 
 
+def mask_comments_and_strings(content: str) -> str:
+    chars = list(content)
+    i = 0
+    state = "code"
+    while i < len(chars):
+        ch = chars[i]
+        nxt = chars[i + 1] if i + 1 < len(chars) else ""
+
+        if state == "code":
+            if ch == "/" and nxt == "/":
+                chars[i] = chars[i + 1] = " "
+                i += 2
+                state = "line_comment"
+                continue
+            if ch == "/" and nxt == "*":
+                chars[i] = chars[i + 1] = " "
+                i += 2
+                state = "block_comment"
+                continue
+            if ch == '"':
+                chars[i] = " "
+                i += 1
+                state = "string"
+                continue
+            if ch == "'":
+                chars[i] = " "
+                i += 1
+                state = "char"
+                continue
+            i += 1
+            continue
+
+        if state == "line_comment":
+            if ch == "\n":
+                state = "code"
+            else:
+                chars[i] = " "
+            i += 1
+            continue
+
+        if state == "block_comment":
+            if ch == "*" and nxt == "/":
+                chars[i] = chars[i + 1] = " "
+                i += 2
+                state = "code"
+                continue
+            if ch != "\n":
+                chars[i] = " "
+            i += 1
+            continue
+
+        if state in {"string", "char"}:
+            quote = '"' if state == "string" else "'"
+            if ch == "\\":
+                chars[i] = " "
+                if i + 1 < len(chars) and chars[i + 1] != "\n":
+                    chars[i + 1] = " "
+                i += 2
+                continue
+            if ch == quote:
+                chars[i] = " "
+                i += 1
+                state = "code"
+                continue
+            if ch != "\n":
+                chars[i] = " "
+            i += 1
+
+    return "".join(chars)
+
+
+def normalized_line_at(content: str, offset: int) -> str:
+    line_start = content.rfind("\n", 0, offset) + 1
+    line_end = content.find("\n", offset)
+    if line_end == -1:
+        line_end = len(content)
+    return re.sub(r"\s+", " ", content[line_start:line_end].strip())
+
+
+def parse_function_ranges(masked_content: str) -> list[tuple[int, int, str]]:
+    ranges: list[tuple[int, int, str]] = []
+    control_keywords = {
+        "if",
+        "for",
+        "while",
+        "switch",
+        "catch",
+        "return",
+        "sizeof",
+        "static_cast",
+        "reinterpret_cast",
+        "const_cast",
+        "dynamic_cast",
+    }
+    pattern = re.compile(
+        r"^[ \t]*(?:[A-Za-z_][A-Za-z0-9_:<>,~*& \t]*[ \t]+)"
+        r"([A-Za-z_~][A-Za-z0-9_:~]*)\s*\([^;{}]*\)\s*"
+        r"(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?\{",
+        re.MULTILINE | re.DOTALL,
+    )
+    for match in pattern.finditer(masked_content):
+        name = match.group(1)
+        short_name = name.rsplit("::", 1)[-1]
+        if short_name in control_keywords:
+            continue
+        brace_start = masked_content.find("{", match.end() - 1)
+        if brace_start == -1:
+            continue
+        body_end = find_matching_brace(masked_content, brace_start)
+        if body_end is None:
+            continue
+        ranges.append((match.start(), body_end, name))
+    return ranges
+
+
+def enclosing_function(offset: int, ranges: list[tuple[int, int, str]]) -> str:
+    matches = [item for item in ranges if item[0] <= offset <= item[1]]
+    if not matches:
+        return "file_scope"
+    matches.sort(key=lambda item: item[1] - item[0])
+    return matches[0][2]
+
+
+def runtimehost_methods(header_path: Path) -> dict[str, dict[str, Any]]:
+    content = read_text(str(header_path))
+    masked = mask_comments_and_strings(content)
+    methods: dict[str, dict[str, Any]] = {}
+    for match in re.finditer(r"\bvirtual\s+legends_error_t\s+([A-Za-z0-9_]+)\s*\(", masked):
+        name = match.group(1)
+        methods[name] = {
+            "name": name,
+            "source_location": source_location(content, match.start()),
+        }
+    factory = re.search(r"\bstd::unique_ptr\s*<\s*RuntimeHost\s*>\s+(create_runtime)\s*\(", masked)
+    if factory:
+        methods["create_runtime"] = {
+            "name": "create_runtime",
+            "source_location": source_location(content, factory.start()),
+        }
+    return methods
+
+
+def iter_app_files(repo: Path) -> list[Path]:
+    root = repo / APP_ROOT
+    if not root.exists():
+        return []
+    exts = {".cpp", ".cc", ".cxx", ".h", ".hh", ".hpp"}
+    return sorted(path for path in root.rglob("*") if path.is_file() and path.suffix in exts)
+
+
+def app_call_key(call: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            norm_path(call["source_file"]),
+            call["enclosing_function"],
+            call["callee"],
+            call["line_text"],
+            str(call.get("occurrence_index", 0)),
+        ]
+    )
+
+
+def parse_app_call_sites(repo: Path, methods: set[str] | None = None) -> list[dict[str, Any]]:
+    method_names = methods or set()
+    calls: list[dict[str, Any]] = []
+    public_api_re = re.compile(r"\b(legends_[a-z0-9_]+)\s*\(")
+    factory_re = re.compile(r"\b(create_runtime)\s*\(")
+    runtime_method_re = (
+        re.compile(r"\b(?:runtime_|runtime|host|runtime_host_)\s*(?:->|\.)\s*([A-Za-z0-9_]+)\s*\(")
+        if method_names
+        else None
+    )
+
+    for path in iter_app_files(repo):
+        source_file = rel_path(repo, path)
+        content = read_text(str(path))
+        masked = mask_comments_and_strings(content)
+        functions = parse_function_ranges(masked)
+        source_area = "runtime_host_adapter" if source_file == RUNTIME_HOST_IMPL_PATH else "application_layer"
+
+        for match in public_api_re.finditer(masked):
+            callee = match.group(1)
+            call = {
+                "source_file": source_file,
+                "source_location": source_location(content, match.start()),
+                "enclosing_function": enclosing_function(match.start(), functions),
+                "callee": callee,
+                "call_kind": "public_c_api",
+                "line_text": normalized_line_at(content, match.start()),
+                "source_area": source_area,
+            }
+            calls.append(call)
+
+        for match in factory_re.finditer(masked):
+            callee = match.group(1)
+            owner = enclosing_function(match.start(), functions)
+            if owner == callee or owner.endswith(f"::{callee}"):
+                continue
+            call = {
+                "source_file": source_file,
+                "source_location": source_location(content, match.start()),
+                "enclosing_function": owner,
+                "callee": callee,
+                "call_kind": "runtime_host",
+                "line_text": normalized_line_at(content, match.start()),
+                "source_area": source_area,
+            }
+            calls.append(call)
+
+        if runtime_method_re:
+            for match in runtime_method_re.finditer(masked):
+                callee = match.group(1)
+                if callee not in method_names:
+                    continue
+                call = {
+                    "source_file": source_file,
+                    "source_location": source_location(content, match.start()),
+                    "enclosing_function": enclosing_function(match.start(), functions),
+                    "callee": callee,
+                    "call_kind": "runtime_host",
+                    "line_text": normalized_line_at(content, match.start()),
+                    "source_area": source_area,
+                }
+                calls.append(call)
+
+    calls = sorted(calls, key=lambda item: (item["source_file"], item["source_location"], item["callee"], item["line_text"]))
+    occurrences: Counter[tuple[str, str, str, str]] = Counter()
+    for call in calls:
+        occurrence_key = (
+            call["source_file"],
+            call["enclosing_function"],
+            call["callee"],
+            call["line_text"],
+        )
+        call["occurrence_index"] = occurrences[occurrence_key]
+        occurrences[occurrence_key] += 1
+        call["key"] = app_call_key(call)
+    return calls
+
+
+
+def load_runtimehost_allowlist(repo: Path) -> dict[str, Any]:
+    path = repo / RUNTIMEHOST_ALLOWLIST_PATH
+    if not path.exists():
+        return {"schema_version": 1, "allowed_bypasses": []}
+    return load_json(path)
+
+
 class OverlayBuilder:
     def __init__(self, repo: Path) -> None:
         self.repo = repo.resolve()
@@ -613,12 +870,34 @@ def build_overlay(repo: Path, graphify_path: Path, *, allow_missing_graphify: bo
     tests = parse_tests(repo)
     cmake = parse_cmake(repo)
     presets = parse_presets(repo)
+    runtime_methods = runtimehost_methods(repo / RUNTIME_HOST_PATH)
+    app_calls = parse_app_call_sites(repo, set(runtime_methods))
+    runtimehost_allowlist = load_runtimehost_allowlist(repo)
+    allowed_bypass_keys = {
+        "|".join(
+            [
+                norm_path(entry.get("source_file", "")),
+                entry.get("enclosing_function", ""),
+                entry.get("api", ""),
+                entry.get("line_text", ""),
+                str(entry.get("occurrence_index", 0)),
+            ]
+        )
+        for entry in runtimehost_allowlist.get("allowed_bypasses", [])
+        if isinstance(entry, dict)
+    }
+    allowed_bypass_keys.update(
+        str(key)
+        for key in runtimehost_allowlist.get("allowed_bypass_keys", [])
+        if isinstance(key, str)
+    )
 
     api_nodes: dict[str, str] = {}
     direct_nodes: dict[str, str] = {}
     proxy_nodes: dict[str, str] = {}
     msgtype_nodes: dict[str, str] = {}
     dispatcher_nodes: dict[str, str] = {}
+    runtimehost_method_nodes: dict[str, str] = {}
     file_nodes_by_path: dict[str, str] = {}
 
     for api in header_apis:
@@ -837,6 +1116,83 @@ def build_overlay(repo: Path, graphify_path: Path, *, allow_missing_graphify: bo
                     source_location=details["source_location"],
                 )
 
+    runtimehost_id = builder.add_node(
+        "pl__runtime_host__RuntimeHost",
+        "RuntimeHost",
+        "runtime_host_interface",
+        name="RuntimeHost",
+        source_file=RUNTIME_HOST_PATH,
+        source_location="L19",
+    )
+    builder.add_source_edge(runtimehost_id, RUNTIME_HOST_PATH, "declared_in")
+
+    for method_name, details in sorted(runtime_methods.items()):
+        method_id = f"pl__runtime_host_method__{sanitize(method_name)}"
+        runtimehost_method_nodes[method_name] = builder.add_node(
+            method_id,
+            method_name,
+            "runtime_host_method",
+            name=method_name,
+            source_file=RUNTIME_HOST_PATH,
+            source_location=details["source_location"],
+        )
+        builder.add_link(
+            runtimehost_id,
+            method_id,
+            "declares_runtime_method",
+            source_file=RUNTIME_HOST_PATH,
+            source_location=details["source_location"],
+        )
+
+    for call in app_calls:
+        digest = hashlib.sha1(call["key"].encode("utf-8")).hexdigest()[:16]
+        call_id = (
+            f"pl__app_call__{sanitize(call['source_file'])}__"
+            f"{sanitize(call['source_location'])}__{sanitize(call['callee'])}__{digest}"
+        )
+        builder.add_node(
+            call_id,
+            f"{call['source_file']}:{call['source_location']} {call['callee']}",
+            "app_call_site",
+            source_file=call["source_file"],
+            source_location=call["source_location"],
+            enclosing_function=call["enclosing_function"],
+            callee=call["callee"],
+            call_kind=call["call_kind"],
+            line_text=call["line_text"],
+            source_area=call["source_area"],
+            occurrence_index=call["occurrence_index"],
+            allowlist_key=call["key"],
+            runtime_host_bypass_allowed=call["key"] in allowed_bypass_keys,
+        )
+        builder.add_source_edge(call_id, call["source_file"], "declared_in")
+        if call["call_kind"] == "public_c_api" and call["callee"] in api_nodes:
+            builder.add_link(
+                call_id,
+                api_nodes[call["callee"]],
+                "app_calls_public_api",
+                source_file=call["source_file"],
+                source_location=call["source_location"],
+            )
+            if call["source_area"] != "runtime_host_adapter":
+                builder.add_link(
+                    call_id,
+                    api_nodes[call["callee"]],
+                    "bypasses_runtime_host",
+                    source_file=call["source_file"],
+                    source_location=call["source_location"],
+                    allowlist_key=call["key"],
+                    allowlisted=call["key"] in allowed_bypass_keys,
+                )
+        elif call["call_kind"] == "runtime_host" and call["callee"] in runtimehost_method_nodes:
+            builder.add_link(
+                call_id,
+                runtimehost_method_nodes[call["callee"]],
+                "app_calls_runtime_host",
+                source_file=call["source_file"],
+                source_location=call["source_location"],
+            )
+
     for test in tests:
         file_id = builder.add_file_node(test["source_file"])
         test_id = f"pl__test_case__{sanitize(test['source_file'])}__{sanitize(test['full_name'])}"
@@ -947,7 +1303,10 @@ def build_overlay(repo: Path, graphify_path: Path, *, allow_missing_graphify: bo
                 builder.add_link(source_id, target_id, "links_target", source_file=CMAKE_PATH)
 
     source_hashes: dict[str, str] = {}
-    for input_path in sorted(set(CRITICAL_INPUTS + [test["source_file"] for test in tests])):
+    tracked_sources = CRITICAL_INPUTS + [test["source_file"] for test in tests] + [
+        rel_path(repo, path) for path in iter_app_files(repo)
+    ]
+    for input_path in sorted(set(tracked_sources)):
         path = repo / input_path
         if path.exists() and path.is_file():
             source_hashes[norm_path(input_path)] = file_hash(path)
@@ -965,6 +1324,19 @@ def build_overlay(repo: Path, graphify_path: Path, *, allow_missing_graphify: bo
         entry.get("direct_status", "unknown")
         for entry in manifest.values()
         if isinstance(entry, dict)
+    )
+    app_call_counts = Counter(call["call_kind"] for call in app_calls)
+    app_bypass_count = sum(
+        1
+        for call in app_calls
+        if call["call_kind"] == "public_c_api" and call["source_area"] != "runtime_host_adapter"
+    )
+    allowlisted_app_bypass_count = sum(
+        1
+        for call in app_calls
+        if call["call_kind"] == "public_c_api"
+        and call["source_area"] != "runtime_host_adapter"
+        and call["key"] in allowed_bypass_keys
     )
 
     return {
@@ -989,6 +1361,10 @@ def build_overlay(repo: Path, graphify_path: Path, *, allow_missing_graphify: bo
             "dispatcher_case_count": len(dispatcher_cases),
             "test_case_count": len(tests),
             "cmake_target_count": len(cmake["targets"]),
+            "runtimehost_method_count": len(runtime_methods),
+            "app_call_counts": dict(sorted(app_call_counts.items())),
+            "runtimehost_bypass_count": app_bypass_count,
+            "runtimehost_allowlisted_bypass_count": allowlisted_app_bypass_count,
         },
     }
 
@@ -1033,6 +1409,9 @@ def write_report(path: Path, overlay: dict[str, Any]) -> None:
         f"* Dispatcher cases: {summary['dispatcher_case_count']}",
         f"* Test cases scanned: {summary['test_case_count']}",
         f"* CMake targets scanned: {summary['cmake_target_count']}",
+        f"* RuntimeHost methods: {summary['runtimehost_method_count']}",
+        f"* App direct RuntimeHost bypasses: {summary['runtimehost_bypass_count']}",
+        f"* Allowlisted app RuntimeHost bypasses: {summary['runtimehost_allowlisted_bypass_count']}",
         "",
         "## Capability Status Counts",
         "",

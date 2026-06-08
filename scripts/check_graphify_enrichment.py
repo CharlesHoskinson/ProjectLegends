@@ -20,6 +20,7 @@ from check_capability_matrix import (  # noqa: E402
     read_text,
 )
 from enrich_graphify_projectlegends import (  # noqa: E402
+    APP_ROOT,
     CAPABILITY_PATH,
     CMAKE_PATH,
     CRITICAL_INPUTS,
@@ -33,10 +34,15 @@ from enrich_graphify_projectlegends import (  # noqa: E402
     MSGTYPES_PATH,
     ORIGIN,
     PROXY_PATH,
+    RUNTIMEHOST_ALLOWLIST_PATH,
+    RUNTIME_HOST_PATH,
     SCHEMA_VERSION,
     file_hash,
+    load_runtimehost_allowlist,
     load_json,
     norm_path,
+    parse_app_call_sites,
+    runtimehost_methods,
 )
 
 
@@ -445,6 +451,116 @@ def gate_cmake(overlay: dict[str, Any], result: CheckResult) -> None:
         result.error("legends_proxy missing link to legends_ipc")
 
 
+def allowlist_entry_key(entry: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            norm_path(entry.get("source_file", "")),
+            entry.get("enclosing_function", ""),
+            entry.get("api", ""),
+            entry.get("line_text", ""),
+            str(entry.get("occurrence_index", 0)),
+        ]
+    )
+
+
+def gate_runtimehost_adoption(repo: Path, overlay: dict[str, Any], result: CheckResult) -> None:
+    methods = runtimehost_methods(repo / RUNTIME_HOST_PATH)
+    current_calls = parse_app_call_sites(repo, set(methods))
+    current_public_keys = sorted(
+        call["key"] for call in current_calls if call["call_kind"] == "public_c_api"
+    )
+    overlay_public_keys = sorted(
+        node.get("allowlist_key")
+        for node in nodes_by_kind(overlay, "app_call_site")
+        if node.get("call_kind") == "public_c_api"
+    )
+    if current_public_keys != overlay_public_keys:
+        result.error("RuntimeHost app call-site overlay is stale relative to src/app sources")
+
+    runtimehost_node = node_by_kind_name(overlay, "runtime_host_interface", "RuntimeHost")
+    if not runtimehost_node:
+        result.error("missing RuntimeHost interface node")
+    method_nodes = nodes_by_kind(overlay, "runtime_host_method")
+    if len(method_nodes) != len(methods):
+        result.error(
+            f"RuntimeHost method node count mismatch: overlay={len(method_nodes)} source={len(methods)}"
+        )
+    if runtimehost_node:
+        declared = outgoing(overlay, runtimehost_node["id"], "declares_runtime_method")
+        if len(declared) != len(methods):
+            result.error("RuntimeHost interface does not declare all method edges")
+
+    call_nodes = nodes_by_kind(overlay, "app_call_site")
+    app_public_calls = [
+        node
+        for node in call_nodes
+        if node.get("call_kind") == "public_c_api"
+        and node.get("source_area") != "runtime_host_adapter"
+    ]
+    runtimehost_calls = [
+        node
+        for node in call_nodes
+        if node.get("call_kind") == "runtime_host"
+        and node.get("source_area") != "runtime_host_adapter"
+    ]
+
+    allowlist = load_runtimehost_allowlist(repo)
+    if allowlist.get("schema_version") != 1:
+        result.error(f"{RUNTIMEHOST_ALLOWLIST_PATH} schema_version must be 1")
+    allowed_keys = {
+        allowlist_entry_key(entry)
+        for entry in allowlist.get("allowed_bypasses", [])
+        if isinstance(entry, dict)
+    }
+    allowed_keys.update(
+        str(key)
+        for key in allowlist.get("allowed_bypass_keys", [])
+        if isinstance(key, str)
+    )
+
+    observed_bypass_keys = {node.get("allowlist_key") for node in app_public_calls}
+    for node in app_public_calls:
+        key = node.get("allowlist_key")
+        if key not in allowed_keys:
+            result.error(
+                "new app-layer direct RuntimeHost bypass: "
+                f"{node.get('source_file')}:{node.get('source_location')} "
+                f"{node.get('enclosing_function')} -> {node.get('callee')}"
+            )
+        if not outgoing(overlay, node["id"], "app_calls_public_api"):
+            result.error(f"app call-site lacks app_calls_public_api edge: {node.get('id')}")
+        bypass_edges = outgoing(overlay, node["id"], "bypasses_runtime_host")
+        if not bypass_edges:
+            result.error(f"app direct API call lacks bypass edge: {node.get('id')}")
+        elif not bypass_edges[0].get("allowlisted"):
+            result.error(f"app direct API bypass edge is not allowlisted: {node.get('id')}")
+
+    retired = sorted(allowed_keys - observed_bypass_keys)
+    for key in retired[:10]:
+        result.warn(f"RuntimeHost bypass allowlist entry is no longer observed: {key}")
+    if len(retired) > 10:
+        result.warn(f"{len(retired) - 10} additional RuntimeHost bypass allowlist entries are retired")
+
+    for node in runtimehost_calls:
+        if not outgoing(overlay, node["id"], "app_calls_runtime_host"):
+            result.error(f"RuntimeHost call-site lacks app_calls_runtime_host edge: {node.get('id')}")
+
+    if not runtimehost_calls:
+        result.warn(
+            f"{APP_ROOT} has RuntimeHost foundation but no application-layer RuntimeHost call sites yet"
+        )
+
+    summary = overlay.get("summary", {})
+    if summary.get("runtimehost_bypass_count") != len(app_public_calls):
+        result.error("summary runtimehost_bypass_count does not match app_call_site nodes")
+    if summary.get("runtimehost_allowlisted_bypass_count") != len(
+        [node for node in app_public_calls if node.get("allowlist_key") in allowed_keys]
+    ):
+        result.error("summary runtimehost_allowlisted_bypass_count does not match allowlist")
+    if summary.get("runtimehost_method_count") != len(methods):
+        result.error("summary runtimehost_method_count does not match RuntimeHost declaration")
+
+
 def validate_merged_graph(repo: Path, overlay: dict[str, Any], result: CheckResult) -> None:
     graphify_path = repo / overlay.get("graphify_graph", "graphify-out/graph.json")
     merged_path = repo / "graphify-out" / "projectlegends-graph-enriched.json"
@@ -488,6 +604,7 @@ def run_checks(
         "ipc-schema",
         "tests",
         "cmake",
+        "runtimehost-adoption",
         "merged",
     }
     if "inputs" in selected:
@@ -506,6 +623,8 @@ def run_checks(
         gate_tests(overlay, result, strict_tests)
     if "cmake" in selected:
         gate_cmake(overlay, result)
+    if "runtimehost-adoption" in selected:
+        gate_runtimehost_adoption(repo, overlay, result)
     if "merged" in selected:
         validate_merged_graph(repo, overlay, result)
     if strict and result.warnings:
@@ -562,6 +681,7 @@ def main() -> int:
             "ipc-schema",
             "tests",
             "cmake",
+            "runtimehost-adoption",
             "merged",
         ],
         help="Run a single gate; can be passed more than once",

@@ -126,6 +126,9 @@ def command_summary(args: argparse.Namespace) -> int:
     print(f"  Dispatcher cases:  {summary.get('dispatcher_case_count')}")
     print(f"  Test cases:        {summary.get('test_case_count')}")
     print(f"  CMake targets:     {summary.get('cmake_target_count')}")
+    print(f"  RuntimeHost API:   {summary.get('runtimehost_method_count')}")
+    print(f"  App bypasses:      {summary.get('runtimehost_bypass_count')}")
+    print(f"  Allowlisted debt:  {summary.get('runtimehost_allowlisted_bypass_count')}")
     print(f"  Enrichment nodes:  {summary.get('enrichment_nodes')}")
     print(f"  Enrichment links:  {summary.get('enrichment_links')}")
     print(f"  Proxy statuses:    {summary.get('proxy_status_counts')}")
@@ -210,6 +213,26 @@ def command_explain_api(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_runtimehost_bypasses(args: argparse.Namespace) -> int:
+    repo = repo_root(args.repo)
+    overlay = load_overlay(repo, args.overlay)
+    bypasses = [
+        node
+        for node in overlay.get("nodes", [])
+        if node.get("kind") == "app_call_site"
+        and node.get("call_kind") == "public_c_api"
+        and node.get("source_area") != "runtime_host_adapter"
+    ]
+    print(f"RuntimeHost direct app bypasses: {len(bypasses)}")
+    for node in sorted(bypasses, key=lambda item: (item.get("source_file"), item.get("source_location"), item.get("callee"))):
+        marker = "allowlisted" if node.get("runtime_host_bypass_allowed") else "NEW"
+        print(
+            f"  {marker}: {node.get('source_file')}:{node.get('source_location')} "
+            f"{node.get('enclosing_function')} -> {node.get('callee')}"
+        )
+    return 1 if any(not node.get("runtime_host_bypass_allowed") for node in bypasses) else 0
+
+
 def command_commands(_: argparse.Namespace) -> int:
     print("Local full refresh:")
     print("  python scripts/graphify_projectlegends.py update --repo .")
@@ -225,6 +248,9 @@ def command_commands(_: argparse.Namespace) -> int:
     print("")
     print("Explain one API:")
     print("  python scripts/graphify_projectlegends.py explain-api legends_mount_drive --repo .")
+    print("")
+    print("List RuntimeHost bypass debt:")
+    print("  python scripts/graphify_projectlegends.py runtimehost-bypasses --repo .")
     return 0
 
 
@@ -264,6 +290,11 @@ def build_parser() -> argparse.ArgumentParser:
     explain.add_argument("--repo", default=".")
     explain.add_argument("--overlay", default=str(DEFAULT_OVERLAY))
     explain.set_defaults(func=command_explain_api)
+
+    runtimehost = subparsers.add_parser("runtimehost-bypasses", help="List app direct legends_* calls bypassing RuntimeHost")
+    runtimehost.add_argument("--repo", default=".")
+    runtimehost.add_argument("--overlay", default=str(DEFAULT_OVERLAY))
+    runtimehost.set_defaults(func=command_runtimehost_bypasses)
 
     commands = subparsers.add_parser("commands", help="Print common Graphify commands")
     commands.set_defaults(func=command_commands)

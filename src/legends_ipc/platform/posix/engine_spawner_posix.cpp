@@ -73,11 +73,17 @@ void EngineProcess::terminate() {
 
 std::expected<EngineProcess, IpcError>
 EngineSpawner::spawn(const SpawnConfig& config) {
-    std::vector<std::string> arg_strings = {
-        config.executable_path,
-        "--pipe", config.pipe_name,
-        "--shm", config.shm_name
-    };
+    std::vector<std::string> arg_strings;
+    arg_strings.push_back(config.executable_path);
+    arg_strings.insert(arg_strings.end(), config.arguments.begin(), config.arguments.end());
+    if (!config.pipe_name.empty()) {
+        arg_strings.push_back("--pipe");
+        arg_strings.push_back(config.pipe_name);
+    }
+    if (!config.shm_name.empty()) {
+        arg_strings.push_back("--shm");
+        arg_strings.push_back(config.shm_name);
+    }
 
     std::vector<char*> argv;
     for (auto& s : arg_strings) argv.push_back(const_cast<char*>(s.c_str()));

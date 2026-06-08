@@ -7,8 +7,62 @@
 #endif
 #include <windows.h>
 #include <string>
+#include <vector>
 
 namespace legends_ipc {
+namespace {
+
+std::string quote_arg(const std::string& arg) {
+    if (arg.empty()) {
+        return "\"\"";
+    }
+
+    bool needs_quotes = false;
+    for (char ch : arg) {
+        if (ch == ' ' || ch == '\t' || ch == '"') {
+            needs_quotes = true;
+            break;
+        }
+    }
+    if (!needs_quotes) {
+        return arg;
+    }
+
+    std::string quoted = "\"";
+    for (char ch : arg) {
+        if (ch == '"') {
+            quoted += '\\';
+        }
+        quoted += ch;
+    }
+    quoted += '"';
+    return quoted;
+}
+
+std::string build_command_line(const SpawnConfig& config) {
+    std::vector<std::string> args;
+    args.push_back(config.executable_path);
+    args.insert(args.end(), config.arguments.begin(), config.arguments.end());
+    if (!config.pipe_name.empty()) {
+        args.push_back("--pipe");
+        args.push_back(config.pipe_name);
+    }
+    if (!config.shm_name.empty()) {
+        args.push_back("--shm");
+        args.push_back(config.shm_name);
+    }
+
+    std::string command_line;
+    for (const auto& arg : args) {
+        if (!command_line.empty()) {
+            command_line += ' ';
+        }
+        command_line += quote_arg(arg);
+    }
+    return command_line;
+}
+
+} // namespace
 
 EngineProcess::~EngineProcess() { cleanup(); }
 
@@ -63,9 +117,7 @@ void EngineProcess::terminate() {
 
 std::expected<EngineProcess, IpcError>
 EngineSpawner::spawn(const SpawnConfig& config) {
-    std::string cmd = "\"" + config.executable_path + "\"" +
-                      " --pipe " + config.pipe_name +
-                      " --shm " + config.shm_name;
+    std::string cmd = build_command_line(config);
 
     STARTUPINFOA si{};
     si.cb = sizeof(si);

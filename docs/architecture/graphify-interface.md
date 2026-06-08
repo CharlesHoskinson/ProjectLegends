@@ -38,6 +38,12 @@ Summary:
 python scripts/graphify_projectlegends.py summary --repo .
 ```
 
+List RuntimeHost bypass debt:
+
+```powershell
+python scripts/graphify_projectlegends.py runtimehost-bypasses --repo .
+```
+
 Explain one public API:
 
 ```powershell
@@ -56,6 +62,7 @@ python scripts/graphify_projectlegends.py commands
 * `graphify-out/projectlegends-enrichment.json` - ProjectLegends domain overlay.
 * `graphify-out/projectlegends-graph-enriched.json` - Disposable merged graph.
 * `docs/architecture/graphify-enrichment-report.md` - Generated human-readable summary.
+* `docs/architecture/runtimehost-bypass-allowlist.json` - Current app-layer direct `legends_*` bypass baseline.
 * `docs/superpowers/reviews/2026-06-08-graphify-enrichment-qa.md` - QA handoff for the initial enrichment implementation.
 
 ## Audit Rule
@@ -65,6 +72,9 @@ Use the interface before architecture or capability claims:
 ```powershell
 python scripts/graphify_projectlegends.py update --repo .
 python scripts/graphify_projectlegends.py explain-api <legends_api> --repo .
+python scripts/graphify_projectlegends.py runtimehost-bypasses --repo .
 ```
 
 The graph is evidence, not authority. Any claim that changes source behavior must still pass the normal build and test gates.
+
+RuntimeHost adoption is enforced as a drift gate. Existing app-layer direct `legends_*` calls are tracked as migration debt in `docs/architecture/runtimehost-bypass-allowlist.json`; new direct app-layer calls fail `scripts/check_graphify_enrichment.py` until they route through `RuntimeHost` or the allowlist is deliberately updated with an audit reason.

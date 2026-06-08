@@ -35,11 +35,12 @@ Use the graph interface as the first pass for every sprint:
 python scripts/graphify_projectlegends.py update --repo .
 python scripts/graphify_projectlegends.py summary --repo .
 python scripts/graphify_projectlegends.py explain-api legends_mount_drive --repo .
+python scripts/graphify_projectlegends.py runtimehost-bypasses --repo .
 ```
 
 Then choose work by evidence gaps, not by intuition:
 
-1. RuntimeHost adoption: query which `Application` call sites still bypass `RuntimeHost`, then migrate the smallest coherent slice.
+1. RuntimeHost adoption: query which app-layer call sites still bypass `RuntimeHost`, migrate the smallest coherent slice, and remove retired keys from `docs/architecture/runtimehost-bypass-allowlist.json`.
 2. Proxy parity: prioritize `proxy-missing` APIs that already have MsgType structs or dispatcher-adjacent code.
 3. IPC safety: inspect variable payload messages and ensure deserialize bounds tests exist.
 4. GPL isolation: verify CMake target edges for IPC mode before claiming proprietary/GPL separation.
@@ -69,4 +70,4 @@ build\dev\legends_abi_test.exe
 build\ipc\legends_abi_test.exe
 ```
 
-The full unit suite still needs separate treatment because it had known pre-existing failures.
+The full dev unit suite should now be treated as a required local gate; the previously known four failures have been fixed and `build\dev\legends_unit_tests.exe` passes on the Windows working tree.

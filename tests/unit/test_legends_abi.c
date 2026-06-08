@@ -515,7 +515,7 @@ static void test_frame_capture_api(void) {
     int cursor_visible;
     err = legends_get_cursor(handle, &cursor_x, &cursor_y, &cursor_visible);
     assert(err == LEGENDS_OK);
-    assert(cursor_x == 4);  /* After "C:\>" prompt */
+    assert(cursor_x == 0);  /* Fresh/reset instances start at the origin */
     assert(cursor_y == 0);
     assert(cursor_visible == 1);
     printf("    get_cursor: (%d,%d) visible=%d\n", cursor_x, cursor_y, cursor_visible);
