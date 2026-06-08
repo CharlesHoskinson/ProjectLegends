@@ -4,6 +4,7 @@
 // Application — full engine wiring: render, audio, input, Phase 2 actions.
 
 #include "app/application.h"
+#include <legends/runtime_host.h>
 #include "app/cli_parser.h"
 #include "app/config_parser.h"
 #include "app/platform_dirs.h"
@@ -229,6 +230,12 @@ ExitCode Application::init(int argc, char** argv) {
         return ExitCode::EngineCreateFailed;
     }
 
+#if LEGENDS_USE_IPC
+    runtime_ = std::make_unique<IpcEngineRuntime>(engine_, false);
+#else
+    runtime_ = std::make_unique<InProcessEngineRuntime>(engine_, false);
+#endif
+
     // ── REQ-UX-010: Crash autosave ─────────────────────────────────────
     g_crash_engine = engine_;
     g_crash_save_mgr = &save_manager_;
@@ -241,7 +248,7 @@ ExitCode Application::init(int argc, char** argv) {
     // Check for previous crash autosave and offer recovery
     if (save_manager_.hasAutosave()) {
         std::fprintf(stderr, "Crash recovery save detected — loading autosave\n");
-        if (save_manager_.recoverAutosave(engine_)) {
+        if (save_manager_.recoverAutosave(*runtime_)) {
             std::fprintf(stderr, "Crash recovery successful\n");
         } else {
             std::fprintf(stderr, "Crash recovery failed: %s\n",
@@ -444,7 +451,7 @@ ExitCode Application::run() {
         bool step_ok = true;
         if (!paused_ && !menu_system_.isOpen()) {
             legends_step_result_t step_result{};
-            legends_error_t step_err = legends_step_ms(engine_, 16, &step_result);
+            legends_error_t step_err = runtime_->step_ms(16, &step_result);
             // REQ-QA-005: Check step result for errors. On error frames,
             // suppress capture and audio to avoid processing stale data.
             if (step_err != LEGENDS_OK) {
@@ -463,9 +470,9 @@ ExitCode Application::run() {
                 elapsed = kMaxFrameUs;
             }
             perf_overlay_.recordFrame(elapsed);
-            if (engine_) {
+            if (runtime_) {
                 uint64_t total_cycles = 0;
-                legends_get_total_cycles(engine_, &total_cycles);
+                runtime_->get_total_cycles(&total_cycles);
                 // Rough estimate: cycles executed this frame / 16ms
                 perf_overlay_.setCyclesPerSec(total_cycles > 0 ? total_cycles * 60 : 0);
             }
@@ -598,21 +605,21 @@ bool Application::processEvents() {
                 }
 
                 // ── Forward to engine via InputMapper ────────────────
-                if (!engine_) break;
+                if (!runtime_) break;
                 auto at = input_mapper_.translate(ev.key.scancode);
                 if (at.code != 0) {
                     if (at.extended) {
-                        legends_key_event_ext(engine_, at.code, down ? 1 : 0);
+                        runtime_->inject_key_ext(at.code, down);
                     } else {
-                        legends_key_event(engine_, at.code, down ? 1 : 0);
+                        runtime_->inject_key(at.code, down);
                     }
                 }
                 break;
             }
 
             case pal::InputEventType::MouseMotion:
-                if (engine_ && mouse_captured_ && !menu_system_.isOpen()) {
-                    legends_mouse_event(engine_,
+                if (runtime_ && mouse_captured_ && !menu_system_.isOpen()) {
+                    runtime_->inject_mouse(
                         static_cast<int16_t>(ev.mouse_motion.dx),
                         static_cast<int16_t>(ev.mouse_motion.dy),
                         0);
@@ -649,13 +656,13 @@ bool Application::processEvents() {
                 }
 
                 // Only forward mouse button events when captured
-                if (!engine_ || !mouse_captured_) break;
+                if (!runtime_ || !mouse_captured_) break;
                 uint8_t buttons = 0;
                 if (ev.mouse_button.button == 1) buttons |= 0x01;
                 if (ev.mouse_button.button == 3) buttons |= 0x02;
                 if (ev.mouse_button.button == 2) buttons |= 0x04;
                 if (ev.type == pal::InputEventType::MouseButtonUp) buttons = 0;
-                legends_mouse_event(engine_, 0, 0, buttons);
+                runtime_->inject_mouse(0, 0, buttons);
                 break;
             }
 
@@ -801,7 +808,7 @@ void Application::registerActionHandlers() {
 
     // Save state
     action_bus_.registerHandler(Action::SaveState, [this](int slot) {
-        if (!engine_ || slot < 1 || slot > SaveManager::kMaxSlots) return;
+        if (!runtime_ || slot < 1 || slot > SaveManager::kMaxSlots) return;
         // Get thumbnail for the save
         size_t size_needed = 0;
         uint16_t w = 0, h = 0;
@@ -811,7 +818,7 @@ void Application::registerActionHandlers() {
             thumb.resize(size_needed);
             legends_capture_rgb(engine_, thumb.data(), thumb.size(), &size_needed, &w, &h);
         }
-        if (save_manager_.saveToSlot(engine_, slot,
+        if (save_manager_.saveToSlot(*runtime_, slot,
                                      thumb.empty() ? nullptr : thumb.data(), w, h)) {
             std::fprintf(stderr, "State saved to slot %d\n", slot);
         } else {
@@ -822,8 +829,8 @@ void Application::registerActionHandlers() {
 
     // Load state
     action_bus_.registerHandler(Action::LoadState, [this](int slot) {
-        if (!engine_ || slot < 1 || slot > SaveManager::kMaxSlots) return;
-        if (save_manager_.loadFromSlot(engine_, slot)) {
+        if (!runtime_ || slot < 1 || slot > SaveManager::kMaxSlots) return;
+        if (save_manager_.loadFromSlot(*runtime_, slot)) {
             std::fprintf(stderr, "State loaded from slot %d\n", slot);
         } else {
             std::fprintf(stderr, "Load failed (slot %d): %s\n", slot,
@@ -1101,17 +1108,17 @@ void Application::setMouseCaptured(bool captured) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void Application::renderFrame() {
-    if (!engine_ || !context_) return;
+    if (!runtime_ || !context_) return;
 
     // Check dirty flag to avoid unnecessary blits
     int dirty = 0;
-    legends_is_frame_dirty(engine_, &dirty);
+    runtime_->is_frame_dirty(&dirty);
     if (!dirty) return;
 
     // Query frame dimensions
     size_t   size_needed = 0;
     uint16_t fw = 0, fh = 0;
-    legends_capture_rgb(engine_, nullptr, 0, &size_needed, &fw, &fh);
+    runtime_->capture_rgb(nullptr, 0, &size_needed, &fw, &fh);
     if (size_needed == 0 || fw == 0 || fh == 0) return;
 
     // Resize capture buffer once (or when resolution changes)
@@ -1119,17 +1126,17 @@ void Application::renderFrame() {
         rgb_buffer_.resize(size_needed);
     }
 
-    legends_capture_rgb(engine_, rgb_buffer_.data(),
+    runtime_->capture_rgb(rgb_buffer_.data(),
                         rgb_buffer_.size(), &size_needed, &fw, &fh);
 
     // ── TTF text-mode override ──────────────────────────────────────────
     if (ttf_renderer_.isEnabled() && ttf_renderer_.isLoaded()) {
         size_t cell_count = 0;
         legends_text_info_t tinfo{};
-        legends_capture_text(engine_, nullptr, 0, &cell_count, &tinfo);
+        runtime_->capture_text(nullptr, 0, &cell_count, &tinfo);
         if (cell_count > 0 && tinfo.columns > 0 && tinfo.rows > 0) {
             std::vector<legends_text_cell_t> cells(cell_count);
-            legends_capture_text(engine_, cells.data(), cells.size(),
+            runtime_->capture_text(cells.data(), cells.size(),
                                  &cell_count, &tinfo);
 
             uint32_t pitch = static_cast<uint32_t>(fw) * 3;
@@ -1308,10 +1315,10 @@ void Application::renderFrame() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void Application::pumpAudio() {
-    if (!engine_ || !audio_sink_) return;
+    if (!runtime_ || !audio_sink_) return;
 
     size_t avail = 0;
-    legends_capture_audio(engine_, nullptr, 0, &avail);
+    runtime_->capture_audio(nullptr, 0, &avail);
     if (avail == 0) return;
 
     if (audio_buffer_.size() < avail) {
@@ -1319,17 +1326,17 @@ void Application::pumpAudio() {
     }
 
     size_t actual = 0;
-    legends_capture_audio(engine_, audio_buffer_.data(), audio_buffer_.size(), &actual);
+    runtime_->capture_audio(audio_buffer_.data(), audio_buffer_.size(), &actual);
     if (actual == 0) return;
 
     // Mix MIDI audio if active
     if (midi_config_.device != MIDIDevice::None) {
         size_t midi_avail = 0;
-        legends_capture_midi_audio(engine_, nullptr, 0, &midi_avail);
+        runtime_->capture_midi_audio(nullptr, 0, &midi_avail);
         if (midi_avail > 0) {
             std::vector<int16_t> midi_buf(midi_avail);
             size_t midi_actual = 0;
-            legends_capture_midi_audio(engine_, midi_buf.data(), midi_buf.size(), &midi_actual);
+            runtime_->capture_midi_audio(midi_buf.data(), midi_buf.size(), &midi_actual);
             if (midi_actual > 0) {
                 size_t mix_count = std::min(actual, midi_actual);
                 AudioMixer::mixAdditive(
@@ -1357,6 +1364,8 @@ void Application::shutdown() {
     globalCrashReporter().disable();
 
     shader_renderer_.destroy();
+
+    runtime_.reset();
 
     if (engine_) {
         legends_destroy(engine_);

@@ -44,12 +44,18 @@ public:
 
     virtual legends_error_t mount_drive(char drive_letter, std::string_view host_path, uint32_t flags) = 0;
     virtual legends_error_t unmount_drive(char drive_letter) = 0;
+
+    virtual legends_error_t get_total_cycles(uint64_t* cycles_out) = 0;
+    virtual legends_error_t is_frame_dirty(int* dirty_out) = 0;
+    virtual legends_error_t inject_key_ext(uint8_t scancode, bool is_down) = 0;
+    virtual legends_error_t capture_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) = 0;
+    virtual legends_error_t capture_midi_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) = 0;
 };
 
 // Subclass: InProcessEngineRuntime
 class InProcessEngineRuntime : public RuntimeHost {
 public:
-    explicit InProcessEngineRuntime(legends_handle handle);
+    explicit InProcessEngineRuntime(legends_handle handle, bool own_handle = true);
     ~InProcessEngineRuntime() override;
 
     legends_error_t step_ms(uint32_t ms, legends_step_result_t* result_out) override;
@@ -77,14 +83,21 @@ public:
     legends_error_t mount_drive(char drive_letter, std::string_view host_path, uint32_t flags) override;
     legends_error_t unmount_drive(char drive_letter) override;
 
+    legends_error_t get_total_cycles(uint64_t* cycles_out) override;
+    legends_error_t is_frame_dirty(int* dirty_out) override;
+    legends_error_t inject_key_ext(uint8_t scancode, bool is_down) override;
+    legends_error_t capture_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) override;
+    legends_error_t capture_midi_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) override;
+
 private:
     legends_handle handle_;
+    bool own_handle_;
 };
 
 // Subclass: IpcEngineRuntime
 class IpcEngineRuntime : public RuntimeHost {
 public:
-    explicit IpcEngineRuntime(legends_handle handle);
+    explicit IpcEngineRuntime(legends_handle handle, bool own_handle = true);
     ~IpcEngineRuntime() override;
 
     legends_error_t step_ms(uint32_t ms, legends_step_result_t* result_out) override;
@@ -112,8 +125,15 @@ public:
     legends_error_t mount_drive(char drive_letter, std::string_view host_path, uint32_t flags) override;
     legends_error_t unmount_drive(char drive_letter) override;
 
+    legends_error_t get_total_cycles(uint64_t* cycles_out) override;
+    legends_error_t is_frame_dirty(int* dirty_out) override;
+    legends_error_t inject_key_ext(uint8_t scancode, bool is_down) override;
+    legends_error_t capture_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) override;
+    legends_error_t capture_midi_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) override;
+
 private:
     legends_handle handle_;
+    bool own_handle_;
 };
 
 // Factory function

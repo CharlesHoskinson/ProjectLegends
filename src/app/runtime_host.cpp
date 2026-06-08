@@ -6,11 +6,11 @@ namespace legends {
 
 // ── InProcessEngineRuntime ──────────────────────────────────────────────────
 
-InProcessEngineRuntime::InProcessEngineRuntime(legends_handle handle)
-    : handle_(handle) {}
+InProcessEngineRuntime::InProcessEngineRuntime(legends_handle handle, bool own_handle)
+    : handle_(handle), own_handle_(own_handle) {}
 
 InProcessEngineRuntime::~InProcessEngineRuntime() {
-    if (handle_) {
+    if (handle_ && own_handle_) {
         legends_destroy(handle_);
     }
 }
@@ -67,14 +67,34 @@ legends_error_t InProcessEngineRuntime::unmount_drive(char drive_letter) {
     return legends_unmount_drive(handle_, drive_letter);
 }
 
+legends_error_t InProcessEngineRuntime::get_total_cycles(uint64_t* cycles_out) {
+    return legends_get_total_cycles(handle_, cycles_out);
+}
+
+legends_error_t InProcessEngineRuntime::is_frame_dirty(int* dirty_out) {
+    return legends_is_frame_dirty(handle_, dirty_out);
+}
+
+legends_error_t InProcessEngineRuntime::inject_key_ext(uint8_t scancode, bool is_down) {
+    return legends_key_event_ext(handle_, scancode, is_down ? 1 : 0);
+}
+
+legends_error_t InProcessEngineRuntime::capture_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) {
+    return legends_capture_audio(handle_, buffer, buffer_count, count_out);
+}
+
+legends_error_t InProcessEngineRuntime::capture_midi_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) {
+    return legends_capture_midi_audio(handle_, buffer, buffer_count, count_out);
+}
+
 
 // ── IpcEngineRuntime ────────────────────────────────────────────────────────
 
-IpcEngineRuntime::IpcEngineRuntime(legends_handle handle)
-    : handle_(handle) {}
+IpcEngineRuntime::IpcEngineRuntime(legends_handle handle, bool own_handle)
+    : handle_(handle), own_handle_(own_handle) {}
 
 IpcEngineRuntime::~IpcEngineRuntime() {
-    if (handle_) {
+    if (handle_ && own_handle_) {
         legends_destroy(handle_);
     }
 }
@@ -129,6 +149,26 @@ legends_error_t IpcEngineRuntime::mount_drive(char drive_letter, std::string_vie
 
 legends_error_t IpcEngineRuntime::unmount_drive(char drive_letter) {
     return legends_unmount_drive(handle_, drive_letter);
+}
+
+legends_error_t IpcEngineRuntime::get_total_cycles(uint64_t* cycles_out) {
+    return legends_get_total_cycles(handle_, cycles_out);
+}
+
+legends_error_t IpcEngineRuntime::is_frame_dirty(int* dirty_out) {
+    return legends_is_frame_dirty(handle_, dirty_out);
+}
+
+legends_error_t IpcEngineRuntime::inject_key_ext(uint8_t scancode, bool is_down) {
+    return legends_key_event_ext(handle_, scancode, is_down ? 1 : 0);
+}
+
+legends_error_t IpcEngineRuntime::capture_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) {
+    return legends_capture_audio(handle_, buffer, buffer_count, count_out);
+}
+
+legends_error_t IpcEngineRuntime::capture_midi_audio(int16_t* buffer, size_t buffer_count, size_t* count_out) {
+    return legends_capture_midi_audio(handle_, buffer, buffer_count, count_out);
 }
 
 // ── Dynamic Factory ─────────────────────────────────────────────────────────

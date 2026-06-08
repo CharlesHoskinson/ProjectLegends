@@ -10,6 +10,7 @@
 #include "app/platform_dirs.h"
 
 #include <legends/gsl.hpp>
+#include <legends/runtime_host.h>
 
 #include <cstdio>
 #include <cstring>
@@ -51,6 +52,10 @@ static_assert(kCRC32Table[1]   == 0x77073096, "CRC-32 table[1] mismatch");
 static_assert(kCRC32Table[128] == 0xEDB88320, "CRC-32 table[128] mismatch");
 static_assert(kCRC32Table[255] == 0x2D02EF8D, "CRC-32 table[255] mismatch");
 
+bool is_valid_storage_slot(int slot) {
+    return slot >= SaveManager::kAutosaveSlot && slot <= SaveManager::kMaxSlots;
+}
+
 } // namespace
 
 std::string SaveManager::getSaveDir() {
@@ -84,7 +89,13 @@ bool SaveManager::saveToSlot(legends_handle engine, int slot,
         last_error_ = "Engine handle is null";
         return false;
     }
-    if (slot < 1 || slot > kMaxSlots) {
+    InProcessEngineRuntime runtime(engine, false);
+    return saveToSlot(runtime, slot, rgb_thumb, w, h);
+}
+
+bool SaveManager::saveToSlot(RuntimeHost& runtime, int slot,
+                             const uint8_t* rgb_thumb, uint16_t w, uint16_t h) {
+    if (!is_valid_storage_slot(slot)) {
         last_error_ = "Invalid save slot: " + std::to_string(slot);
         return false;
     }
@@ -100,7 +111,7 @@ bool SaveManager::saveToSlot(legends_handle engine, int slot,
 
     // Two-call pattern: query state size, then read
     size_t state_size = 0;
-    auto err = legends_save_state(engine, nullptr, 0, &state_size);
+    auto err = runtime.save_state(nullptr, 0, &state_size);
     if (err != LEGENDS_OK && err != LEGENDS_ERR_BUFFER_TOO_SMALL) {
         last_error_ = "legends_save_state query failed: " + std::to_string(err);
         return false;
@@ -111,7 +122,7 @@ bool SaveManager::saveToSlot(legends_handle engine, int slot,
     }
 
     std::vector<uint8_t> state_buf(state_size);
-    err = legends_save_state(engine, state_buf.data(), state_buf.size(), &state_size);
+    err = runtime.save_state(state_buf.data(), state_buf.size(), &state_size);
     if (err != LEGENDS_OK) {
         last_error_ = "legends_save_state failed: " + std::to_string(err);
         return false;
@@ -151,7 +162,12 @@ bool SaveManager::loadFromSlot(legends_handle engine, int slot) {
         last_error_ = "Engine handle is null";
         return false;
     }
-    if (slot < 1 || slot > kMaxSlots) {
+    InProcessEngineRuntime runtime(engine, false);
+    return loadFromSlot(runtime, slot);
+}
+
+bool SaveManager::loadFromSlot(RuntimeHost& runtime, int slot) {
+    if (!is_valid_storage_slot(slot)) {
         last_error_ = "Invalid save slot: " + std::to_string(slot);
         return false;
     }
@@ -231,7 +247,7 @@ bool SaveManager::loadFromSlot(legends_handle engine, int slot) {
         return false;
     }
 
-    auto err = legends_load_state(engine, payload, header.payload_size);
+    auto err = runtime.load_state(payload, header.payload_size);
     if (err != LEGENDS_OK) {
         last_error_ = "legends_load_state failed: " + std::to_string(err);
         return false;
@@ -247,7 +263,16 @@ bool SaveManager::isSlotOccupied(int slot) const {
 }
 
 bool SaveManager::recoverAutosave(legends_handle engine) {
-    if (!loadFromSlot(engine, kAutosaveSlot)) {
+    if (engine == nullptr) {
+        last_error_ = "Engine handle is null";
+        return false;
+    }
+    InProcessEngineRuntime runtime(engine, false);
+    return recoverAutosave(runtime);
+}
+
+bool SaveManager::recoverAutosave(RuntimeHost& runtime) {
+    if (!loadFromSlot(runtime, kAutosaveSlot)) {
         return false;
     }
     // Delete the autosave file after successful recovery

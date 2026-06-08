@@ -25,6 +25,8 @@ struct SaveStateHeader {
 
 static_assert(sizeof(SaveStateHeader) == 18, "SaveStateHeader must be packed");
 
+class RuntimeHost;
+
 class SaveManager {
 public:
     static constexpr int kMaxSlots = 9;
@@ -35,10 +37,11 @@ public:
     /// Get the saves directory: <getDataDir()>/saves
     [[nodiscard]] static std::string getSaveDir();
 
-    /// Get the file path for a save slot (1-based).
+    /// Get the file path for a save slot. Slot 0 is reserved for crash autosave;
+    /// slots 1 through kMaxSlots are user-visible saves.
     [[nodiscard]] static std::string slotPath(int slot);
 
-    /// Get the file path for a save slot thumbnail (1-based).
+    /// Get the file path for a save slot thumbnail.
     [[nodiscard]] static std::string thumbnailPath(int slot);
 
     /// Save engine state to the given slot with optional RGB24 thumbnail.
@@ -46,9 +49,14 @@ public:
     [[nodiscard]] bool saveToSlot(legends_handle engine, int slot,
                     const uint8_t* rgb_thumb, uint16_t w, uint16_t h);
 
+    [[nodiscard]] bool saveToSlot(RuntimeHost& runtime, int slot,
+                    const uint8_t* rgb_thumb, uint16_t w, uint16_t h);
+
     /// Load engine state from the given slot.
     /// Returns true on success.
     [[nodiscard]] bool loadFromSlot(legends_handle engine, int slot);
+
+    [[nodiscard]] bool loadFromSlot(RuntimeHost& runtime, int slot);
 
     /// Check if a slot has a saved state file.
     [[nodiscard]] bool isSlotOccupied(int slot) const;
@@ -64,6 +72,8 @@ public:
 
     /// REQ-UX-010: Load the crash autosave and delete the file.
     [[nodiscard]] bool recoverAutosave(legends_handle engine);
+
+    [[nodiscard]] bool recoverAutosave(RuntimeHost& runtime);
 
 private:
     std::string last_error_;

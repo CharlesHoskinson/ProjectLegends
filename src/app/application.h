@@ -43,6 +43,8 @@
 
 namespace legends {
 
+class RuntimeHost;
+
 enum class ExitCode : int {
     Success = 0,
     PlatformInitFailed = 1,
@@ -84,6 +86,7 @@ private:
     std::unique_ptr<pal::IHostClock>    host_clock_;
     std::unique_ptr<pal::IInputSource>  input_source_;
 
+    std::unique_ptr<RuntimeHost> runtime_;
     legends_handle engine_ = nullptr;
     bool running_ = false;
 

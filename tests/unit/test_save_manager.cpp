@@ -11,6 +11,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <set>
 
 namespace legends {
 namespace {
@@ -37,6 +38,12 @@ TEST(SaveManagerTest, SlotPathContainsSlotNumber) {
     EXPECT_NE(path.find(".sav"), std::string::npos);
 }
 
+TEST(SaveManagerTest, SlotPathContainsAutosaveSlotNumber) {
+    std::string path = SaveManager::slotPath(SaveManager::kAutosaveSlot);
+    EXPECT_NE(path.find("slot_0"), std::string::npos);
+    EXPECT_NE(path.find(".sav"), std::string::npos);
+}
+
 TEST(SaveManagerTest, ThumbnailPathContainsSlotNumber) {
     std::string path = SaveManager::thumbnailPath(5);
     EXPECT_NE(path.find("slot_5"), std::string::npos);
@@ -45,10 +52,10 @@ TEST(SaveManagerTest, ThumbnailPathContainsSlotNumber) {
 
 TEST(SaveManagerTest, AllSlotPathsAreUnique) {
     std::set<std::string> paths;
-    for (int i = 1; i <= SaveManager::kMaxSlots; ++i) {
+    for (int i = SaveManager::kAutosaveSlot; i <= SaveManager::kMaxSlots; ++i) {
         paths.insert(SaveManager::slotPath(i));
     }
-    EXPECT_EQ(paths.size(), static_cast<size_t>(SaveManager::kMaxSlots));
+    EXPECT_EQ(paths.size(), static_cast<size_t>(SaveManager::kMaxSlots + 1));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -57,7 +64,6 @@ TEST(SaveManagerTest, AllSlotPathsAreUnique) {
 
 TEST(SaveManagerTest, IsSlotOccupied_InvalidSlotReturnsFalse) {
     SaveManager mgr;
-    EXPECT_FALSE(mgr.isSlotOccupied(0));
     EXPECT_FALSE(mgr.isSlotOccupied(-1));
     EXPECT_FALSE(mgr.isSlotOccupied(10));
 }
@@ -84,7 +90,7 @@ TEST(SaveManagerTest, SaveToSlot_InvalidSlot) {
     // engine is non-null (fake), but slot is out of range
     SaveManager mgr;
     auto fake_engine = reinterpret_cast<legends_handle>(0x1);
-    EXPECT_FALSE(mgr.saveToSlot(fake_engine, 0, nullptr, 0, 0));
+    EXPECT_FALSE(mgr.saveToSlot(fake_engine, -1, nullptr, 0, 0));
     EXPECT_FALSE(mgr.saveToSlot(fake_engine, 10, nullptr, 0, 0));
 }
 
@@ -109,18 +115,9 @@ TEST(SaveManagerTest, MaxSlotsIsNine) {
 // Phase 2 QA: streampos comparison, path formats, atomic write
 // ═══════════════════════════════════════════════════════════════════════════
 
-TEST(SaveManagerTest, LoadFromSlot_EmptyFileReturnsFalse) {
-    auto tmp_dir = std::filesystem::temp_directory_path() / "legends_save_qa1";
-    std::filesystem::create_directories(tmp_dir);
-    // Create an empty file at the slot path
-    std::string saves_dir = tmp_dir.string() + "/saves";
-    std::filesystem::create_directories(saves_dir);
-    std::string slot_path = SaveManager::slotPath(1);
-    // We can't easily override the save dir, so instead test with a
-    // nonexistent slot — the existing test covers that. Instead, test
-    // that the error message is set for out-of-range slots.
+TEST(SaveManagerTest, LoadFromSlot_InvalidSlotReturnsFalse) {
     SaveManager mgr;
-    EXPECT_FALSE(mgr.loadFromSlot(reinterpret_cast<legends_handle>(0x1), 0));
+    EXPECT_FALSE(mgr.loadFromSlot(reinterpret_cast<legends_handle>(0x1), -1));
     EXPECT_FALSE(mgr.lastError().empty());
 }
 
@@ -144,9 +141,12 @@ TEST(SaveManagerTest, SlotAndThumbnailPaths_AllSlots1Through9) {
     }
 }
 
-TEST(SaveManagerTest, IsSlotOccupied_Slot0AndSlot10ReturnFalse) {
+TEST(SaveManagerTest, IsSlotOccupied_AutosaveSlotReflectsFileExistence) {
     SaveManager mgr;
-    EXPECT_FALSE(mgr.isSlotOccupied(0));
+    EXPECT_EQ(mgr.isSlotOccupied(SaveManager::kAutosaveSlot),
+              std::filesystem::exists(SaveManager::slotPath(SaveManager::kAutosaveSlot)));
+    EXPECT_EQ(mgr.hasAutosave(),
+              std::filesystem::exists(SaveManager::slotPath(SaveManager::kAutosaveSlot)));
     EXPECT_FALSE(mgr.isSlotOccupied(10));
 }
 
