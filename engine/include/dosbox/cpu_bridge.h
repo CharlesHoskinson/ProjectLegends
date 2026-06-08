@@ -132,6 +132,17 @@ void restore_cpu_gprs(
 
 // Forward declaration
 struct EngineStateVgaRegisters;
+struct EngineStateCpu;
+
+/**
+ * @brief Snapshot CPU cycle/NMI control globals into a serialization struct.
+ */
+void snapshot_cpu_control(EngineStateCpu& out);
+
+/**
+ * @brief Restore CPU cycle/NMI control globals from a serialization struct.
+ */
+void restore_cpu_control(const EngineStateCpu& in);
 
 /**
  * @brief Check if VGA hardware is available (mem.linear != nullptr).

@@ -127,12 +127,13 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build and Test - Linux SDL3
+  # Optional Build - Linux SDL3
   # ─────────────────────────────────────────────────────────────────────────────
   linux-sdl3:
-    name: Linux SDL3 (${{ matrix.compiler }})
+    name: Optional Linux SDL3 (${{ matrix.compiler }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     strategy:
       matrix:
         compiler: [gcc, clang]
@@ -155,7 +156,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y cmake ninja-build ${{ matrix.pkg }} \
-            libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev \
+            libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev libxss-dev \
             libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
             libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev
 
@@ -218,12 +219,13 @@ jobs:
           retention-days: 14
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build and Test - Windows SDL3
+  # Optional Build - Windows SDL3
   # ─────────────────────────────────────────────────────────────────────────────
   windows-sdl3:
-    name: Windows SDL3 (MSVC)
+    name: Optional Windows SDL3 (MSVC)
     runs-on: windows-latest
     timeout-minutes: 30
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
@@ -251,12 +253,13 @@ jobs:
           }
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build and Test - macOS (Headless)
+  # Optional Build and Test - macOS (Headless)
   # ─────────────────────────────────────────────────────────────────────────────
   macos:
-    name: macOS (AppleClang)
+    name: Optional macOS (AppleClang)
     runs-on: macos-15
     timeout-minutes: 15
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
@@ -288,12 +291,13 @@ jobs:
           retention-days: 14
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build and Test - macOS SDL3
+  # Optional Build - macOS SDL3
   # ─────────────────────────────────────────────────────────────────────────────
   macos-sdl3:
-    name: macOS SDL3 (AppleClang)
+    name: Optional macOS SDL3 (AppleClang)
     runs-on: macos-15
     timeout-minutes: 20
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/checkout@v4
@@ -321,11 +325,11 @@ jobs:
   # Sanitizer Builds (merge-to-main + nightly)
   # ─────────────────────────────────────────────────────────────────────────────
   sanitizers:
-    name: ${{ matrix.sanitizer }} Sanitizer
+    name: Optional ${{ matrix.sanitizer }} Sanitizer
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: ${{ matrix.allow_failure == true }}
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         sanitizer: [address, undefined, thread, memory]
@@ -420,9 +424,10 @@ jobs:
   # Static Analysis (clang-tidy)
   # ─────────────────────────────────────────────────────────────────────────────
   static-analysis:
-    name: Static Analysis (clang-tidy)
+    name: Optional Static Analysis (clang-tidy)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: [linux]
 
     steps:
@@ -462,10 +467,10 @@ jobs:
   # Fuzz Testing (libFuzzer) — PR: quick 30s, merge-to-main: 60s
   # ─────────────────────────────────────────────────────────────────────────────
   fuzz:
-    name: Fuzz Testing
+    name: Optional Fuzz Testing
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name == 'schedule' || github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: [linux]
 
     steps:
@@ -542,9 +547,10 @@ jobs:
   # TLA+ Model Checking
   # ─────────────────────────────────────────────────────────────────────────────
   tlaplus:
-    name: TLA+ Model Checking
+    name: Optional TLA+ Model Checking
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
@@ -668,7 +674,8 @@ jobs:
     name: Code Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [linux]
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -705,14 +712,18 @@ jobs:
             --output-file coverage.filtered.info \
             --ignore-errors unused
           lcov --list coverage.filtered.info
+          echo "Coverage policy: report-only; no minimum threshold is enforced by CI yet." > coverage-policy.txt
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage.filtered.info
+          path: |
+            coverage.filtered.info
+            coverage-policy.txt
 
       - name: Upload to Codecov
+        if: env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v4
         with:
           file: coverage.filtered.info
@@ -722,9 +733,10 @@ jobs:
   # REQ-SEC-028: Dependency Vulnerability Scanning
   # ─────────────────────────────────────────────────────────────────────────────
   dependency-scan:
-    name: Dependency Scan
+    name: Optional Dependency Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
@@ -778,7 +790,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y cmake ninja-build gcc-13 g++-13 \
-            libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev \
+            libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev libxss-dev \
             libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
             libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev
 

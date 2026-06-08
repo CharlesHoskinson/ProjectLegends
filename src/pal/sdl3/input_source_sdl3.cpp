@@ -8,7 +8,7 @@
 
 #include "pal/input_source.h"
 #include <SDL3/SDL.h>
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 #include <memory>
 
 namespace pal {
@@ -119,59 +119,59 @@ private:
             // SDL3: New event constant names
             case SDL_EVENT_KEY_DOWN:
                 event.type = InputEventType::KeyDown;
-                event.key.scancode = gsl::narrow<uint16_t>(sdl.key.scancode);
-                event.key.keycode = gsl::narrow_cast<uint16_t>(sdl.key.key & 0xFFFF);  // SDL3: .key not .keysym.sym
+                event.key.scancode = legends::gsl::narrow<uint16_t>(sdl.key.scancode);
+                event.key.keycode = legends::gsl::narrow_cast<uint16_t>(sdl.key.key & 0xFFFF);  // SDL3: .key not .keysym.sym
                 event.key.repeat = sdl.key.repeat != 0;
                 return true;
 
             case SDL_EVENT_KEY_UP:
                 event.type = InputEventType::KeyUp;
-                event.key.scancode = gsl::narrow<uint16_t>(sdl.key.scancode);
-                event.key.keycode = gsl::narrow_cast<uint16_t>(sdl.key.key & 0xFFFF);
+                event.key.scancode = legends::gsl::narrow<uint16_t>(sdl.key.scancode);
+                event.key.keycode = legends::gsl::narrow_cast<uint16_t>(sdl.key.key & 0xFFFF);
                 event.key.repeat = false;
                 return true;
 
             case SDL_EVENT_MOUSE_MOTION:
                 event.type = InputEventType::MouseMotion;
-                event.mouse_motion.x = gsl::narrow_cast<int32_t>(sdl.motion.x);
-                event.mouse_motion.y = gsl::narrow_cast<int32_t>(sdl.motion.y);
-                event.mouse_motion.dx = gsl::narrow_cast<int32_t>(sdl.motion.xrel);
-                event.mouse_motion.dy = gsl::narrow_cast<int32_t>(sdl.motion.yrel);
+                event.mouse_motion.x = legends::gsl::narrow_cast<int32_t>(sdl.motion.x);
+                event.mouse_motion.y = legends::gsl::narrow_cast<int32_t>(sdl.motion.y);
+                event.mouse_motion.dx = legends::gsl::narrow_cast<int32_t>(sdl.motion.xrel);
+                event.mouse_motion.dy = legends::gsl::narrow_cast<int32_t>(sdl.motion.yrel);
                 return true;
 
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 event.type = InputEventType::MouseButtonDown;
                 event.mouse_button.button = sdl.button.button;
                 event.mouse_button.clicks = sdl.button.clicks;
-                event.mouse_button.x = gsl::narrow_cast<int32_t>(sdl.button.x);
-                event.mouse_button.y = gsl::narrow_cast<int32_t>(sdl.button.y);
+                event.mouse_button.x = legends::gsl::narrow_cast<int32_t>(sdl.button.x);
+                event.mouse_button.y = legends::gsl::narrow_cast<int32_t>(sdl.button.y);
                 return true;
 
             case SDL_EVENT_MOUSE_BUTTON_UP:
                 event.type = InputEventType::MouseButtonUp;
                 event.mouse_button.button = sdl.button.button;
                 event.mouse_button.clicks = 0;
-                event.mouse_button.x = gsl::narrow_cast<int32_t>(sdl.button.x);
-                event.mouse_button.y = gsl::narrow_cast<int32_t>(sdl.button.y);
+                event.mouse_button.x = legends::gsl::narrow_cast<int32_t>(sdl.button.x);
+                event.mouse_button.y = legends::gsl::narrow_cast<int32_t>(sdl.button.y);
                 return true;
 
             case SDL_EVENT_MOUSE_WHEEL:
                 event.type = InputEventType::MouseWheel;
-                event.mouse_wheel.dx = gsl::narrow_cast<int32_t>(sdl.wheel.x);
-                event.mouse_wheel.dy = gsl::narrow_cast<int32_t>(sdl.wheel.y);
+                event.mouse_wheel.dx = legends::gsl::narrow_cast<int32_t>(sdl.wheel.x);
+                event.mouse_wheel.dy = legends::gsl::narrow_cast<int32_t>(sdl.wheel.y);
                 return true;
 
             case SDL_EVENT_JOYSTICK_AXIS_MOTION:
                 event.type = InputEventType::JoystickAxis;
-                event.joy_axis.id = gsl::narrow<uint8_t>(sdl.jaxis.which);
-                event.joy_axis.axis = gsl::narrow<int16_t>(sdl.jaxis.axis);
+                event.joy_axis.id = legends::gsl::narrow<uint8_t>(sdl.jaxis.which);
+                event.joy_axis.axis = legends::gsl::narrow<int16_t>(sdl.jaxis.axis);
                 event.joy_axis.value = sdl.jaxis.value;
                 return true;
 
             case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
             case SDL_EVENT_JOYSTICK_BUTTON_UP:
                 event.type = InputEventType::JoystickButton;
-                event.joy_button.id = gsl::narrow<uint8_t>(sdl.jbutton.which);
+                event.joy_button.id = legends::gsl::narrow<uint8_t>(sdl.jbutton.which);
                 event.joy_button.button = sdl.jbutton.button;
                 event.joy_button.pressed = (sdl.type == SDL_EVENT_JOYSTICK_BUTTON_DOWN);
                 return true;
@@ -182,8 +182,8 @@ private:
 
             case SDL_EVENT_WINDOW_RESIZED:
                 event.type = InputEventType::WindowResize;
-                event.window_resize.width = gsl::narrow<uint32_t>(sdl.window.data1);
-                event.window_resize.height = gsl::narrow<uint32_t>(sdl.window.data2);
+                event.window_resize.width = legends::gsl::narrow<uint32_t>(sdl.window.data1);
+                event.window_resize.height = legends::gsl::narrow<uint32_t>(sdl.window.data2);
                 return true;
 
             case SDL_EVENT_WINDOW_FOCUS_GAINED:

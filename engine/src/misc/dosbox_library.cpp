@@ -134,6 +134,148 @@ inline uint64_t ms_to_cycles(uint32_t ms) {
 #define LIB_LOG_ERROR(msg) \
     do { g_last_error = (msg); g_log_state.log(0, msg); } while(0)
 
+void snapshot_context_meta(
+    const dosbox::DOSBoxContext& ctx,
+    dosbox::EngineStateContextMeta& meta
+) {
+    meta.mixer_work_in = ctx.mixer.work_in.load(std::memory_order_relaxed);
+    meta.mixer_work_out = ctx.mixer.work_out.load(std::memory_order_relaxed);
+    meta.mixer_work_wrap = ctx.mixer.work_wrap;
+    meta.mixer_pos = ctx.mixer.pos;
+    meta.mixer_done = ctx.mixer.done;
+    meta.mixer_samples_per_ms_whole = ctx.mixer.samples_per_ms.whole;
+    meta.mixer_samples_per_ms_numerator = ctx.mixer.samples_per_ms.numerator;
+    meta.mixer_samples_per_ms_denominator = ctx.mixer.samples_per_ms.denominator;
+    meta.mixer_samples_this_ms_whole = ctx.mixer.samples_this_ms.whole;
+    meta.mixer_samples_this_ms_numerator = ctx.mixer.samples_this_ms.numerator;
+    meta.mixer_samples_this_ms_denominator = ctx.mixer.samples_this_ms.denominator;
+    meta.mixer_samples_rendered_whole = ctx.mixer.samples_rendered.whole;
+    meta.mixer_samples_rendered_numerator = ctx.mixer.samples_rendered.numerator;
+    meta.mixer_samples_rendered_denominator = ctx.mixer.samples_rendered.denominator;
+    meta.vga_assigned_lfb = ctx.vga.assigned_lfb;
+    meta.pic_irq_delay_ns = ctx.pic.irq_delay_ns;
+    meta.mixer_sample_counter = ctx.mixer.sample_counter;
+    meta.vga_vsync_period = ctx.vga.vsync.period;
+    meta.pic_srv_lag = ctx.pic.srv_lag;
+    meta.ps2_acx = ctx.keyboard.ps2mouse.acx;
+    meta.ps2_acy = ctx.keyboard.ps2mouse.acy;
+
+    meta.mixer_prebuffer_wait = ctx.mixer.prebuffer_wait ? 1 : 0;
+    meta.vga_render_wait_for_changes = ctx.vga.render_wait_for_changes ? 1 : 0;
+    meta.vga_pci_enabled = ctx.vga.pci_enabled ? 1 : 0;
+    meta.vga_page_flip_occurred = ctx.vga.page_flip_occurred ? 1 : 0;
+    meta.vga_retrace_poll = ctx.vga.retrace_poll ? 1 : 0;
+    meta.vga_ega_mode = ctx.vga.ega_mode ? 1 : 0;
+    meta.vga_vsync_manual = ctx.vga.vsync.manual ? 1 : 0;
+    meta.vga_vsync_persistent = ctx.vga.vsync.persistent ? 1 : 0;
+    meta.vga_vsync_faithful = ctx.vga.vsync.faithful ? 1 : 0;
+
+    meta.ps2_type = ctx.keyboard.ps2mouse.type;
+    meta.ps2_mode = ctx.keyboard.ps2mouse.mode;
+    meta.ps2_reset_mode = ctx.keyboard.ps2mouse.reset_mode;
+    meta.ps2_samplerate = ctx.keyboard.ps2mouse.samplerate;
+    meta.ps2_resolution = ctx.keyboard.ps2mouse.resolution;
+    std::memcpy(meta.ps2_last_srate, ctx.keyboard.ps2mouse.last_srate, 3);
+    meta.ps2_reporting = ctx.keyboard.ps2mouse.reporting ? 1 : 0;
+    meta.ps2_scale21 = ctx.keyboard.ps2mouse.scale21 ? 1 : 0;
+    meta.ps2_intellimouse_mode = ctx.keyboard.ps2mouse.intellimouse_mode ? 1 : 0;
+    meta.ps2_intellimouse_btn45 = ctx.keyboard.ps2mouse.intellimouse_btn45 ? 1 : 0;
+    meta.ps2_int33_taken = ctx.keyboard.ps2mouse.int33_taken ? 1 : 0;
+    meta.ps2_l = ctx.keyboard.ps2mouse.l ? 1 : 0;
+    meta.ps2_m = ctx.keyboard.ps2mouse.m ? 1 : 0;
+    meta.ps2_r = ctx.keyboard.ps2mouse.r ? 1 : 0;
+
+    meta.keyboard_enable_aux = ctx.keyboard.enable_aux ? 1 : 0;
+    meta.keyboard_reset_state = ctx.keyboard.reset_state ? 1 : 0;
+    meta.keyboard_aux_command = ctx.keyboard.aux_command;
+    meta.input_captured_num_lock = ctx.input.captured_num_lock ? 1 : 0;
+    meta.input_captured_caps_lock = ctx.input.captured_caps_lock ? 1 : 0;
+    meta.input_captured = ctx.input.input_captured ? 1 : 0;
+    meta.pic_enable_pc_xt_nmi_mask = ctx.pic.enable_pc_xt_nmi_mask ? 1 : 0;
+}
+
+void restore_context_meta(
+    dosbox::DOSBoxContext& ctx,
+    const dosbox::EngineStateContextMeta& meta
+) {
+    ctx.mixer.work_in.store(meta.mixer_work_in, std::memory_order_relaxed);
+    ctx.mixer.work_out.store(meta.mixer_work_out, std::memory_order_relaxed);
+    ctx.mixer.work_wrap = meta.mixer_work_wrap;
+    ctx.mixer.pos = meta.mixer_pos;
+    ctx.mixer.done = meta.mixer_done;
+    ctx.mixer.samples_per_ms.whole = meta.mixer_samples_per_ms_whole;
+    ctx.mixer.samples_per_ms.numerator = meta.mixer_samples_per_ms_numerator;
+    ctx.mixer.samples_per_ms.denominator = meta.mixer_samples_per_ms_denominator;
+    ctx.mixer.samples_this_ms.whole = meta.mixer_samples_this_ms_whole;
+    ctx.mixer.samples_this_ms.numerator = meta.mixer_samples_this_ms_numerator;
+    ctx.mixer.samples_this_ms.denominator = meta.mixer_samples_this_ms_denominator;
+    ctx.mixer.samples_rendered.whole = meta.mixer_samples_rendered_whole;
+    ctx.mixer.samples_rendered.numerator = meta.mixer_samples_rendered_numerator;
+    ctx.mixer.samples_rendered.denominator = meta.mixer_samples_rendered_denominator;
+    ctx.vga.assigned_lfb = meta.vga_assigned_lfb;
+    ctx.pic.irq_delay_ns = meta.pic_irq_delay_ns;
+    ctx.mixer.sample_counter = meta.mixer_sample_counter;
+    ctx.vga.vsync.period = meta.vga_vsync_period;
+    ctx.pic.srv_lag = meta.pic_srv_lag;
+    ctx.keyboard.ps2mouse.acx = meta.ps2_acx;
+    ctx.keyboard.ps2mouse.acy = meta.ps2_acy;
+
+    ctx.mixer.prebuffer_wait = meta.mixer_prebuffer_wait != 0;
+    ctx.vga.render_wait_for_changes = meta.vga_render_wait_for_changes != 0;
+    ctx.vga.pci_enabled = meta.vga_pci_enabled != 0;
+    ctx.vga.page_flip_occurred = meta.vga_page_flip_occurred != 0;
+    ctx.vga.retrace_poll = meta.vga_retrace_poll != 0;
+    ctx.vga.ega_mode = meta.vga_ega_mode != 0;
+    ctx.vga.vsync.manual = meta.vga_vsync_manual != 0;
+    ctx.vga.vsync.persistent = meta.vga_vsync_persistent != 0;
+    ctx.vga.vsync.faithful = meta.vga_vsync_faithful != 0;
+
+    ctx.keyboard.ps2mouse.type = meta.ps2_type;
+    ctx.keyboard.ps2mouse.mode = meta.ps2_mode;
+    ctx.keyboard.ps2mouse.reset_mode = meta.ps2_reset_mode;
+    ctx.keyboard.ps2mouse.samplerate = meta.ps2_samplerate;
+    ctx.keyboard.ps2mouse.resolution = meta.ps2_resolution;
+    std::memcpy(ctx.keyboard.ps2mouse.last_srate, meta.ps2_last_srate, 3);
+    ctx.keyboard.ps2mouse.reporting = meta.ps2_reporting != 0;
+    ctx.keyboard.ps2mouse.scale21 = meta.ps2_scale21 != 0;
+    ctx.keyboard.ps2mouse.intellimouse_mode = meta.ps2_intellimouse_mode != 0;
+    ctx.keyboard.ps2mouse.intellimouse_btn45 = meta.ps2_intellimouse_btn45 != 0;
+    ctx.keyboard.ps2mouse.int33_taken = meta.ps2_int33_taken != 0;
+    ctx.keyboard.ps2mouse.l = meta.ps2_l != 0;
+    ctx.keyboard.ps2mouse.m = meta.ps2_m != 0;
+    ctx.keyboard.ps2mouse.r = meta.ps2_r != 0;
+
+    ctx.keyboard.enable_aux = meta.keyboard_enable_aux != 0;
+    ctx.keyboard.reset_state = meta.keyboard_reset_state != 0;
+    ctx.keyboard.aux_command = meta.keyboard_aux_command;
+    ctx.input.captured_num_lock = meta.input_captured_num_lock != 0;
+    ctx.input.captured_caps_lock = meta.input_captured_caps_lock != 0;
+    ctx.input.input_captured = meta.input_captured != 0;
+    ctx.pic.enable_pc_xt_nmi_mask = meta.pic_enable_pc_xt_nmi_mask != 0;
+}
+
+void restore_cpu_control_from_context(const dosbox::DOSBoxContext& ctx) {
+    dosbox::EngineStateCpu cpu{};
+    cpu.cycles = ctx.cpu_state.cycles;
+    cpu.cycle_left = ctx.cpu_state.cycle_left;
+    cpu.cycle_max = ctx.cpu_state.cycle_max;
+    cpu.cycle_old_max = ctx.cpu_state.cycle_old_max;
+    cpu.cycle_percent_used = ctx.cpu_state.cycle_percent_used;
+    cpu.cycle_limit = ctx.cpu_state.cycle_limit;
+    cpu.cycle_up = ctx.cpu_state.cycle_up;
+    cpu.cycle_down = ctx.cpu_state.cycle_down;
+    cpu.cycles_set = ctx.cpu_state.cycles_set;
+    cpu.io_delay_removed = ctx.cpu_state.io_delay_removed;
+    cpu.extflags_toggle = ctx.cpu_state.extflags_toggle;
+    cpu.cycle_auto_adjust = ctx.cpu_state.cycle_auto_adjust ? 1 : 0;
+    cpu.skip_cycle_auto_adjust = ctx.cpu_state.skip_cycle_auto_adjust ? 1 : 0;
+    cpu.nmi_gate = ctx.cpu_state.nmi_gate ? 1 : 0;
+    cpu.nmi_active = ctx.cpu_state.nmi_active ? 1 : 0;
+    cpu.nmi_pending = ctx.cpu_state.nmi_pending ? 1 : 0;
+    cpu.halted = ctx.cpu_state.halted ? 1 : 0;
+    dosbox::restore_cpu_control(cpu);
+}
+
 } // anonymous namespace
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -314,6 +456,7 @@ dosbox_lib_error_t dosbox_lib_init(dosbox_lib_handle_t handle) {
         // (EIP etc. persist as globals across instance create/destroy).
         dosbox::init_cpu_bridge();
         dosbox::reset_cpu_bridge();
+        restore_cpu_control_from_context(*g_context);
 
         LIB_LOG_INFO("DOSBox-X library instance initialized");
         return DOSBOX_LIB_OK;
@@ -372,6 +515,7 @@ dosbox_lib_error_t dosbox_lib_reset(dosbox_lib_handle_t handle) {
 
         // Reset real CPU registers to power-on defaults for determinism
         dosbox::reset_cpu_bridge();
+        restore_cpu_control_from_context(*g_context);
 
         // Zero guest memory so execution starts from a clean state,
         // then refill guard region with HLT (0xF4) so CPU halts on overrun
@@ -567,8 +711,10 @@ dosbox_lib_error_t dosbox_lib_save_state(
 
     // Count sub-blocks to determine dynamic size
     uint16_t sub_block_count = 0;
+    bool has_context_meta = true;
     bool has_ram = (ctx_for_size->memory.base != nullptr && ctx_for_size->memory.size > 0);
     bool has_vga_hw = dosbox::vga_hw_available();
+    if (has_context_meta) ++sub_block_count;
     if (has_ram)    ++sub_block_count;
     if (has_vga_hw) sub_block_count += 2;  // VGA_REG + VRAM
 
@@ -578,6 +724,8 @@ dosbox_lib_error_t dosbox_lib_save_state(
     if (sub_block_count > 0) {
         total += sizeof(dosbox::V5SubBlockDir);                         // 8
         total += static_cast<size_t>(sub_block_count) * sizeof(dosbox::V5DirEntry); // N×16
+        if (has_context_meta)
+            total += sizeof(dosbox::EngineStateContextMeta);
         if (has_ram)
             total += dosbox::zero_rle_bound(ctx_for_size->memory.size);
         if (has_vga_hw) {
@@ -722,23 +870,9 @@ dosbox_lib_error_t dosbox_lib_save_state(
 
     // Serialize CPU state (H2: local struct + memcpy)
     dosbox::EngineStateCpu cpu{};
-    cpu.cycles = ctx->cpu_state.cycles;
-    cpu.cycle_left = ctx->cpu_state.cycle_left;
-    cpu.cycle_max = ctx->cpu_state.cycle_max;
-    cpu.cycle_old_max = ctx->cpu_state.cycle_old_max;
-    cpu.cycle_percent_used = ctx->cpu_state.cycle_percent_used;
-    cpu.cycle_limit = ctx->cpu_state.cycle_limit;
+    dosbox::snapshot_cpu_control(cpu);
     cpu.cycle_up = ctx->cpu_state.cycle_up;
     cpu.cycle_down = ctx->cpu_state.cycle_down;
-    cpu.cycles_set = ctx->cpu_state.cycles_set;
-    cpu.io_delay_removed = ctx->cpu_state.io_delay_removed;
-    cpu.extflags_toggle = ctx->cpu_state.extflags_toggle;
-    cpu.cycle_auto_adjust = ctx->cpu_state.cycle_auto_adjust ? 1 : 0;
-    cpu.skip_cycle_auto_adjust = ctx->cpu_state.skip_cycle_auto_adjust ? 1 : 0;
-    cpu.nmi_gate = ctx->cpu_state.nmi_gate ? 1 : 0;
-    cpu.nmi_active = ctx->cpu_state.nmi_active ? 1 : 0;
-    cpu.nmi_pending = ctx->cpu_state.nmi_pending ? 1 : 0;
-    cpu.halted = ctx->cpu_state.halted ? 1 : 0;
     std::memcpy(ptr + header.cpu_offset, &cpu, sizeof(cpu));
 
     // Serialize Memory state (H2: local struct + memcpy)
@@ -845,8 +979,23 @@ dosbox_lib_error_t dosbox_lib_save_state(
         size_t blob_cursor = dir_offset + dir_header_size + dir_entries_size;
 
         // Temporary storage for directory entries
-        dosbox::V5DirEntry entries[3] = {};
+        dosbox::V5DirEntry entries[4] = {};
         uint16_t entry_idx = 0;
+
+        // ── Context metadata blob ──────────────────────────────────────
+        if (has_context_meta) {
+            dosbox::EngineStateContextMeta meta{};
+            snapshot_context_meta(*ctx, meta);
+            std::memcpy(ptr + blob_cursor, &meta, sizeof(meta));
+
+            entries[entry_idx].tag = dosbox::V5_SUBTAG_CONTEXT_META;
+            entries[entry_idx].flags = 0;  // Uncompressed
+            entries[entry_idx].offset = static_cast<uint32_t>(blob_cursor);
+            entries[entry_idx].size = static_cast<uint32_t>(sizeof(meta));
+            entries[entry_idx].orig_size = static_cast<uint32_t>(sizeof(meta));
+            blob_cursor += sizeof(meta);
+            ++entry_idx;
+        }
 
         // ── RAM blob ────────────────────────────────────────────────────
         if (has_ram) {
@@ -1146,6 +1295,7 @@ dosbox_lib_error_t dosbox_lib_load_state(
     ctx->cpu_state.nmi_active = cpu.nmi_active != 0;
     ctx->cpu_state.nmi_pending = cpu.nmi_pending != 0;
     ctx->cpu_state.halted = cpu.halted != 0;
+    dosbox::restore_cpu_control(cpu);
 
     // Deserialize Memory state (H2: memcpy into local struct)
     dosbox::EngineStateMemory mem{};
@@ -1276,6 +1426,14 @@ dosbox_lib_error_t dosbox_lib_load_state(
                             continue;  // Skip corrupt entry
 
                         switch (entry.tag) {
+                        case dosbox::V5_SUBTAG_CONTEXT_META: {
+                            if (entry.size < sizeof(dosbox::EngineStateContextMeta))
+                                break;  // Truncated
+                            dosbox::EngineStateContextMeta meta{};
+                            std::memcpy(&meta, ptr + entry.offset, sizeof(meta));
+                            restore_context_meta(*ctx, meta);
+                            break;
+                        }
                         case dosbox::V5_SUBTAG_RAM: {
                             if (ctx->memory.base == nullptr || ctx->memory.size == 0)
                                 break;

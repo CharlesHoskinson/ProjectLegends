@@ -5,7 +5,7 @@
 
 #include "pal/window.h"
 #include <SDL3/SDL.h>
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 #include <memory>
 #include <string>
 
@@ -52,8 +52,8 @@ public:
             SDL_free(displays);
         }
 
-        int scaled_w = gsl::narrow_cast<int>(config.width * dpi_scale);
-        int scaled_h = gsl::narrow_cast<int>(config.height * dpi_scale);
+        int scaled_w = legends::gsl::narrow_cast<int>(config.width * dpi_scale);
+        int scaled_h = legends::gsl::narrow_cast<int>(config.height * dpi_scale);
 
         // SDL3: CreateWindow has no x,y parameters - uses SDL_WINDOWPOS_CENTERED by default
         window_ = SDL_CreateWindow(
@@ -101,7 +101,7 @@ public:
             return Result::InvalidParameter;
         }
 
-        if (!SDL_SetWindowSize(window_, gsl::narrow<int>(width), gsl::narrow<int>(height))) {
+        if (!SDL_SetWindowSize(window_, legends::gsl::narrow<int>(width), legends::gsl::narrow<int>(height))) {
             return Result::NotSupported;
         }
         width_ = width;
@@ -145,8 +145,8 @@ public:
         if (window_) {
             int w, h;
             SDL_GetWindowSize(window_, &w, &h);
-            width = gsl::narrow<uint32_t>(w);
-            height = gsl::narrow<uint32_t>(h);
+            width = legends::gsl::narrow<uint32_t>(w);
+            height = legends::gsl::narrow<uint32_t>(h);
         } else {
             width = width_;
             height = height_;
@@ -163,13 +163,13 @@ public:
         if (displays) {
             SDL_free(displays);
         }
-        return count > 0 ? gsl::narrow<uint32_t>(count) : 1;
+        return count > 0 ? legends::gsl::narrow<uint32_t>(count) : 1;
     }
 
     Result getDisplayInfo(uint32_t index, DisplayInfo& info) const override {
         int count = 0;
         SDL_DisplayID* displays = SDL_GetDisplays(&count);
-        if (!displays || gsl::narrow<int>(index) >= count) {
+        if (!displays || legends::gsl::narrow<int>(index) >= count) {
             if (displays) SDL_free(displays);
             return Result::InvalidParameter;
         }
@@ -182,8 +182,8 @@ public:
             return Result::NotSupported;
         }
 
-        info.width = gsl::narrow<uint32_t>(mode->w);
-        info.height = gsl::narrow<uint32_t>(mode->h);
+        info.width = legends::gsl::narrow<uint32_t>(mode->w);
+        info.height = legends::gsl::narrow<uint32_t>(mode->h);
         info.refresh_rate = mode->refresh_rate;
 
         // Get DPI scale

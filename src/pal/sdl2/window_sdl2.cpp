@@ -5,7 +5,7 @@
 
 #include "pal/window.h"
 #include <SDL.h>
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 #include <memory>
 #include <string>
 
@@ -44,8 +44,8 @@ public:
             config.title ? config.title : "DOSBox-X",
             SDL_WINDOWPOS_CENTERED,
             SDL_WINDOWPOS_CENTERED,
-            gsl::narrow<int>(config.width),
-            gsl::narrow<int>(config.height),
+            legends::gsl::narrow<int>(config.width),
+            legends::gsl::narrow<int>(config.height),
             flags
         );
 
@@ -87,7 +87,7 @@ public:
             return Result::InvalidParameter;
         }
 
-        SDL_SetWindowSize(window_, gsl::narrow<int>(width), gsl::narrow<int>(height));
+        SDL_SetWindowSize(window_, legends::gsl::narrow<int>(width), legends::gsl::narrow<int>(height));
         width_ = width;
         height_ = height;
 
@@ -128,8 +128,8 @@ public:
         if (window_) {
             int w, h;
             SDL_GetWindowSize(window_, &w, &h);
-            width = gsl::narrow<uint32_t>(w);
-            height = gsl::narrow<uint32_t>(h);
+            width = legends::gsl::narrow<uint32_t>(w);
+            height = legends::gsl::narrow<uint32_t>(h);
         } else {
             width = width_;
             height = height_;
@@ -142,27 +142,27 @@ public:
 
     uint32_t getDisplayCount() const override {
         int count = SDL_GetNumVideoDisplays();
-        return count > 0 ? gsl::narrow<uint32_t>(count) : 1;
+        return count > 0 ? legends::gsl::narrow<uint32_t>(count) : 1;
     }
 
     Result getDisplayInfo(uint32_t index, DisplayInfo& info) const override {
         int count = SDL_GetNumVideoDisplays();
-        if (gsl::narrow<int>(index) >= count) {
+        if (legends::gsl::narrow<int>(index) >= count) {
             return Result::InvalidParameter;
         }
 
         SDL_DisplayMode mode;
-        if (SDL_GetCurrentDisplayMode(gsl::narrow<int>(index), &mode) != 0) {
+        if (SDL_GetCurrentDisplayMode(legends::gsl::narrow<int>(index), &mode) != 0) {
             return Result::NotSupported;
         }
 
-        info.width = gsl::narrow<uint32_t>(mode.w);
-        info.height = gsl::narrow<uint32_t>(mode.h);
+        info.width = legends::gsl::narrow<uint32_t>(mode.w);
+        info.height = legends::gsl::narrow<uint32_t>(mode.h);
         info.refresh_rate = static_cast<float>(mode.refresh_rate);
         info.dpi_scale = 1.0f;  // SDL2 doesn't have easy DPI access
 
         // Get display name
-        const char* name = SDL_GetDisplayName(gsl::narrow<int>(index));
+        const char* name = SDL_GetDisplayName(legends::gsl::narrow<int>(index));
         info.name = name ? name : "Unknown Display";
 
         return Result::Success;

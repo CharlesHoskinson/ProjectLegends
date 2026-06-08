@@ -3379,9 +3379,23 @@ void CPU_LibraryInit(void) {
 
     cpudecoder = &CPU_Core_Simple_Run;
     CPU_ArchitectureType = CPU_ARCHTYPE_386;
+    CPU_Cycles = 0;
+    CPU_CycleLeft = 3000;
     CPU_CycleMax = 3000;
-    CPU_CyclesSet = 3000;
     CPU_OldCycleMax = 3000;
+    CPU_CyclePercUsed = 100;
+    CPU_CycleLimit = -1;
+    CPU_CycleUp = 0;
+    CPU_CycleDown = 0;
+    CPU_CyclesSet = 3000;
+    CPU_IODelayRemoved = 0;
+    CPU_CycleAutoAdjust = false;
+    CPU_SkipCycleAutoAdjust = false;
+    CPU_AutoDetermineMode = CPU_AUTODETERMINE_NONE;
+    CPU_NMI_gate = true;
+    CPU_NMI_active = false;
+    CPU_NMI_pending = false;
+    CPU_extflags_toggle = 0;
 }
 
 void CPU_Init() { CPU_LibraryInit(); }

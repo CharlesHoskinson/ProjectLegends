@@ -413,6 +413,7 @@ constexpr uint32_t V5_DIR_MAGIC = 0x44423556;
 constexpr uint16_t V5_SUBTAG_RAM     = 2;  ///< Guest RAM contents (zero-RLE compressed)
 constexpr uint16_t V5_SUBTAG_VGA_REG = 3;  ///< VGA hardware registers (flat struct)
 constexpr uint16_t V5_SUBTAG_VRAM    = 4;  ///< VGA VRAM contents (zero-RLE compressed)
+constexpr uint16_t V5_SUBTAG_CONTEXT_META = 5; ///< Lightweight context fields hashed for determinism
 
 /// Flags for V5DirEntry
 constexpr uint16_t V5_BLOCK_FLAG_COMPRESSED = 0x0001;  ///< Block is zero-RLE compressed
@@ -443,6 +444,75 @@ struct V5DirEntry {
     uint32_t orig_size;    ///< Original uncompressed size in bytes
 };
 static_assert(sizeof(V5DirEntry) == 16, "V5DirEntry must be 16 bytes");
+
+/**
+ * @brief Additional lightweight fields required for hash/save-load parity.
+ *
+ * V5 fixed sections predate several fields that are included in the fast
+ * determinism hash. This sub-block captures those fields without changing the
+ * fixed header or V4/V5 base offsets.
+ */
+struct EngineStateContextMeta {
+    // Mixer counters and fractional sample state.
+    uint32_t mixer_work_in;
+    uint32_t mixer_work_out;
+    uint32_t mixer_work_wrap;
+    uint32_t mixer_pos;
+    uint32_t mixer_done;
+    uint32_t mixer_samples_per_ms_whole;
+    uint32_t mixer_samples_per_ms_numerator;
+    uint32_t mixer_samples_per_ms_denominator;
+    uint32_t mixer_samples_this_ms_whole;
+    uint32_t mixer_samples_this_ms_numerator;
+    uint32_t mixer_samples_this_ms_denominator;
+    uint32_t mixer_samples_rendered_whole;
+    uint32_t mixer_samples_rendered_numerator;
+    uint32_t mixer_samples_rendered_denominator;
+
+    // VGA, PIC, and global input metadata.
+    uint32_t vga_assigned_lfb;
+    uint32_t pic_irq_delay_ns;
+    uint64_t mixer_sample_counter;
+    double vga_vsync_period;
+    double pic_srv_lag;
+    float ps2_acx;
+    float ps2_acy;
+
+    uint8_t mixer_prebuffer_wait;
+    uint8_t vga_render_wait_for_changes;
+    uint8_t vga_pci_enabled;
+    uint8_t vga_page_flip_occurred;
+    uint8_t vga_retrace_poll;
+    uint8_t vga_ega_mode;
+    uint8_t vga_vsync_manual;
+    uint8_t vga_vsync_persistent;
+    uint8_t vga_vsync_faithful;
+
+    uint8_t ps2_type;
+    uint8_t ps2_mode;
+    uint8_t ps2_reset_mode;
+    uint8_t ps2_samplerate;
+    uint8_t ps2_resolution;
+    uint8_t ps2_last_srate[3];
+    uint8_t ps2_reporting;
+    uint8_t ps2_scale21;
+    uint8_t ps2_intellimouse_mode;
+    uint8_t ps2_intellimouse_btn45;
+    uint8_t ps2_int33_taken;
+    uint8_t ps2_l;
+    uint8_t ps2_m;
+    uint8_t ps2_r;
+
+    uint8_t keyboard_enable_aux;
+    uint8_t keyboard_reset_state;
+    uint8_t keyboard_aux_command;
+    uint8_t input_captured_num_lock;
+    uint8_t input_captured_caps_lock;
+    uint8_t input_captured;
+    uint8_t pic_enable_pc_xt_nmi_mask;
+};
+static_assert(sizeof(EngineStateContextMeta) == 128,
+    "EngineStateContextMeta must be 128 bytes");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // VGA Hardware Register State [Phase 3] (REQ-SR-003)

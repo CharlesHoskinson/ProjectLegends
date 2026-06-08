@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 #include "app/ai_screen_context.h"
+#include <legends/runtime_host.h>
 
 #include <string>
 
@@ -130,6 +131,92 @@ TEST(AIScreenContextTest, FormatScreenContextEmptyText) {
 
 TEST(AIScreenContextTest, CaptureScreenContextNullHandleReturnsEmpty) {
     std::string result = captureScreenContext(nullptr);
+    EXPECT_TRUE(result.empty());
+}
+
+} // namespace
+
+class FakeRuntimeHost : public RuntimeHost {
+public:
+    std::vector<legends_text_cell_t> mock_cells;
+    legends_text_info_t mock_info{};
+    legends_error_t mock_error = LEGENDS_OK;
+
+    legends_error_t step_ms(uint32_t, legends_step_result_t*) override { return LEGENDS_OK; }
+    legends_error_t step_cycles(uint64_t, legends_step_result_t*) override { return LEGENDS_OK; }
+
+    legends_error_t capture_text(
+        legends_text_cell_t* cells,
+        size_t cells_count,
+        size_t* cells_count_out,
+        legends_text_info_t* info_out) override {
+        if (mock_error != LEGENDS_OK) {
+            return mock_error;
+        }
+        if (info_out) {
+            *info_out = mock_info;
+        }
+        if (cells_count_out) {
+            *cells_count_out = mock_cells.size();
+        }
+        if (cells && cells_count >= mock_cells.size()) {
+            std::copy(mock_cells.begin(), mock_cells.end(), cells);
+        }
+        return LEGENDS_OK;
+    }
+
+    legends_error_t capture_rgb(uint8_t*, size_t, size_t*, uint16_t*, uint16_t*) override { return LEGENDS_OK; }
+    legends_error_t inject_key(uint8_t, bool) override { return LEGENDS_OK; }
+    legends_error_t inject_mouse(int16_t, int16_t, uint8_t) override { return LEGENDS_OK; }
+    legends_error_t save_state(void*, size_t, size_t*) override { return LEGENDS_OK; }
+    legends_error_t load_state(const void*, size_t) override { return LEGENDS_OK; }
+    legends_error_t mount_drive(char, std::string_view, uint32_t) override { return LEGENDS_OK; }
+    legends_error_t unmount_drive(char) override { return LEGENDS_OK; }
+    legends_error_t get_total_cycles(uint64_t*) override { return LEGENDS_OK; }
+    legends_error_t is_frame_dirty(int*) override { return LEGENDS_OK; }
+    legends_error_t inject_key_ext(uint8_t, bool) override { return LEGENDS_OK; }
+    legends_error_t capture_audio(int16_t*, size_t, size_t*) override { return LEGENDS_OK; }
+    legends_error_t capture_midi_audio(int16_t*, size_t, size_t*) override { return LEGENDS_OK; }
+
+    legends_error_t reset() override { return LEGENDS_OK; }
+    legends_error_t text_input(std::string_view) override { return LEGENDS_OK; }
+    legends_error_t get_cursor(uint8_t*, uint8_t*, int*) override { return LEGENDS_OK; }
+    legends_error_t joystick_event(uint8_t, uint8_t, uint8_t, uint8_t) override { return LEGENDS_OK; }
+    legends_error_t set_log_callback(legends_log_callback_t, void*) override { return LEGENDS_OK; }
+    legends_error_t set_midi_device(std::string_view) override { return LEGENDS_OK; }
+    legends_error_t set_midi_soundfont(std::string_view) override { return LEGENDS_OK; }
+    legends_error_t set_midi_romdir(std::string_view) override { return LEGENDS_OK; }
+    legends_error_t set_printer_output(std::string_view) override { return LEGENDS_OK; }
+    legends_error_t set_ttf_font(std::string_view, uint32_t) override { return LEGENDS_OK; }
+    legends_error_t ipx_enable(bool) override { return LEGENDS_OK; }
+    legends_error_t ipx_connect(std::string_view, uint16_t) override { return LEGENDS_OK; }
+    legends_error_t ipx_disconnect() override { return LEGENDS_OK; }
+    legends_error_t glide_enable(bool) override { return LEGENDS_OK; }
+    legends_error_t glide_set_resolution(uint16_t, uint16_t) override { return LEGENDS_OK; }
+    legends_error_t set_machine_pc98(bool) override { return LEGENDS_OK; }
+};
+
+namespace {
+
+TEST(AIScreenContextTest, CaptureScreenContextWithFakeRuntime) {
+    FakeRuntimeHost runtime;
+    runtime.mock_info.columns = 5;
+    runtime.mock_info.rows = 2;
+    for (int i = 0; i < 10; ++i) {
+        legends_text_cell_t cell{};
+        cell.character = 'A' + i;
+        cell.attribute = 0x07;
+        runtime.mock_cells.push_back(cell);
+    }
+
+    std::string result = captureScreenContext(runtime);
+    EXPECT_EQ(result, "ABCDE\nFGHIJ");
+}
+
+TEST(AIScreenContextTest, CaptureScreenContextWithFakeRuntimeErrorReturnsEmpty) {
+    FakeRuntimeHost runtime;
+    runtime.mock_error = LEGENDS_ERR_NOT_SUPPORTED;
+    std::string result = captureScreenContext(runtime);
     EXPECT_TRUE(result.empty());
 }
 

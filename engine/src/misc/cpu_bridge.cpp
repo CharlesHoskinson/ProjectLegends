@@ -25,11 +25,31 @@
 extern void CPU_Init();
 extern void CPU_LibraryInit();
 extern bool CPU_IsHLTed();
+extern Bitu CPU_extflags_toggle;
 
 namespace dosbox {
 
 namespace {
 bool g_bridge_initialized = false;
+
+void sync_context_cpu_state(DOSBoxContext& ctx)
+{
+    ctx.cpu_state.cycles = CPU_Cycles;
+    ctx.cpu_state.cycle_left = CPU_CycleLeft;
+    ctx.cpu_state.cycle_max = CPU_CycleMax;
+    ctx.cpu_state.cycle_old_max = CPU_OldCycleMax;
+    ctx.cpu_state.cycle_percent_used = CPU_CyclePercUsed;
+    ctx.cpu_state.cycle_limit = CPU_CycleLimit;
+    ctx.cpu_state.cycles_set = CPU_CyclesSet;
+    ctx.cpu_state.io_delay_removed = CPU_IODelayRemoved;
+    ctx.cpu_state.extflags_toggle = static_cast<uint32_t>(CPU_extflags_toggle);
+    ctx.cpu_state.cycle_auto_adjust = CPU_CycleAutoAdjust;
+    ctx.cpu_state.skip_cycle_auto_adjust = CPU_SkipCycleAutoAdjust;
+    ctx.cpu_state.nmi_gate = CPU_NMI_gate;
+    ctx.cpu_state.nmi_active = CPU_NMI_active;
+    ctx.cpu_state.nmi_pending = CPU_NMI_pending;
+    ctx.cpu_state.halted = CPU_IsHLTed();
+}
 } // anonymous namespace
 
 void init_cpu_bridge() {
@@ -53,6 +73,7 @@ void reset_cpu_bridge() {
     // Re-initialize all CPU registers, segments, flags to power-on defaults.
     // This ensures deterministic execution after a context reset.
     ::CPU_LibraryInit();
+    cpudecoder = &CPU_Core_Simple_Run;
 }
 
 CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
@@ -120,6 +141,7 @@ CpuExecuteResult execute_cycles(DOSBoxContext* ctx, uint64_t cycles) {
         result.stop_reason = CpuStopReason::Halt;
     }
     // ret == CBRET_NONE (0) means normal completion
+    sync_context_cpu_state(*ctx);
 
     // Update context timing state
     ctx->timing.total_cycles += result.cycles_executed;
@@ -168,6 +190,48 @@ void restore_cpu_gprs(
         Segs.val[i] = static_cast<Bitu>(seg_val[i]);
         Segs.phys[i] = static_cast<PhysPt>(seg_phys[i]);
         Segs.limit[i] = static_cast<PhysPt>(seg_limit[i]);
+    }
+}
+
+void snapshot_cpu_control(EngineStateCpu& out)
+{
+    out.cycles = CPU_Cycles;
+    out.cycle_left = CPU_CycleLeft;
+    out.cycle_max = CPU_CycleMax;
+    out.cycle_old_max = CPU_OldCycleMax;
+    out.cycle_percent_used = CPU_CyclePercUsed;
+    out.cycle_limit = CPU_CycleLimit;
+    out.cycle_up = 0;
+    out.cycle_down = 0;
+    out.cycles_set = CPU_CyclesSet;
+    out.io_delay_removed = CPU_IODelayRemoved;
+    out.extflags_toggle = static_cast<uint32_t>(CPU_extflags_toggle);
+    out.cycle_auto_adjust = CPU_CycleAutoAdjust ? 1 : 0;
+    out.skip_cycle_auto_adjust = CPU_SkipCycleAutoAdjust ? 1 : 0;
+    out.nmi_gate = CPU_NMI_gate ? 1 : 0;
+    out.nmi_active = CPU_NMI_active ? 1 : 0;
+    out.nmi_pending = CPU_NMI_pending ? 1 : 0;
+    out.halted = CPU_IsHLTed() ? 1 : 0;
+}
+
+void restore_cpu_control(const EngineStateCpu& in)
+{
+    CPU_Cycles = static_cast<cpu_cycles_count_t>(in.cycles);
+    CPU_CycleLeft = static_cast<cpu_cycles_count_t>(in.cycle_left);
+    CPU_CycleMax = static_cast<cpu_cycles_count_t>(in.cycle_max);
+    CPU_OldCycleMax = static_cast<cpu_cycles_count_t>(in.cycle_old_max);
+    CPU_CyclePercUsed = static_cast<cpu_cycles_count_t>(in.cycle_percent_used);
+    CPU_CycleLimit = static_cast<cpu_cycles_count_t>(in.cycle_limit);
+    CPU_CyclesSet = static_cast<cpu_cycles_count_t>(in.cycles_set);
+    CPU_IODelayRemoved = static_cast<cpu_cycles_count_t>(in.io_delay_removed);
+    CPU_extflags_toggle = static_cast<Bitu>(in.extflags_toggle);
+    CPU_CycleAutoAdjust = in.cycle_auto_adjust != 0;
+    CPU_SkipCycleAutoAdjust = in.skip_cycle_auto_adjust != 0;
+    CPU_NMI_gate = in.nmi_gate != 0;
+    CPU_NMI_active = in.nmi_active != 0;
+    CPU_NMI_pending = in.nmi_pending != 0;
+    if (in.halted == 0 && CPU_IsHLTed()) {
+        cpudecoder = &CPU_Core_Simple_Run;
     }
 }
 

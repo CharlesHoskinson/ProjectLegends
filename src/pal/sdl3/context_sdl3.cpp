@@ -9,7 +9,7 @@
 #include "pal/context.h"
 #include "pal/window.h"
 #include <SDL3/SDL.h>
-#include <gsl-lite/gsl-lite.hpp>
+#include <legends/gsl.hpp>
 #include <memory>
 
 namespace pal {
@@ -52,7 +52,7 @@ public:
         // Create streaming texture for pixel access
         texture_ = SDL_CreateTexture(renderer_, sdl_fmt,
             SDL_TEXTUREACCESS_STREAMING,
-            gsl::narrow<int>(width), gsl::narrow<int>(height));
+            legends::gsl::narrow<int>(width), legends::gsl::narrow<int>(height));
 
         if (!texture_) {
             SDL_DestroyRenderer(renderer_);
@@ -139,7 +139,7 @@ public:
         }
 
         ctx.pixels = locked_pixels_;
-        ctx.pitch = gsl::narrow<uint32_t>(locked_pitch_);
+        ctx.pitch = legends::gsl::narrow<uint32_t>(locked_pitch_);
         ctx.width = width_;
         ctx.height = height_;
         ctx.format = format_;
@@ -203,7 +203,7 @@ public:
     void setLogicalSize(uint32_t w, uint32_t h) override {
         if (renderer_ && w > 0 && h > 0) {
             SDL_SetRenderLogicalPresentation(renderer_,
-                gsl::narrow<int>(w), gsl::narrow<int>(h),
+                legends::gsl::narrow<int>(w), legends::gsl::narrow<int>(h),
                 SDL_LOGICAL_PRESENTATION_LETTERBOX);
         }
     }

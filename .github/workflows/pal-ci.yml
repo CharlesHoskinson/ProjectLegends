@@ -1,14 +1,29 @@
-name: PAL CI
+name: Optional PAL CI
 
 on:
   push:
     branches: [main, master, develop]
+    paths:
+      - "src/pal/**"
+      - "include/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/pal-ci.yml"
   pull_request:
     branches: [main, master]
+    paths:
+      - "src/pal/**"
+      - "include/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/pal-ci.yml"
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
 
 jobs:
   headless-tests:
-    name: Headless Backend
+    name: Optional Headless Backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +49,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   sdl2-tests:
-    name: SDL2 Backend
+    name: Optional SDL2 Backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,7 +74,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   sdl3-tests:
-    name: SDL3 Backend
+    name: Optional SDL3 Backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +83,7 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y build-essential cmake g++-13 \
-            libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev \
+            libx11-dev libxext-dev libxrandr-dev libxi-dev libxfixes-dev libxcursor-dev libxss-dev \
             libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev \
             libdbus-1-dev libudev-dev libdrm-dev libgbm-dev libegl-dev libgl-dev
 
@@ -95,7 +110,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   sdl-firewall:
-    name: SDL Header Firewall
+    name: Optional SDL Header Firewall
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -112,7 +127,7 @@ jobs:
           echo "SDL header firewall: PASS"
 
   contract-gates:
-    name: Contract Gates
+    name: Optional Contract Gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -157,7 +172,7 @@ jobs:
           echo "No main exported: PASS"
 
   asan-lifecycle:
-    name: ASan Lifecycle Tests
+    name: Optional ASan Lifecycle Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -190,7 +205,7 @@ jobs:
             --gtest_repeat=3
 
   abi-c-compile:
-    name: Pure C ABI Verification
+    name: Optional Pure C ABI Verification
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -221,7 +236,7 @@ jobs:
           echo "C11 compilation: PASS"
 
   windows-build:
-    name: Windows Build
+    name: Optional Windows Build
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

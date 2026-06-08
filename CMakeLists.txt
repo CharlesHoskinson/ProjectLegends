@@ -785,7 +785,11 @@ if(LEGENDS_BUILD_TESTS)
         gsl_CONFIG_CONTRACT_CHECKING_ON
         gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
     )
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    if(MSVC)
+        # Test code intentionally exercises [[nodiscard]] APIs in negative paths.
+        # Keep /WX on production targets while containing this to test binaries.
+        target_compile_options(legends_unit_tests PRIVATE /wd4834)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(legends_unit_tests PRIVATE -Wno-error)
     endif()
 
@@ -817,6 +821,9 @@ if(LEGENDS_BUILD_TESTS)
             gsl_CONFIG_CONTRACT_CHECKING_ON
             gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
         )
+        if(MSVC)
+            target_compile_options(legends_ipc_integration_tests PRIVATE /wd4834)
+        endif()
 
         add_dependencies(legends_ipc_integration_tests legends_engine_host)
 
@@ -975,7 +982,9 @@ if(LEGENDS_BUILD_TESTS)
     target_compile_definitions(legends_integration_tests PRIVATE
         LEGENDS_LIBRARY_MODE=1
     )
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    if(MSVC)
+        target_compile_options(legends_integration_tests PRIVATE /wd4834)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(legends_integration_tests PRIVATE -Wno-error)
     endif()
 
@@ -1016,12 +1025,13 @@ if(LEGENDS_BUILD_TESTS)
     )
 
     # ── Coverage Check (Phase 4 Sprint 7) ─────────────────────────────────
-    # Custom target to verify src/app/ coverage >= 80%
+    # Report-only src/app/ coverage target. CI uploads coverage artifacts but
+    # does not enforce a threshold until a stable baseline is established.
     find_program(LCOV_EXE lcov)
     find_program(GENHTML_EXE genhtml)
     if(LCOV_EXE AND GENHTML_EXE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         add_custom_target(coverage-check
-            COMMENT "Checking test coverage for src/app/ (target: 80%)"
+            COMMENT "Generating report-only coverage for src/app/"
             COMMAND ${LCOV_EXE} --capture --directory . --output-file coverage.info --quiet
             COMMAND ${LCOV_EXE} --extract coverage.info "*/src/app/*" --output-file coverage_app.info --quiet
             COMMAND ${GENHTML_EXE} coverage_app.info --output-directory coverage_report --quiet

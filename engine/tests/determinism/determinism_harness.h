@@ -14,6 +14,7 @@
 #define AIBOX_DETERMINISM_HARNESS_H
 
 #include "dosbox/dosbox_library.h"
+#include "dosbox/dosbox_context.h"
 #include "dosbox/state_hash.h"
 
 #include <array>
@@ -93,6 +94,51 @@ inline StateHash get_state_hash(dosbox_lib_handle_t handle) {
     StateHash hash;
     dosbox_lib_get_state_hash(handle, hash.bytes.data());
     return hash;
+}
+
+inline std::vector<std::pair<std::string, std::string>> get_component_hashes(
+    dosbox_lib_handle_t handle
+) {
+    void* ctx_ptr = nullptr;
+    if (dosbox_lib_get_context_ptr(handle, &ctx_ptr) != DOSBOX_LIB_OK || ctx_ptr == nullptr) {
+        return {};
+    }
+
+    auto* ctx = static_cast<dosbox::DOSBoxContext*>(ctx_ptr);
+    auto hash_state = [](const auto& state) {
+        dosbox::HashBuilder builder;
+        state.hash_into(builder);
+        return dosbox::hash_to_hex(builder.finalize());
+    };
+
+    return {
+        {"timing", hash_state(ctx->timing)},
+        {"cpu", hash_state(ctx->cpu_state)},
+        {"mixer", hash_state(ctx->mixer)},
+        {"vga", hash_state(ctx->vga)},
+        {"pic", hash_state(ctx->pic)},
+        {"keyboard", hash_state(ctx->keyboard)},
+        {"input", hash_state(ctx->input)},
+        {"memory", hash_state(ctx->memory)},
+        {"dma", hash_state(ctx->dma)},
+        {"dos", hash_state(ctx->dos)},
+    };
+}
+
+inline std::string format_component_diff(
+    const std::vector<std::pair<std::string, std::string>>& expected,
+    const std::vector<std::pair<std::string, std::string>>& actual
+) {
+    std::ostringstream out;
+    const size_t count = std::min(expected.size(), actual.size());
+    for (size_t i = 0; i < count; ++i) {
+        if (expected[i].second != actual[i].second) {
+            out << "\n  " << expected[i].first
+                << ": expected " << expected[i].second
+                << ", actual " << actual[i].second;
+        }
+    }
+    return out.str();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -386,6 +432,8 @@ public:
 
         // Step to save point
         dosbox_lib_step_ms(handle, ms_before_save, nullptr);
+        StateHash hash_at_save = get_state_hash(handle);
+        auto components_at_save = get_component_hashes(handle);
 
         // Save state
         size_t state_size = 0;
@@ -396,13 +444,30 @@ public:
         // Continue stepping and record hash
         dosbox_lib_step_ms(handle, ms_after_save, nullptr);
         StateHash hash_run1 = get_state_hash(handle);
+        auto components_run1 = get_component_hashes(handle);
 
         // Restore state
         dosbox_lib_load_state(handle, saved_state.data(), state_size);
+        StateHash hash_after_load = get_state_hash(handle);
+        auto components_after_load = get_component_hashes(handle);
+        if (hash_at_save != hash_after_load) {
+            VerificationResult result;
+            result.passed = false;
+            result.message =
+                "State hash differs immediately after save/load restore\n"
+                "  saved:    " + hash_at_save.to_hex() + "\n"
+                "  restored: " + hash_after_load.to_hex() +
+                format_component_diff(components_at_save, components_after_load);
+            result.expected_hash = hash_at_save;
+            result.actual_hash = hash_after_load;
+            dosbox_lib_destroy(handle);
+            return result;
+        }
 
         // Step same amount and record hash
         dosbox_lib_step_ms(handle, ms_after_save, nullptr);
         StateHash hash_run2 = get_state_hash(handle);
+        auto components_run2 = get_component_hashes(handle);
 
         dosbox_lib_destroy(handle);
 
@@ -410,7 +475,11 @@ public:
         if (hash_run1 != hash_run2) {
             VerificationResult result;
             result.passed = false;
-            result.message = "State hashes differ after save/load round-trip";
+            result.message =
+                "State hashes differ after save/load round-trip\n"
+                "  expected: " + hash_run1.to_hex() + "\n"
+                "  actual:   " + hash_run2.to_hex() +
+                format_component_diff(components_run1, components_run2);
             result.expected_hash = hash_run1;
             result.actual_hash = hash_run2;
             return result;

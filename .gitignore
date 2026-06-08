@@ -32,6 +32,8 @@ Makefile
 # Test outputs
 Testing/
 test-results.xml
+__pycache__/
+*.py[cod]
 
 # Graphify local/generated graph artifacts
 graphify-out/.graphify_root
@@ -54,3 +56,6 @@ spec/tla/states/
 *_TTrace_*.tla
 build_test/
 .worktrees/
+
+# Local agent state
+.claude/worktrees/
