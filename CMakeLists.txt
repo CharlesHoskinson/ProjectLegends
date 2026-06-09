@@ -582,6 +582,21 @@ target_compile_definitions(legends_app PRIVATE
     gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
 )
 
+function(legends_configure_app_entrypoint_target target_name)
+    target_include_directories(${target_name} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    target_link_libraries(${target_name} PRIVATE gsl::gsl-lite-v1)
+
+    target_compile_definitions(${target_name} PRIVATE
+        gsl_CONFIG_DEFAULTS_VERSION=1
+        gsl_CONFIG_CONTRACT_CHECKING_ON
+        gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
+    )
+endfunction()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Tests
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1137,10 +1152,9 @@ if(PAL_BACKEND_SDL2)
     )
 
     legends_set_strict_cxx_standard(project_legends)
+    legends_configure_app_entrypoint_target(project_legends)
 
     target_include_directories(project_legends PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/external/SDL2/include
     )
 
@@ -1247,6 +1261,7 @@ if(PAL_BACKEND_SDL3)
     )
 
     legends_set_strict_cxx_standard(project_legends)
+    legends_configure_app_entrypoint_target(project_legends)
 
     # In IPC mode, link the proxy (MIT) instead of legends_core (GPL).
     # In monolithic mode (default), link legends_app which transitively
