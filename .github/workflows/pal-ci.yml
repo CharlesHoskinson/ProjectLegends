@@ -71,6 +71,9 @@ jobs:
         run: cmake --build build -j$(nproc)
 
       - name: Test
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
         run: ctest --test-dir build --output-on-failure
 
   sdl3-tests:
@@ -108,6 +111,9 @@ jobs:
         run: cmake --build build -j$(nproc)
 
       - name: Test
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
         run: ctest --test-dir build --output-on-failure
 
   sdl-firewall:

@@ -586,6 +586,10 @@ function(legends_configure_app_entrypoint_target target_name)
     target_include_directories(${target_name} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/external
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/glad
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine/src/libs
+        ${CMAKE_BINARY_DIR}/include
     )
 
     target_link_libraries(${target_name} PRIVATE gsl::gsl-lite-v1)

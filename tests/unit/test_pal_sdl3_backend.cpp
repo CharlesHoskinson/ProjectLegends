@@ -116,7 +116,10 @@ TEST_F(SDL3BackendTest, AudioSinkOpensWithStream) {
     config.buffer_ms = 50;
 
     auto result = sink->open(config);
-    EXPECT_EQ(result, pal::Result::Success);
+    if (result == pal::Result::DeviceNotFound || result == pal::Result::NotSupported) {
+        GTEST_SKIP() << "SDL3 audio device unavailable in this test environment";
+    }
+    ASSERT_EQ(result, pal::Result::Success);
     EXPECT_TRUE(sink->isOpen());
 
     // SDL3 uses push model with SDL_AudioStream

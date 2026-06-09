@@ -5,7 +5,9 @@
 
 #include "pal/host_clock.h"
 #include <SDL.h>
+#include <chrono>
 #include <memory>
+#include <thread>
 
 namespace pal {
 namespace sdl2 {
@@ -25,24 +27,14 @@ public:
             return Result::AlreadyInitialized;
         }
 
-        // Get performance counter frequency for microsecond timing
-        perf_frequency_ = SDL_GetPerformanceFrequency();
-        if (perf_frequency_ == 0) {
-            perf_frequency_ = 1000000;  // Fallback to microseconds
-        }
-
-        // Record start time
-        start_ticks_ms_ = SDL_GetTicks();
-        start_perf_counter_ = SDL_GetPerformanceCounter();
-
+        start_time_ = Clock::now();
         initialized_ = true;
         return Result::Success;
     }
 
     void shutdown() override {
         initialized_ = false;
-        start_ticks_ms_ = 0;
-        start_perf_counter_ = 0;
+        start_time_ = Clock::time_point{};
     }
 
     bool isInitialized() const override {
@@ -57,7 +49,9 @@ public:
         if (!initialized_) {
             return 0;
         }
-        return SDL_GetTicks() - start_ticks_ms_;
+        auto elapsed = Clock::now() - start_time_;
+        return static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
     }
 
     uint64_t getTicksUs() const override {
@@ -65,12 +59,9 @@ public:
             return 0;
         }
 
-        uint64_t current = SDL_GetPerformanceCounter();
-        uint64_t elapsed = current - start_perf_counter_;
-
-        // Convert to microseconds: elapsed * 1000000 / frequency
-        // Use 128-bit math to avoid overflow on long-running sessions
-        return (elapsed * 1000000ULL) / perf_frequency_;
+        auto elapsed = Clock::now() - start_time_;
+        return static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -79,23 +70,21 @@ public:
 
     void sleepMs(uint32_t ms) override {
         if (ms > 0) {
-            SDL_Delay(ms);
+            std::this_thread::sleep_for(std::chrono::milliseconds(ms));
         }
     }
 
     void sleepUs(uint64_t us) override {
-        // SDL_Delay only supports milliseconds, so we round up
         if (us > 0) {
-            uint32_t ms = static_cast<uint32_t>((us + 999) / 1000);
-            SDL_Delay(ms);
+            std::this_thread::sleep_for(std::chrono::microseconds(us));
         }
     }
 
 private:
+    using Clock = std::chrono::steady_clock;
+
     bool initialized_ = false;
-    uint32_t start_ticks_ms_ = 0;
-    uint64_t start_perf_counter_ = 0;
-    uint64_t perf_frequency_ = 1000000;
+    Clock::time_point start_time_{};
 };
 
 } // namespace sdl2
