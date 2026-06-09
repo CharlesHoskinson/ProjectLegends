@@ -1,5 +1,5 @@
 {
-  "allow_missing_graphify": true,
+  "allow_missing_graphify": false,
   "generated_at": "deterministic-source-derived",
   "generator": "scripts/enrich_graphify_projectlegends.py",
   "graphify_graph": "graphify-out/graph.json",
@@ -30412,7 +30412,7 @@
       "relation": "contains_test_case",
       "source": "pl__file__tests_unit_test_pal_sdl3_backend_cpp",
       "source_file": "tests/unit/test_pal_sdl3_backend.cpp",
-      "source_location": "L170",
+      "source_location": "L173",
       "target": "pl__test_case__tests_unit_test_pal_sdl3_backend_cpp__SDL3BackendTest_NotAvailable",
       "weight": 1.0
     },
@@ -43249,7 +43249,7 @@
       "relation": "contains_test_case",
       "source": "pl__file__tests_unit_test_pal_sdl3_backend_cpp",
       "source_file": "tests/unit/test_pal_sdl3_backend.cpp",
-      "source_location": "L133",
+      "source_location": "L136",
       "target": "pl__test_case__tests_unit_test_pal_sdl3_backend_cpp__SDL3BackendTest_InputSourceInitializes",
       "weight": 1.0
     },
@@ -43579,7 +43579,7 @@
       "relation": "contains_test_case",
       "source": "pl__file__tests_unit_test_pal_sdl2_backend_cpp",
       "source_file": "tests/unit/test_pal_sdl2_backend.cpp",
-      "source_location": "L149",
+      "source_location": "L152",
       "target": "pl__test_case__tests_unit_test_pal_sdl2_backend_cpp__SDL2BackendTest_NotAvailable",
       "weight": 1.0
     },
@@ -53248,7 +53248,7 @@
       "relation": "contains_test_case",
       "source": "pl__file__tests_unit_test_pal_sdl3_backend_cpp",
       "source_file": "tests/unit/test_pal_sdl3_backend.cpp",
-      "source_location": "L150",
+      "source_location": "L153",
       "target": "pl__test_case__tests_unit_test_pal_sdl3_backend_cpp__SDL3BackendTest_HostClockNanosecondSleep",
       "weight": 1.0
     },
@@ -58836,7 +58836,7 @@
       "relation": "contains_test_case",
       "source": "pl__file__tests_unit_test_pal_sdl2_backend_cpp",
       "source_file": "tests/unit/test_pal_sdl2_backend.cpp",
-      "source_location": "L130",
+      "source_location": "L133",
       "target": "pl__test_case__tests_unit_test_pal_sdl2_backend_cpp__SDL2BackendTest_InputSourceInitializes",
       "weight": 1.0
     },
@@ -73496,7 +73496,7 @@
       "relation": "declared_in",
       "source": "pl__cmake_target__legends_ipc_integration_tests",
       "source_file": "CMakeLists.txt",
-      "source_location": "L808",
+      "source_location": "L827",
       "target": "pl__file__CMakeLists_txt",
       "weight": 1.0
     },
@@ -73540,7 +73540,7 @@
       "relation": "declared_in",
       "source": "pl__cmake_target__legends_abi_test",
       "source_file": "CMakeLists.txt",
-      "source_location": "L840",
+      "source_location": "L859",
       "target": "pl__file__CMakeLists_txt",
       "weight": 1.0
     },
@@ -73991,7 +73991,7 @@
       "relation": "declared_in",
       "source": "pl__cmake_target__pal_benchmarks",
       "source_file": "CMakeLists.txt",
-      "source_location": "L1070",
+      "source_location": "L1089",
       "target": "pl__file__CMakeLists_txt",
       "weight": 1.0
     },
@@ -74266,7 +74266,7 @@
       "relation": "declared_in",
       "source": "pl__cmake_target__legends_integration_tests",
       "source_file": "CMakeLists.txt",
-      "source_location": "L921",
+      "source_location": "L940",
       "target": "pl__file__CMakeLists_txt",
       "weight": 1.0
     },
@@ -77115,7 +77115,7 @@
       "relation": "declared_in",
       "source": "pl__cmake_target__legends_unit_tests",
       "source_file": "CMakeLists.txt",
-      "source_location": "L607",
+      "source_location": "L626",
       "target": "pl__file__CMakeLists_txt",
       "weight": 1.0
     },
@@ -77379,7 +77379,7 @@
       "relation": "declared_in",
       "source": "pl__cmake_target__emulation_benchmarks",
       "source_file": "CMakeLists.txt",
-      "source_location": "L1087",
+      "source_location": "L1106",
       "target": "pl__file__CMakeLists_txt",
       "weight": 1.0
     },
@@ -77588,7 +77588,7 @@
       "relation": "declared_in",
       "source": "pl__cmake_target__project_legends",
       "source_file": "CMakeLists.txt",
-      "source_location": "L1133",
+      "source_location": "L1152",
       "target": "pl__file__CMakeLists_txt",
       "weight": 1.0
     },
@@ -78512,7 +78512,7 @@
       "relation": "declared_in",
       "source": "pl__cmake_target__legends_ipc_benchmarks",
       "source_file": "CMakeLists.txt",
-      "source_location": "L1108",
+      "source_location": "L1127",
       "target": "pl__file__CMakeLists_txt",
       "weight": 1.0
     },
@@ -79095,7 +79095,7 @@
       "relation": "declared_in",
       "source": "pl__cmake_target__legends_toolchain_tests",
       "source_file": "CMakeLists.txt",
-      "source_location": "L889",
+      "source_location": "L908",
       "target": "pl__file__CMakeLists_txt",
       "weight": 1.0
     },
@@ -85672,16 +85672,6 @@
     {
       "_origin": "projectlegends-enrichment",
       "confidence": "DERIVED",
-      "id": "pl__edge__links_target__b2d54674998840a9",
-      "relation": "links_target",
-      "source": "pl__cmake_target__project_legends",
-      "source_file": "CMakeLists.txt",
-      "target": "pl__cmake_target__legends_core",
-      "weight": 1.0
-    },
-    {
-      "_origin": "projectlegends-enrichment",
-      "confidence": "DERIVED",
       "id": "pl__edge__links_target__b7a8ec9bad315784",
       "relation": "links_target",
       "source": "pl__cmake_target__legends_engine_host",
@@ -91706,7 +91696,7 @@
       ],
       "name": "emulation_benchmarks",
       "source_file": "CMakeLists.txt",
-      "source_location": "L1087",
+      "source_location": "L1106",
       "sources": [
         "benchmarks/bench_emulation.cpp"
       ],
@@ -91722,7 +91712,7 @@
       ],
       "name": "legends_abi_test",
       "source_file": "CMakeLists.txt",
-      "source_location": "L840",
+      "source_location": "L859",
       "sources": [
         "tests/unit/test_legends_abi.c"
       ],
@@ -91853,7 +91843,7 @@
       ],
       "name": "legends_integration_tests",
       "source_file": "CMakeLists.txt",
-      "source_location": "L921",
+      "source_location": "L940",
       "sources": [
         "src/app/ssim.cpp",
         "tests/integration/test_agent_smoke.cpp",
@@ -91927,7 +91917,7 @@
       ],
       "name": "legends_ipc_benchmarks",
       "source_file": "CMakeLists.txt",
-      "source_location": "L1108",
+      "source_location": "L1127",
       "sources": [
         "benchmarks/bench_ipc_overhead.cpp"
       ],
@@ -91944,7 +91934,7 @@
       ],
       "name": "legends_ipc_integration_tests",
       "source_file": "CMakeLists.txt",
-      "source_location": "L808",
+      "source_location": "L827",
       "sources": [
         "tests/integration/test_ipc_integration.cpp"
       ],
@@ -91995,7 +91985,7 @@
       ],
       "name": "legends_toolchain_tests",
       "source_file": "CMakeLists.txt",
-      "source_location": "L889",
+      "source_location": "L908",
       "sources": [
         "tests/toolchain/test_cpp_standard.cpp",
         "tests/toolchain/test_shell_h_headless.cpp"
@@ -92016,7 +92006,7 @@
       ],
       "name": "legends_unit_tests",
       "source_file": "CMakeLists.txt",
-      "source_location": "L607",
+      "source_location": "L626",
       "sources": [
         "src/engine_host/cli_parser.cpp",
         "src/engine_host/engine_dispatcher.cpp",
@@ -92158,7 +92148,7 @@
       ],
       "name": "pal_benchmarks",
       "source_file": "CMakeLists.txt",
-      "source_location": "L1070",
+      "source_location": "L1089",
       "sources": [
         "benchmarks/bench_pal.cpp"
       ],
@@ -92173,10 +92163,10 @@
         "CURL::libcurl",
         "FluidSynth::FluidSynth",
         "SDL2",
+        "SDL2::SDL2",
         "SDL2main",
         "SDL3::SDL3-shared",
         "legends_app",
-        "legends_core",
         "legends_pal",
         "legends_proxy",
         "mingw32",
@@ -92184,7 +92174,7 @@
       ],
       "name": "project_legends",
       "source_file": "CMakeLists.txt",
-      "source_location": "L1133",
+      "source_location": "L1152",
       "sources": [
         "engine/src/libs/zmbv/zmbv.cpp",
         "engine/src/libs/zmbv/zmbv_stubs.cpp",
@@ -92242,7 +92232,9 @@
       "id": "pl__cmake_target__target_name",
       "kind": "cmake_target",
       "label": "${target_name}",
-      "links": [],
+      "links": [
+        "gsl::gsl-lite-v1"
+      ],
       "name": "${target_name}",
       "source_file": "CMakeLists.txt",
       "source_location": "L109",
@@ -153544,7 +153536,7 @@
       "msgtypes": [],
       "name": "InputSourceInitializes",
       "source_file": "tests/unit/test_pal_sdl2_backend.cpp",
-      "source_location": "L130",
+      "source_location": "L133",
       "suite": "SDL2BackendTest"
     },
     {
@@ -153557,7 +153549,7 @@
       "msgtypes": [],
       "name": "NotAvailable",
       "source_file": "tests/unit/test_pal_sdl2_backend.cpp",
-      "source_location": "L149",
+      "source_location": "L152",
       "suite": "SDL2BackendTest"
     },
     {
@@ -153622,7 +153614,7 @@
       "msgtypes": [],
       "name": "HostClockNanosecondSleep",
       "source_file": "tests/unit/test_pal_sdl3_backend.cpp",
-      "source_location": "L150",
+      "source_location": "L153",
       "suite": "SDL3BackendTest"
     },
     {
@@ -153648,7 +153640,7 @@
       "msgtypes": [],
       "name": "InputSourceInitializes",
       "source_file": "tests/unit/test_pal_sdl3_backend.cpp",
-      "source_location": "L133",
+      "source_location": "L136",
       "suite": "SDL3BackendTest"
     },
     {
@@ -153661,7 +153653,7 @@
       "msgtypes": [],
       "name": "NotAvailable",
       "source_file": "tests/unit/test_pal_sdl3_backend.cpp",
-      "source_location": "L170",
+      "source_location": "L173",
       "suite": "SDL3BackendTest"
     },
     {
@@ -163076,7 +163068,7 @@
   ],
   "schema_version": 1,
   "source_hashes": {
-    "CMakeLists.txt": "309a9dcf9455b22f61b2d8312be2e0a8b1f3e84e49276728165370f29df43264",
+    "CMakeLists.txt": "117df8b39c801dc71b802a0fde0e845dcafc9056bd0e1bada7a3dd3662b52e14",
     "CMakePresets.json": "c6b87a9b6f59402720f736f28514ba81029cb28495bcc9f5e19aa334f5ac06be",
     "docs/architecture/2026-06-08-public-capability-truth-matrix.md": "4aef54d63fa40495f5093eb4f58dfc0190f472d452d4f5c6680950eb65ec0f68",
     "docs/architecture/capability_truth.json": "dfab24320b6093666fadbda67d02e06729cad54e25ec23f6e03bea9179509a73",
@@ -163275,7 +163267,7 @@
     "tests/unit/test_ai_config.cpp": "2e4314c9f4f73091baf633a968c3807035232fc49959a01075ca4365f6c3b5e5",
     "tests/unit/test_ai_http_client.cpp": "ca750333d105199ff499b399eaa342e3669195836e142502779c9e9ebc06de43",
     "tests/unit/test_ai_panel.cpp": "8bcecf786e765f94bd37600ef934122ff22415c72005f7b5816226d74cedef9a",
-    "tests/unit/test_ai_screen_context.cpp": "84ac83b5b4c2b5785ef364fc4d72a1d82ecebd51885c045686f96c3a59df7e67",
+    "tests/unit/test_ai_screen_context.cpp": "66978e8aa60559188efbc02e1f032ff8dfdfb2de677f21b8de8bb53a12dc9c3a",
     "tests/unit/test_application_events.cpp": "615a3cc2b6f88dafa09c916a189e44860bb55ff5ac6fded1f062605b442487de",
     "tests/unit/test_application_init.cpp": "9984fb0171b75db2249e5b4cbe0d09437b95b4b594191da93f7c26f8c8bdfee0",
     "tests/unit/test_application_lifecycle.cpp": "23705f519525cee3f7de691e3f43ca543d8622f8e25d59e36cbda433f57cd73a",
@@ -163356,8 +163348,8 @@
     "tests/unit/test_pal_host_clock.cpp": "fa9b3eb1f1126be99e3bd9168634fa366ed5a0f4cace7a50b80a5a856a7eb09d",
     "tests/unit/test_pal_input_source.cpp": "ed7718435630962a7fdf245c72d2e8b5c6e6874142642f25c187f3ca104c8ef9",
     "tests/unit/test_pal_platform.cpp": "da7b544c31ec1c03cf4b33e9a6c40cd96777cf4383aad0bddfba010302db0c27",
-    "tests/unit/test_pal_sdl2_backend.cpp": "bd6905de306aaf1030d45076caa8c25298089a73631c6bf2c98ce1e209227cd3",
-    "tests/unit/test_pal_sdl3_backend.cpp": "bd2c7e1a796199f0048310a84bfda7ee5498992b917587a3e1c7a9b638f7c513",
+    "tests/unit/test_pal_sdl2_backend.cpp": "da1c3fbbd5d4761dfe962720a4f984d5fbe01f102c31fea82958c554a8ff81f5",
+    "tests/unit/test_pal_sdl3_backend.cpp": "9e7b7deb8a65e397cc6209b205ad6b24d2b3e77852ba14e046ca8953d09104cf",
     "tests/unit/test_pal_types.cpp": "7c3cbe384d359889a0887afa70f347912475a10afbd003c43dac614907639cc4",
     "tests/unit/test_pal_window.cpp": "d03fb5911b422c0c4b16cd26bf6f10d2328e95bfa67d3c29da25aea9dbd7b370",
     "tests/unit/test_pause_reset.cpp": "50a9bf72bd6be9f5f9810fc38e6e01d013ca344d60fd025c0f410df31e2896fd",
@@ -163409,10 +163401,10 @@
       "unsupported": 2
     },
     "dispatcher_case_count": 43,
-    "enrichment_links": 8011,
+    "enrichment_links": 8010,
     "enrichment_nodes": 5640,
-    "graphify_links": 715900,
-    "graphify_nodes": 38652,
+    "graphify_links": 818069,
+    "graphify_nodes": 39172,
     "link_counts": {
       "aliases_api": 2,
       "app_calls_public_api": 67,
@@ -163437,7 +163429,7 @@
       "has_capability_entry": 50,
       "has_matrix_row": 50,
       "includes_source": 278,
-      "links_target": 18,
+      "links_target": 17,
       "paired_with_response": 50,
       "proxy_implemented_by": 50,
       "sends_request": 42,

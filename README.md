@@ -33,41 +33,69 @@ Project Legends treats the emulator as a library. The host application controls 
 ## Architecture
 
 ```
-                     ┌───────────────────┐
-                     │  Host Application │
-                     └─────────┬─────────┘
-                               │ C ABI
-                               ▼
-┌──────────────────────────────────────────────────────────────┐
-│                       legends_embed.h                        │
-│          Lifecycle · Stepping · Capture · Input · State      │
-└──────────────────────────────┬───────────────────────────────┘
-                               │
-               ┌───────────────┴───────────────┐
-               ▼                               ▼
-┌─────────────────────────┐     ┌─────────────────────────────┐
-│      Legends Core       │     │           PAL               │
-│                         │     │                             │
-│  MachineContext         │     │  IWindow    IAudioSink      │
-│  HandleRegistry         │     │  IContext   IHostClock      │
-│  EventQueue             │     │  IInputSource               │
-│                         │     │                             │
-│  ┌───────────────────┐  │     │  Backends:                  │
-│  │ DOSBox Library    │  │     │  Headless · SDL2 · SDL3     │
-│  │ dosbox_lib_*()    │  │     └─────────────────────────────┘
-│  └───────────────────┘  │
-└────────────┬────────────┘
-             │
-             ▼
-┌──────────────────────────────────────────────────────────────┐
-│                    DOSBox-X Core Engine                      │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
-│  │   CPU    │  │ Hardware │  │ DOS/BIOS │  │  Memory  │     │
-│  │ x86 emu  │  │ PIC, PIT │  │ INT 21h  │  │  Paging  │     │
-│  │ prot mode│  │ VGA, SB  │  │ FileSys  │  │  A20     │     │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │
-└──────────────────────────────────────────────────────────────┘
+Graphify audit snapshot: 39,172 raw nodes, 818,069 raw edges,
+5,640 ProjectLegends enrichment nodes, 8,010 enrichment links.
+
++---------------------------+        +-----------------------------+
+| External embedders        |        | Project Legends app shell   |
+| C / Rust / Python / tests |        | UI, config, save, AI, PAL   |
++-------------+-------------+        +--------------+--------------+
+              | C ABI                               | RuntimeHost calls
+              |                                     | (52 app call sites)
+              v                                     v
++------------------------------------------------------------------+
+| Public runtime surface                                            |
+| include/legends/legends_embed.h: 50 legends_* C APIs              |
+| src/app/runtime_host.*: 32 RuntimeHost methods                    |
++------------------------------+-----------------------------------+
+                               |
+        +----------------------+----------------------+
+        |                                             |
+        v                                             v
++-------------------------------+       +-------------------------------+
+| In-process runtime            |       | IPC/proxy runtime             |
+| InProcessEngineRuntime        |       | IpcEngineRuntime              |
+| direct legends_* dispatch     |       | legends_proxy/proxy_api.cpp   |
++---------------+---------------+       +---------------+---------------+
+                |                                       |
+                |                                       v
+                |                       +-------------------------------+
+                |                       | legends_ipc message layer     |
+                |                       | 108 msg types, 89 structs     |
+                |                       +---------------+---------------+
+                |                                       |
+                |                                       v
+                |                       +-------------------------------+
+                |                       | engine_host dispatcher        |
+                |                       | 43 dispatcher cases           |
+                |                       +---------------+---------------+
+                |                                       |
+                +-----------------------+---------------+
+                                        |
+                                        v
++------------------------------------------------------------------+
+| Legends core                                                      |
+| src/legends/legends_embed_api.cpp                                 |
+| MachineContext, HandleRegistry, EventQueue, save/load, capture,   |
+| determinism, input, audio, MIDI, printer, IPX, Glide, PC-98       |
++------------------------------+-----------------------------------+
+                               |
+                               v
++------------------------------------------------------------------+
+| DOSBox-X engine bridge                                            |
+| dosbox_lib_*(), CPU, memory, VGA, PIT/PIC, DMA, DOS/BIOS, devices |
++------------------------------------------------------------------+
+
++-------------------------------+       +-------------------------------+
+| Platform Abstraction Layer    |       | Quality and architecture gates|
+| Headless, SDL2, SDL3          |       | OpenSpec, Graphify, CMake DAG |
+| Window, context, audio, input |       | capability truth, CI, tests   |
++-------------------------------+       +-------------------------------+
+
+RuntimeHost bypass invariant:
+  Application may call legends_create and legends_destroy directly for
+  lifecycle ownership. All other app-layer legends_* calls must route
+  through RuntimeHost and are checked by Graphify.
 ```
 
 ---
