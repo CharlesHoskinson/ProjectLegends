@@ -6,6 +6,7 @@ on:
     paths:
       - "src/pal/**"
       - "include/**"
+      - "tests/unit/test_pal_*.cpp"
       - "cmake/**"
       - "CMakeLists.txt"
       - ".github/workflows/pal-ci.yml"
@@ -14,6 +15,7 @@ on:
     paths:
       - "src/pal/**"
       - "include/**"
+      - "tests/unit/test_pal_*.cpp"
       - "cmake/**"
       - "CMakeLists.txt"
       - ".github/workflows/pal-ci.yml"
