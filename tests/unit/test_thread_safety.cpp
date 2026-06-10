@@ -17,9 +17,26 @@
 #include <vector>
 #include <chrono>
 
+// Every test in this suite deliberately calls the API from a non-owning
+// thread to verify LEGENDS_ERR_WRONG_THREAD semantics. Under TSan those
+// intentional wrong-thread paths report as races; suppressing them would
+// mask real races in the same code paths, so the suite skips instead
+// (openspec change ci-stabilize-mandatory-lanes, design D1).
+#if defined(__has_feature)
+#  if __has_feature(thread_sanitizer)
+#    define LEGENDS_TSAN_BUILD 1
+#  endif
+#endif
+#if !defined(LEGENDS_TSAN_BUILD) && defined(__SANITIZE_THREAD__)
+#  define LEGENDS_TSAN_BUILD 1
+#endif
+
 class ThreadSafetyTest : public ::testing::Test {
 protected:
     void SetUp() override {
+#if defined(LEGENDS_TSAN_BUILD)
+        GTEST_SKIP() << "intentional wrong-thread tests skip under TSan";
+#endif
         pal::Platform::shutdown();
         pal::Platform::initialize(pal::Backend::Headless);
         legends_force_destroy();

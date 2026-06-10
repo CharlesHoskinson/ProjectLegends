@@ -208,13 +208,32 @@ in CI on release tags.
 
 PRs run the following CI jobs:
 - Linux headless (GCC-13, Clang-18)
+- Linux IPC mode (GCC, `LEGENDS_USE_IPC=ON`)
 - Windows headless (MSVC)
-- macOS headless (AppleClang)
 - C ABI verification
-- Static analysis (clang-tidy)
+- Sanitizer builds (ASan, UBSan, TSan — TSan uses the issue-linked
+  `tsan-suppressions.txt` at repo root)
 - Fuzz testing (30s smoke)
+- Coverage (lcov)
 
-Merge-to-main additionally runs sanitizer builds (ASan, UBSan, TSan, MSan).
+Nightly/dispatch additionally runs macOS, SDL3 backends, static analysis
+(clang-tidy), TLA+ model checking, and the dependency scan.
+
+### Gate demotion rule
+
+No CI gate is weakened without a tracked exit criterion. Any of the
+following requires an open issue stating the condition under which the
+demotion is reversed, linked from the change that introduces it:
+
+- adding `allow_failure`/`continue-on-error` to a job or matrix leg
+- muting a command (`|| true`) in a gate step
+- retiring a lane or narrowing its trigger tier
+- relaxing or deleting a test assertion to make CI pass
+
+YAML comments do not count as exit criteria. Suppression files (e.g.
+`tsan-suppressions.txt`) follow the same rule: one entry per root cause,
+each entry linked to its issue, and deleting the entry is the issue's
+exit criterion.
 
 ---
 

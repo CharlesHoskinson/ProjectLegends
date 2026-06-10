@@ -1,0 +1,21 @@
+# ThreadSanitizer suppressions for the CI `thread` sanitizer leg and the
+# `tsan` CMake preset.
+#
+# Hygiene policy (openspec change ci-stabilize-mandatory-lanes, design D1):
+#   - One entry per race or common root cause. No module-wide globs.
+#   - Every entry is preceded by a comment linking its tracking issue.
+#   - Deleting an entry is the exit criterion of its issue; entries are
+#     reviewed like code.
+#   - Intentional wrong-thread tests are not suppressed here; they skip
+#     under TSan in code (tests/unit/test_thread_safety.cpp).
+
+# https://github.com/CharlesHoskinson/ProjectLegends/issues/38
+# Engine global-state race family (REQ-TH-004). Seeded from the historical
+# ci.yml comment; g_active_instance is atomic as of legends_embed_api.cpp:68,
+# so this entry may be deletable after the first enforced run.
+race:g_active_instance
+
+# https://github.com/CharlesHoskinson/ProjectLegends/issues/39
+# Lock-free crash breadcrumb ring: relaxed index bump + non-atomic slot
+# writes; tolerated by design on the crash path.
+race:CrashBreadcrumb::add

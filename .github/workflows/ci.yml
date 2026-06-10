@@ -337,7 +337,7 @@ jobs:
       github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
-        sanitizer: [address, undefined, thread, memory]
+        sanitizer: [address, undefined, thread]
         include:
           # Note: -stdlib=libc++ is CXX-only; c_flags omit it to avoid -Wunused-command-line-argument
           - sanitizer: address
@@ -348,29 +348,20 @@ jobs:
             flags: "-stdlib=libc++ -fsanitize=undefined -fno-omit-frame-pointer"
             c_flags: "-fsanitize=undefined -fno-omit-frame-pointer"
             env: "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"
-          # TSan detects pre-existing data races in engine global state
-          # (g_active_instance), CrashBreadcrumb::add(), and cross-thread
-          # tests that intentionally exercise wrong-thread paths.
-          # Mark allow-failure until REQ-TH-004 mixer/global state fixes land.
-          # Exit plan (2026-06-10): Sprint 7 tracks removing allow_failure
-          # after the remaining engine global-state races are fixed.
+          # Known races are suppressed via the issue-linked tsan-suppressions.txt
+          # at repo root (one entry per root cause; see issues #38, #39).
+          # Intentional wrong-thread tests skip under TSan in code.
+          # allow_failure is temporary for the suppression bring-up and is
+          # removed once the first suppressed run is green (issue #38).
           - sanitizer: thread
             flags: "-stdlib=libc++ -fsanitize=thread -fno-omit-frame-pointer"
             c_flags: "-fsanitize=thread -fno-omit-frame-pointer"
-            env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1"
+            env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1:suppressions=$GITHUB_WORKSPACE/tsan-suppressions.txt"
             allow_failure: true
-          # MSan requires all code (including libc++) to be instrumented.
-          # CI uses stock libc++ which is NOT MSan-instrumented, so test
-          # executables crash on startup. Mark as allow-failure until we
-          # build an instrumented libc++ or switch to a pre-built one.
-          # Exit plan (2026-06-10): Sprint 7 tracks replacing stock libc++
-          # with an instrumented runtime or retiring the MSan gate.
-          - sanitizer: memory
-            flags: "-stdlib=libc++ -fsanitize=memory -fPIE -fno-omit-frame-pointer"
-            c_flags: "-fsanitize=memory -fPIE -fno-omit-frame-pointer"
-            linker_flags: "-pie"
-            env: "MSAN_OPTIONS=halt_on_error=1"
-            allow_failure: true
+          # The MSan leg is retired: stock libc++ is not MSan-instrumented, so
+          # test executables crash on startup and the leg verifies nothing.
+          # Re-entry condition (instrumented libc++ + dependency surface,
+          # nightly-only) is tracked in issue #40.
 
     steps:
       - uses: actions/checkout@v4
@@ -378,7 +369,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev
+          sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev llvm-18
 
       - name: Configure
         run: |
@@ -388,7 +379,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
             -DCMAKE_C_FLAGS="${{ matrix.c_flags }}" \
-            -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.flags }} ${{ matrix.linker_flags }}" \
+            -DCMAKE_EXE_LINKER_FLAGS="${{ matrix.flags }}" \
             -DLEGENDS_BUILD_TESTS=ON \
             -DLEGENDS_HEADLESS=ON
 
@@ -780,10 +771,13 @@ jobs:
           chmod +x osv-scanner
 
       - name: Scan dependencies
+        # The former `--lockfile cmake/dependencies.cmake` invocation was
+        # unparseable by osv-scanner and never produced a result; the scan
+        # now covers the vendored trees recursively and emits JSON for the
+        # artifact step. Mutes below are removed once a dispatch run is
+        # triaged green (openspec change ci-stabilize-mandatory-lanes, D5).
         run: |
-          ./osv-scanner --lockfile cmake/dependencies.cmake || true
-          # Also scan for known CVEs in vendored code
-          ./osv-scanner -r engine/ || true
+          ./osv-scanner scan --recursive --format json --output osv-results.json ./engine ./src ./tests || true
         continue-on-error: true
 
       - name: Upload scan results
