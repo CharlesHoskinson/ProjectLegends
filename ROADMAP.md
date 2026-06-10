@@ -1,12 +1,20 @@
 # Project Legends: Interactive Binary Roadmap
 
 **Format:** EARS (Easy Approach to Requirements Specification) + OpenSpec
-**Version:** 4.2.0
-**Date:** 2026-02-27
-**Status:** In Progress — Phases -1, 0, 1, 4 COMPLETE; Phases 2, 3 PARTIAL
+**Version:** 4.2.1-record
+**Date:** 2026-06-10
+**Status:** In Progress — Phases -1, 0, 1, 2, 4 COMPLETE; Phase 3 PARTIAL; Security Hardening, GPL Process Isolation, and UX/Accessibility PARTIAL; Wasm Sandbox PLANNED/NOT STARTED
 **Author:** Charles Hoskinson and Contributors
 
 ---
+
+> **Truthful-record note (2026-06-10):** This file remains the canonical
+> tracked roadmap path. The formerly tracked lowercase `roadmap.md` path was
+> removed from the Git index to eliminate the Windows case collision. The
+> current 4,061-line EARS roadmap preserves detailed requirement content that
+> other docs reference; the March 2026 source-verified 427-line roadmap shape is
+> an owner decision to revisit, not an implementation decision made in this
+> sprint.
 
 ## Table of Contents
 

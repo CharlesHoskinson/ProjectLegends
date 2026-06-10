@@ -56,6 +56,9 @@ jobs:
       - name: Check unresolved merge conflict markers
         run: python scripts/check_conflict_markers.py --path .
 
+      - name: Check case-insensitive tracked path collisions
+        run: python scripts/check_case_collisions.py --path .
+
       - name: Check capability matrix drift
         run: python scripts/check_capability_matrix.py --repo .
 
