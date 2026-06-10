@@ -1,0 +1,1701 @@
+{
+  "results": [
+    {
+      "role": "backlog-miner",
+      "report": {
+        "role": "Backlog & prior-audit verification auditor",
+        "summary": "The 2026-02-24 AUDIT.md backlog has been substantially executed: 22 of 30 findings are verifiably resolved at HEAD, including both criticals (C1 header duplication now pure forwarding headers; C2 fixed with PIC_RunQueue/CPU_Check_NMI in cpu_bridge.cpp:113,119) and 7 of 9 highs (H1 V5 GPR/RAM/VGA serialization, H5 strict handle matching, H6 subtraction-form bounds, H8 real framebuffer sync, H9, plus M1-M3, M6-M9, M11 and 6 of 8 lows). Verified-open remainders are H2 (dual thread-local contexts), H3/M10 (deprecated stub step path), H4/M5 (accepted-design init stubs), H7 (HashMode::Full still missing VGA/device hashing vs header contract), M4, L1 (README now documents only 23 of 50 APIs), and L3. The paper trail itself is the new weak point: ROADMAP.md and roadmap.md are both tracked as case-colliding paths and the March source-verified ROADMAP (commit 8e3b0b0) was clobbered back to a stale-stamped 4,061-line document in June (1dd76b4); TODO.md is 3.5 months stale and internally contradictory; CHANGELOG.md claims TLS verification that does not exist in code; and AUDIT.md records none of the 22 resolutions. Roadmap gaps confirmed at HEAD: Security Hardening ~6-10/22 REQs still open (TLS, mount confinement, signing), GPL isolation mostly built but with 6 proxy NOT_SUPPORTED parity gaps and a stub protocol.cpp, Wasm Sandbox 0/50 (CMake option only), UX ~2-3/11.",
+        "health_grade": "B",
+        "findings": [
+          {
+            "id": "backlog-01",
+            "title": "Dual g_current_context thread-locals (aibox + dosbox layers) still unmerged",
+            "severity": "medium",
+            "status": "confirmed-open",
+            "existing_audit_ref": "H2",
+            "files": [
+              "C:\\projectLegends\\engine\\src\\aibox\\machine_context.cpp:20",
+              "C:\\projectLegends\\engine\\src\\misc\\dosbox_context.cpp:65"
+            ],
+            "evidence": "Both `thread_local MachineContext* g_current_context` (machine_context.cpp:20) and `thread_local dosbox::DOSBoxContext* g_current_context` (dosbox_context.cpp:65) still exist at HEAD; TODO.md Engine-Level Technical Debt still lists 'Eliminate thread-local current_context() accessors' as open. Mitigated by ContextGuard dual-set during step scope only.",
+            "effort": "L",
+            "recommendation": "Either unify the two context types behind one TLS accessor or formally document the dual-guard invariant (every cross-layer entry point must set both) and add a debug assertion that they refer to the same logical instance."
+          },
+          {
+            "id": "backlog-02",
+            "title": "Deprecated stub execution path dosbox_step()/MachineContext::step() still compiled and exported",
+            "severity": "low",
+            "status": "confirmed-open",
+            "existing_audit_ref": "M10",
+            "files": [
+              "C:\\projectLegends\\engine\\src\\misc\\dosbox_context.cpp:973",
+              "C:\\projectLegends\\engine\\src\\aibox\\machine_context.cpp:229",
+              "C:\\projectLegends\\engine\\include\\dosbox\\dosbox_context.h:99"
+            ],
+            "evidence": "dosbox_context.cpp:973-976 comment: 'DEPRECATED(M10): Routes through MachineContext::step() which is a counter-incrementing stub... Only called from test_dosbox_context.cpp. Will be removed in a future pass.' machine_context.cpp:229: 'No real CPU execution — counter increment only'. Covers prior H3 as well; REQ-LC-005 (no alternative stub path) remains a GAP.",
+            "effort": "S",
+            "recommendation": "Delete dosbox_step() and the MachineContext::step() counter body, migrate test_dosbox_context.cpp to dosbox_lib_step_cycles(), closing H3, M10 and REQ-LC-005 in one pass."
+          },
+          {
+            "id": "backlog-03",
+            "title": "HashMode::Full still omits VGA and device state while header contract promises them",
+            "severity": "medium",
+            "status": "confirmed-open",
+            "existing_audit_ref": "H7",
+            "files": [
+              "C:\\projectLegends\\engine\\src\\misc\\state_hash.cpp:300",
+              "C:\\projectLegends\\engine\\include\\dosbox\\state_hash.h:40"
+            ],
+            "evidence": "state_hash.cpp:300-303 now hashes conventional memory (builder.update(ctx->memory.base, ctx->memory.size)) but comments 'VGA and device state will be added in Phase B'; state_hash.h:40-47 still documents Full mode as 'all of fast mode plus memory, VGA state, device state'. Narrowed since 2026-02 (memory added) but contract still overstated — notable because V5 serialization (faababd) now captures VGA registers, so the hash could reuse that path.",
+            "effort": "M",
+            "recommendation": "Feed EngineStateVgaRegisters + VRAM (already serialized in V5) into the Full-mode hash, or amend the header docs to state the actual coverage until then."
+          },
+          {
+            "id": "backlog-04",
+            "title": "MachineContext init_* stubs and 7 undefined forward-declared classes retained as accepted design",
+            "severity": "low",
+            "status": "confirmed-open",
+            "existing_audit_ref": "H4",
+            "files": [
+              "C:\\projectLegends\\engine\\src\\aibox\\machine_context.cpp:376",
+              "C:\\projectLegends\\engine\\include\\aibox\\machine_context.h:34"
+            ],
+            "evidence": "machine_context.cpp:376-378: '// H4/M5: These init stubs delegate to DOSBox-X engine bridge... intentional no-ops'; all 7 init_* methods (lines 380-419) still return Ok() immediately. machine_context.h:34-40 still forward-declares VgaContext, DosKernel, PicController, PitTimer, KeyboardController, MouseController, SoundSubsystem with no definitions anywhere (covers prior M5).",
+            "effort": "S",
+            "recommendation": "Delete the dead init_* interface and the 7 phantom forward declarations (initialization is owned by the engine bridge), or mark them permanently in the header so future audits stop re-flagging."
+          },
+          {
+            "id": "backlog-05",
+            "title": "README documents only 23 of 50 public C API functions",
+            "severity": "low",
+            "status": "confirmed-open",
+            "existing_audit_ref": "L1",
+            "files": [
+              "C:\\projectLegends\\include\\legends\\legends_embed.h",
+              "C:\\projectLegends\\README.md"
+            ],
+            "evidence": "legends_embed.h declares 50 distinct legends_* functions (grep -oE 'legends_[a-z0-9_]+\\(' | sort -u = 50); README.md mentions only ~31 distinct legends_ identifiers and 27 of the 50 functions do not appear at all. Gap widened since the prior audit (was ~18 of 22) because the API more than doubled.",
+            "effort": "S",
+            "recommendation": "Generate the README API table from legends_embed.h Doxygen annotations (6,451 annotations already exist per AUDIT_REPORT) and add a CI doc-coverage check."
+          },
+          {
+            "id": "backlog-06",
+            "title": "HandleRegistry remains fully implemented but dead in production",
+            "severity": "low",
+            "status": "confirmed-open",
+            "existing_audit_ref": "L3",
+            "files": [
+              "C:\\projectLegends\\include\\legends\\handle_registry.h",
+              "C:\\projectLegends\\tests\\unit\\test_handle_registry.cpp"
+            ],
+            "evidence": "Only consumers at HEAD are tests (test_handle_registry.cpp, test_gsl_contracts.cpp, test_thread_safety.cpp); zero references in src/legends/legends_embed_api.cpp, which uses strict pointer comparison via get_instance() (legends_embed_api.cpp:79-82) instead.",
+            "effort": "S",
+            "recommendation": "Delete HandleRegistry and its tests, or adopt it as the multi-instance handle mechanism if the single-instance constraint is ever lifted; do not keep maintaining dead code."
+          },
+          {
+            "id": "backlog-07",
+            "title": "Engine-header mutable extern globals only partially tracked in migration registry",
+            "severity": "low",
+            "status": "confirmed-open",
+            "existing_audit_ref": "M4",
+            "files": [
+              "C:\\projectLegends\\engine\\globals_registry.yaml",
+              "C:\\projectLegends\\engine\\include\\cpu.h:59"
+            ],
+            "evidence": "globals_registry.yaml grew to 70 tracked entries (includes CPU_Cycles/CPU_CycleLeft at lines 36/49), but engine headers still expose unregistered mutable externs: cpu.h has 26 extern declarations, bios.h 19, callback.h 4. Narrowed since prior audit, not closed.",
+            "effort": "M",
+            "recommendation": "Run a one-time sweep of engine/include extern declarations into the registry with status=deferred where appropriate, and extend sprint2-checks.yml to fail on new untracked externs."
+          },
+          {
+            "id": "doc-01",
+            "title": "ROADMAP.md and roadmap.md both tracked (case collision); March source-verified roadmap clobbered with stale-stamped content",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\roadmap.md:3845",
+              "C:\\projectLegends\\ROADMAP.md"
+            ],
+            "evidence": "git ls-files shows BOTH ROADMAP.md and roadmap.md tracked at HEAD with identical 209,189-byte blobs. Commit 8e3b0b0 (2026-03-15) deleted the 4,061-line roadmap.md and created a 427-line source-verified ROADMAP.md 'correcting major factual errors' (API 50 not 22, save format V3 not V4, REQ-SEC-024 not implemented, GPL IPC partially implemented); commit 1dd76b4 (2026-06-08) re-expanded it +3,994/-360 lines back to a 4,061-line document whose own changelog still says 'v4.1.0 (2026-02-25)' (roadmap.md:3845-3847). On Windows (the primary dev OS) case-colliding tracked paths cause nondeterministic checkout clobbering — the likely mechanism of the loss.",
+            "effort": "S",
+            "recommendation": "git rm one of the two case-colliding paths, reconcile content against the March source-verified version, update the internal version stamp, and add a CI guard rejecting case-only-duplicate tracked filenames."
+          },
+          {
+            "id": "doc-02",
+            "title": "CHANGELOG.md claims TLS verification but no HTTP/TLS transport exists (REQ-SEC-005 open)",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\CHANGELOG.md:36",
+              "C:\\projectLegends\\src\\app\\ai_http_client.cpp:212"
+            ],
+            "evidence": "CHANGELOG.md:36-38 lists 'Security hardening: TLS verification, API key protection, config field limits...' under Added. ai_http_client.cpp:212 is the only transport-related line: '// Actual thread creation deferred to application wiring (libcurl optional).' — no TLS/SSL/curl/WinHttp code exists in the AI client. AUDIT_REPORT.md (2026-03-20) section 4 flagged the identical gap; it remains unfixed at HEAD while the user-facing changelog asserts the opposite.",
+            "effort": "S",
+            "recommendation": "Reword CHANGELOG and roadmap REQ-SEC-005 status to planned/deferred immediately (S), and schedule the actual libcurl-with-cert-verification wiring before any release that ships the AI panel (M)."
+          },
+          {
+            "id": "doc-03",
+            "title": "TODO.md is 3.5 months stale and internally contradictory (same REQs marked both done and missing)",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\TODO.md:19",
+              "C:\\projectLegends\\TODO.md:90",
+              "C:\\projectLegends\\TODO.md:168"
+            ],
+            "evidence": "TODO.md:3 last updated 2026-02-27. Line 19 claims 'GPL v2 Process Isolation: STUB 2/16' while src/legends_ipc/, src/engine_host/, src/legends_proxy/ are substantially built with a Linux IPC CI lane (commits 8e46c2d, 0de44cd, 3e73565); AUDIT_REPORT.md measured 12-13/16. Internal contradiction: line 90 marks REQ-MOUNT-001 complete ('[x] Host directory mounting (mount_manager.cpp, legends_mount_drive API)') while line 168 lists the same REQ-MOUNT-001 under 'Not Yet Implemented — Must-Have (Release Blockers)'; same dual listing for REQ-MOUNT-002, REQ-MENU-001, REQ-MAPPER-001, REQ-SAVE-003, REQ-CAPTURE-003.",
+            "effort": "S",
+            "recommendation": "Regenerate TODO.md from the verification matrix or retire it in favor of the single reconciled ROADMAP; stale planning docs are actively misleading sprint planning."
+          },
+          {
+            "id": "doc-04",
+            "title": "IPC protocol.cpp still a stub and 6 proxy APIs return NOT_SUPPORTED, contradicting 'GPL isolation mostly complete' record",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\src\\legends_ipc\\protocol.cpp:1",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:452",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:675"
+            ],
+            "evidence": "protocol.cpp:1 reads '// Stub — not yet implemented'. proxy_api.cpp returns LEGENDS_ERR_NOT_SUPPORTED in IPC mode for video capture start/stop/query (:452-454), legends_set_ttf_font (:571), legends_register_event_callback (:675), plus :425. CIFix.md (2026-06-08) confirms 'several proxy C ABI functions still return LEGENDS_ERR_NOT_SUPPORTED'. roadmap.md §14 says 'MOSTLY COMPLETE' and CHANGELOG claims a full 'IPC protocol' — embedders using IPC mode for GPL compliance silently lose these features.",
+            "effort": "M",
+            "recommendation": "Close the 6 proxy parity gaps (the engine_host dispatcher already exists), implement or delete protocol.cpp, and publish an IPC-mode capability matrix in legends_embed.h docs; GPL isolation is the license-compliance load-bearing wall (RISK-019 High/Critical)."
+          },
+          {
+            "id": "doc-05",
+            "title": "AUDIT.md records none of the 22 resolved findings, inviting duplicate remediation",
+            "severity": "low",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\AUDIT.md:49",
+              "C:\\projectLegends\\audit-wiki\\raw\\backlog-miner-report.md"
+            ],
+            "evidence": "AUDIT.md still presents all 30 findings as current ('Top Findings by Severity', EARS table showing 24 GAP of 50 REQs) although 22 are fixed — several fixes carry code comments citing the finding IDs (cpu_bridge.cpp:113 'C2 fix', dosbox_library.cpp:118 '(M8)', :382 '(M9)', dosbox_context.cpp:973 'DEPRECATED(M10)'). The March AUDIT_REPORT.md does not cross-reference the February IDs, so no document records the true open set (verified here: H2, H3/M10, H4/M5, H7, M4, L1, L3).",
+            "effort": "S",
+            "recommendation": "Append a verified-2026-06-09 disposition table to AUDIT.md (this report's section 3/6 supplies it) or formally supersede AUDIT.md with the audit-wiki as the system of record."
+          }
+        ],
+        "sprint_recommendations": [
+          "Documentation-of-record reconciliation sprint (S-M): remove the ROADMAP.md/roadmap.md case collision and restore the source-verified roadmap, regenerate TODO.md from the verification matrix, annotate AUDIT.md with the 22 verified resolutions, fix the false TLS claim in CHANGELOG.md, and add a CI guard for case-colliding tracked paths.",
+          "Security Hardening completion sprint (M-L): implement or honestly re-label REQ-SEC-005 (TLS transport for the AI client), finish REQ-SEC-023/024 (canonical path resolution, read-only mount enforcement — flag exists, no logic), REQ-SEC-031 threat-model doc, and REQ-SEC-035/036 (code signing + checksum publication) to make gate G5 passable.",
+          "GPL process-isolation parity sprint (M): close the 6 proxy NOT_SUPPORTED gaps (video capture x3, TTF font, event callbacks), implement or delete the stub protocol.cpp, add IPC reconnection handling, and publish an IPC-mode capability matrix — this is the GPL-compliance load-bearing wall (RISK-019 High/Critical).",
+          "Engine-debt and contract-truth sprint (M): delete the deprecated dosbox_step()/MachineContext::step() counter path (H3/M10) and the dead init_*/forward-decl interface (H4/M5), wire VGA+device state into HashMode::Full or fix its header contract (H7), regenerate README API docs for all 50 functions (L1), and delete-or-adopt HandleRegistry (L3); also decide Wasm Sandbox (0/50 unchanged since Feb): fund a REQ-WASM-001..010 spike or formally defer Section 15 so completion metrics stop being distorted."
+        ]
+      },
+      "verified": []
+    },
+    {
+      "role": "api-architecture",
+      "report": {
+        "role": "API surface & architecture auditor",
+        "summary": "The in-process C ABI (50 legends_* functions in include/legends/legends_embed.h) has improved markedly since the 2026-02-24 audit: the destroy-fallback hole (H5), unused error codes (L2), LEGENDS_ERROR macro collision (L4), and the 27-pair header duplication (C1) are all verifiably fixed at HEAD, and config strings are now deep-copied. The new risk center is the IPC/runtime split added since February: the GPL-isolation mode cannot actually run end-to-end (no production code ever establishes the ProxyConnection; SDL2+IPC cannot even link; the CI IPC job builds headless-only so neither is caught), the two runtimes diverge semantically on at least six functions plus destroy/null-handle/capture_rgb contracts, the ABI version handshake is transmitted but never validated across the process boundary, and the installed package ships 25 forwarding headers plus runtime_host.h that cannot compile or link for an external consumer. A build-from-source, single-instance, in-process embedder gets a genuinely good C API today; the README/architecture promises beyond that (process isolation, installable SDK, multi-instance motivation) are not yet delivered.",
+        "health_grade": "C",
+        "findings": [
+          {
+            "id": "api-01",
+            "title": "IPC runtime mode is not usable end-to-end: no connection bootstrap, SDL2+IPC cannot link, CI never exercises the app",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_connection.cpp:13-51",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:23",
+              "C:\\projectLegends\\src\\app\\application.cpp:905-945",
+              "C:\\projectLegends\\src\\main.cpp:9",
+              "C:\\projectLegends\\CMakeLists.txt:1152-1186",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:95-127"
+            ],
+            "evidence": "Every proxied API gates on conn().is_connected() returning LEGENDS_ERR_NOT_INITIALIZED; ProxyConnection::connect() lives in a private header and is called only from tests (repo grep: zero references in src/app or src/main.cpp; EngineSpawner used only in crash_handler.cpp:35 for restart). So in IPC builds Application::init's legends_create() (application.cpp:905) always fails with EngineCreateFailed. Additionally SDL2+IPC project_legends compiles only src/main.cpp and links legends_proxy+legends_pal but not legends_app (CMakeLists.txt:1173-1180), while main.cpp:9 instantiates legends::Application compiled only into legends_app (CMakeLists.txt:503-505) — guaranteed link failure. The linux-ipc CI job uses -DLEGENDS_HEADLESS=ON so project_legends is never built (ci.yml:108-127).",
+            "effort": "L",
+            "recommendation": "Implement spawn+connect bootstrap inside proxy legends_create (EngineSpawner + pipe/SHM + handshake) or expose a public connect API; split Application out of GPL-linked legends_app so SDL2+IPC links; add a CI job that boots the app or a smoke embedder against a spawned engine host."
+          },
+          {
+            "id": "api-02",
+            "title": "In-process and IPC runtimes do not expose identical C ABI semantics (NOT_SUPPORTED gaps, destroy(NULL) inversion, inconsistent handle validation, capture_rgb contract change)",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:81-83",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:116-132",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:214-233",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:424-426",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:960-969",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:1277-1319",
+              "C:\\projectLegends\\src\\app\\application.cpp:1181"
+            ],
+            "evidence": "Six functions return LEGENDS_ERR_NOT_SUPPORTED over IPC (set_log_callback proxy_api.cpp:424-426, video capture trio :452-454, set_ttf_font :571, register_event_callback :675) while the app calls runtime_->set_log_callback unconditionally (application.cpp:1181,1193). legends_destroy(NULL) is a documented no-op in-process (legends_embed_api.cpp:960-963) but the proxy ignores the handle and always sends DestroyReq, destroying the engine singleton (proxy_api.cpp:81-83, engine_dispatcher.cpp:67-73). ~15 proxy functions skip null-handle validation while ~20 others check it. Proxy capture_rgb returns LEGENDS_OK without copying when the buffer is too small and OK with size 0 when no frame exists, vs in-process BUFFER_TOO_SMALL semantics (legends_embed_api.cpp:1313-1319). WRONG_THREAD/REENTRANT_CALL guards are unreachable for IPC embedders.",
+            "effort": "L",
+            "recommendation": "Build one parameterized C-ABI conformance suite run against both runtimes in CI; fix proxy null-handle checks, destroy(NULL), and capture_rgb error contract; implement log/event forwarding over the already-reserved SetLogCallbackReq/EventNotification messages or formally gate via legends_has_capability."
+          },
+          {
+            "id": "api-03",
+            "title": "ABI version handshake and config do not survive the IPC boundary (versions transmitted but never validated; config_path silently dropped)",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\include\\legends_ipc\\messages.h:112-128",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:59-68",
+              "C:\\projectLegends\\src\\engine_host\\engine_dispatcher.cpp:48-65",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_connection.cpp:41-43",
+              "C:\\projectLegends\\src\\engine_host\\main.cpp:54-62",
+              "C:\\projectLegends\\src\\app\\application.cpp:885-897"
+            ],
+            "evidence": "CreateReq carries only 7 numeric fields — api_version, struct_size, config_path, working_dir are dropped (messages.h:112-128, proxy_api.cpp:59-68); the dispatcher rebuilds the config from its own LEGENDS_CONFIG_INIT (engine_dispatcher.cpp:52-59), making the in-process version gate a self-check. HandshakeAck carries protocol_version and engine_version=LEGENDS_API_VERSION (main.cpp:55-57) but the proxy validates only error_code (proxy_connection.cpp:41-43); IpcError::VersionMismatch mapping (ipc_error_mapping.h:21) is dead code. The app's resolved .conf path (application.cpp:893) never reaches the engine host in IPC mode.",
+            "effort": "M",
+            "recommendation": "Validate ack.protocol_version/engine_version in ProxyConnection::connect (fail with VersionMismatch); add api_version+struct_size to CreateReq with host-side validation; transmit config_path/working_dir subject to the roadmap's path-confinement checks."
+          },
+          {
+            "id": "api-04",
+            "title": "IPC responses are not correlated by message type or sequence ID; timeout permanently desynchronizes the protocol stream",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_connection.h:39-45",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_connection.cpp:74-88",
+              "C:\\projectLegends\\include\\legends_ipc\\message_header.h:14-40"
+            ],
+            "evidence": "ProxyConnection::request<Resp>() deserializes msg->payload without checking msg->header.msg_type == Resp::type or matching sequence_id (proxy_connection.h:42-44); send_and_recv assigns a fresh seq but never verifies it on receive (proxy_connection.cpp:80-87). After a 5s timeout the late response remains queued and the next request consumes it; field-wise LE decoding silently reinterprets the wrong struct as valid data. The header already carries both correlation fields (message_header.h:17-20).",
+            "effort": "S",
+            "recommendation": "Check msg_type (with ErrorResponse special-cased) and discard responses with stale sequence_ids in request<>; drain the channel on timeout before reuse."
+          },
+          {
+            "id": "api-05",
+            "title": "Installed package is broken for embedders: forwarding headers reference never-installed aibox headers, runtime_host.h has no installed implementation, IPC artifacts not installed",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\CMakeLists.txt:1333-1357",
+              "C:\\projectLegends\\include\\legends\\builder.h:1-4",
+              "C:\\projectLegends\\include\\legends\\gsl.hpp",
+              "C:\\projectLegends\\include\\legends\\runtime_host.h",
+              "C:\\projectLegends\\CMakeLists.txt:503-505"
+            ],
+            "evidence": "install(DIRECTORY include/legends include/pal ...) (CMakeLists.txt:1350) ships all 25 forwarding headers each doing #include <aibox/...> (e.g. builder.h:3) while engine/include/aibox is never installed; gsl.hpp ships publicly despite self-documenting 'Do NOT include this header in public API headers' (it requires the PRIVATE gsl-lite dep); runtime_host.h is installed but its implementation src/app/runtime_host.cpp is compiled only into the never-installed legends_app target; include/legends_ipc and legends_proxy/legends_engine_host artifacts are not installed. Only legends_embed.h + legends_export.h survive installation intact.",
+            "effort": "M",
+            "recommendation": "Define and install only the supported public surface (C ABI headers, plus runtime_host.h if its impl moves to an installed library), or install aibox headers alongside; add a CI consumption test that cmake --installs and builds a minimal external embedder via find_package(Legends)."
+          },
+          {
+            "id": "api-06",
+            "title": "RuntimeHost facade: InProcessEngineRuntime and IpcEngineRuntime are byte-identical ~300-line duplicates; public header implemented in the app layer; dead FrameData type; facade covers only 32/50 APIs",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\src\\app\\runtime_host.cpp:25-621",
+              "C:\\projectLegends\\include\\legends\\runtime_host.h:25-381",
+              "C:\\projectLegends\\src\\app\\application.cpp:929-945",
+              "C:\\projectLegends\\src\\app\\application.cpp:957"
+            ],
+            "evidence": "Both subclasses forward every method to the same legends_* symbols with identical bodies (runtime_host.cpp:25-318 vs 328-621); the real backend switch is link-time (legends_proxy vs legends_core), so the class split encodes a difference that does not exist. The header lives in public include/legends but is implemented in src/app and compiled into GPL-linked legends_app. legends::FrameData (runtime_host.h:25-33) is used by no interface method and duplicates legends_ipc::FrameData. 18 C APIs (get_emu_time, get_state_hash, verify_determinism, get_last_error, has_capability, register_event_callback, video capture trio, etc.) are absent from the facade, so code like crash autosave bypasses it with the raw handle (application.cpp:957).",
+            "effort": "M",
+            "recommendation": "Collapse to one concrete runtime class (or give IpcEngineRuntime real responsibilities: connect/heartbeat/crash-restart), move the implementation into an installable non-app library, delete legends::FrameData, and round out or document the facade subset."
+          },
+          {
+            "id": "api-07",
+            "title": "Module DAG enforcement lags the IPC split: license-critical edges for legends_proxy/legends_ipc/legends_engine_host declared but never verified; legends_app absent from manifest",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\cmake\\ModuleDAG.cmake:124",
+              "C:\\projectLegends\\cmake\\ModuleDAG.cmake:196-206",
+              "C:\\projectLegends\\cmake\\ModuleManifest.cmake:63-68",
+              "C:\\projectLegends\\CMakeLists.txt:571-575"
+            ],
+            "evidence": "ModuleManifest.cmake:63-68 declares DAG edges for six modules, but legends_verify_all_dags() checks only legends_core/legends_pal/aibox_core (ModuleDAG.cmake:196-206) and legends_detect_cycles() hardcodes those same three (ModuleDAG.cmake:124). The MIT-only constraint on legends_proxy (no GPL deps) is therefore unenforced at configure time. legends_app, which links legends_core PUBLIC (CMakeLists.txt:571-575), has no manifest entry at all.",
+            "effort": "S",
+            "recommendation": "Extend both verification functions to all declared modules plus legends_app (data already exists in the manifest) and run DAG verification in CI for both monolithic and IPC configurations."
+          },
+          {
+            "id": "api-08",
+            "title": "legends_config_t evolution policy is self-contradictory: header promises additive v1.x fields but create rejects struct_size != sizeof exactly; semver never exercised as API grew 22 to 50 functions",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\include\\legends\\legends_embed.h:114",
+              "C:\\projectLegends\\include\\legends\\legends_embed.h:45-53",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:829-839",
+              "C:\\projectLegends\\CHANGELOG.md:8"
+            ],
+            "evidence": "legends_embed.h:114 states 'frozen for v1.x. New fields added at end only', but legends_create rejects config->struct_size != sizeof(legends_config_t) with strict equality (legends_embed_api.cpp:829), so any appended field breaks all previously compiled embedders — additive evolution is impossible as specified. Meanwhile LEGENDS_API_VERSION is still 1.0.0 (header lines 45-47) despite the surface growing from 22 (Feb audit) to 50 functions, and CHANGELOG.md contains only [Unreleased].",
+            "effort": "S",
+            "recommendation": "Switch to ranged prefix semantics (accept struct_size between the v1.0 minimum and current sizeof, reading only declared fields) now while no external consumers exist; bump MINOR on additions; add an older-struct-prefix case to tests/unit/test_legends_abi.c."
+          },
+          {
+            "id": "api-09",
+            "title": "Single-instance design contradicts README's multi-instance embeddability motivation; IPC layer re-bakes the limitation (singleton ProxyConnection, single engine-host handle)",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\README.md:17",
+              "C:\\projectLegends\\include\\legends\\legends_embed.h:13",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:803-819",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_connection.cpp:8-11",
+              "C:\\projectLegends\\src\\engine_host\\engine_dispatcher.cpp:13"
+            ],
+            "evidence": "README.md:17 motivates the project by criticizing emulators unsuitable 'where you need multiple instances', yet legends_embed.h:13 declares 'Single instance per process' and legends_create enforces it via atomic CAS returning ALREADY_CREATED (legends_embed_api.cpp:803-819). The IPC architecture could deliver N instances via one engine-host process each, but ProxyConnection is a hard singleton (proxy_connection.cpp:8-11) and the engine host holds a single static g_handle (engine_dispatcher.cpp:13).",
+            "effort": "S",
+            "recommendation": "Make an explicit product decision: either commit to multi-instance-via-N-host-processes (key ProxyConnection per handle; protocol needs no changes since the handle is implicit) or correct the README positioning. Decision is S; implementation if chosen is L."
+          },
+          {
+            "id": "api-10",
+            "title": "Dead/unsolicited protocol message types and an uninitialized-bytes leak in GetStateHash dispatch",
+            "severity": "low",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\include\\legends_ipc\\message_types.h:28",
+              "C:\\projectLegends\\include\\legends_ipc\\message_types.h:48-49",
+              "C:\\projectLegends\\src\\engine_host\\engine_dispatcher.cpp:177-182",
+              "C:\\projectLegends\\src\\engine_host\\main.cpp:54-62"
+            ],
+            "evidence": "ForceDestroyReq, CaptureRgbReq/Resp, CaptureAudioReq/Resp, SetLogCallbackReq, video-capture, SetTtfFontReq, RegisterEventCallbackReq, and EventNotification IDs are never sent nor dispatched (proxy maps force_destroy to DestroyReq, proxy_api.cpp:85-87; capture paths use SHM); Handshake (0x0001) is never sent — the engine pushes an unsolicited HandshakeAck (main.cpp:54-62). GetStateHashReq handler serializes resp.hash even when legends_get_state_hash failed, leaking up to 32 uninitialized stack bytes across the process boundary (engine_dispatcher.cpp:177-182).",
+            "effort": "S",
+            "recommendation": "Zero-initialize response structs before serialization, annotate reserved/SHM-superseded message IDs, and implement EventNotification (needed for api-02 log/event parity) or remove it."
+          },
+          {
+            "id": "api-11",
+            "title": "SDL3 executable duplicates the entire ~45-file legends_app source list inline",
+            "severity": "low",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\CMakeLists.txt:1211-1268",
+              "C:\\projectLegends\\CMakeLists.txt:503-556"
+            ],
+            "evidence": "The SDL3 project_legends target re-lists every source already registered in legends_app (CMakeLists.txt:1211-1268 vs 503-556). New app sources must be added in two or three places (SDL2 lib, SDL3 inline, IPC variants), and drift produces backend-specific link failures of the kind already live in api-01.",
+            "effort": "S",
+            "recommendation": "Make legends_app PAL-agnostic and link it from both SDL targets, or factor the source list into a single CMake variable consumed by all targets."
+          },
+          {
+            "id": "api-12",
+            "title": "C1 header duplication resolved via forwarding headers (verified)",
+            "severity": "low",
+            "status": "resolved",
+            "existing_audit_ref": "C1",
+            "files": [
+              "C:\\projectLegends\\include\\legends\\builder.h:1-4",
+              "C:\\projectLegends\\include\\legends\\machine_context.h:1-7"
+            ],
+            "evidence": "All 25 overlapping pairs are now 4-7 line forwarding shims (#include <aibox/X.h>; namespace legends { using namespace aibox; }) with the canonical implementation solely in engine/include/aibox (diff comparison run across all pairs: legends side 4-7 lines vs aibox 59-746 lines). Residual caveat captured separately as api-05: the shims are installed while aibox headers are not.",
+            "effort": "S",
+            "recommendation": "Close C1. Track the install-time breakage under api-05; consider replacing blanket 'using namespace aibox' with explicit aliases to avoid namespace pollution."
+          },
+          {
+            "id": "api-13",
+            "title": "H5 destroy-fallback fixed in-process (verified); permissive behavior survives only in IPC proxy",
+            "severity": "low",
+            "status": "resolved",
+            "existing_audit_ref": "H5",
+            "files": [
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:960-969",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:81-83"
+            ],
+            "evidence": "legends_destroy now returns LEGENDS_OK for null handles and LEGENDS_ERR_NULL_HANDLE for non-matching non-null handles via get_instance() pointer-equality check (legends_embed_api.cpp:960-969); the g_active_instance fallback is gone. The IPC proxy's handle-ignoring destroy (proxy_api.cpp:81-83) re-creates the spirit of H5 across the boundary — tracked under api-02.",
+            "effort": "S",
+            "recommendation": "Close H5 for the in-process path; fold the proxy-side equivalent into the api-02 parity work."
+          },
+          {
+            "id": "api-14",
+            "title": "L2 unused error codes now all used (verified)",
+            "severity": "low",
+            "status": "resolved",
+            "existing_audit_ref": "L2",
+            "files": [
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:1010",
+              "C:\\projectLegends\\src\\legends_proxy\\ipc_error_mapping.h:15-16",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:425"
+            ],
+            "evidence": "LEGENDS_ERR_REENTRANT_CALL returned from legends_reset and step paths (legends_embed_api.cpp:1010); LEGENDS_ERR_IO_FAILED used in IPC error mapping (ipc_error_mapping.h:15-16) and embed API; LEGENDS_ERR_NOT_SUPPORTED used by proxy stubs, dispatcher default case (engine_dispatcher.cpp:536), and stub APIs per commit 7f86dd7.",
+            "effort": "S",
+            "recommendation": "Close L2."
+          },
+          {
+            "id": "api-15",
+            "title": "L3 HandleRegistry still implemented but unused by the embed API",
+            "severity": "low",
+            "status": "confirmed-open",
+            "existing_audit_ref": "L3",
+            "files": [
+              "C:\\projectLegends\\engine\\include\\aibox\\handle_registry.h",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:79-82",
+              "C:\\projectLegends\\include\\legends\\handle_registry.h:1-4"
+            ],
+            "evidence": "HandleRegistry (504-line header) is consumed only by tests (test_handle_registry.cpp, test_thread_safety.cpp, test_gsl_contracts.cpp); the embed API validates handles by pointer equality against the single g_active_instance (legends_embed_api.cpp:79-82). The unused class is additionally re-exported publicly via the forwarding header.",
+            "effort": "M",
+            "recommendation": "Either adopt HandleRegistry as the multi-instance enabler (pairs with api-09) or delete it and its forwarding header to shrink the public surface."
+          },
+          {
+            "id": "api-16",
+            "title": "L4 LEGENDS_ERROR macro collision resolved (verified)",
+            "severity": "low",
+            "status": "resolved",
+            "existing_audit_ref": "L4",
+            "files": [
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:687-697",
+              "C:\\projectLegends\\include\\legends\\legends_embed.h:56-99"
+            ],
+            "evidence": "Repo-wide grep finds exactly one definition of LEGENDS_ERROR (legends_embed_api.cpp:690, with defensive #ifdef/#undef at 687-688); neither include/legends/error.h (now a forwarding shim) nor engine/include/aibox/error.h defines it. Commit 91569c6 also documented the dual public-negative/internal-positive error-code systems with sign-invariant static_asserts in legends_embed.h:56-99.",
+            "effort": "S",
+            "recommendation": "Close L4."
+          }
+        ],
+        "sprint_recommendations": [
+          "Make IPC mode real (api-01, api-03, api-04): wire EngineSpawner+connect bootstrap into proxy legends_create, validate handshake protocol/engine versions, correlate responses by type and sequence ID, fix the SDL2+IPC link by extracting Application from GPL-linked legends_app, and add a CI job that boots the app end-to-end in IPC mode.",
+          "One ABI, two runtimes parity (api-02, api-06, api-10): build a single C-ABI conformance suite run against both backends in CI; fix proxy null-handle/destroy(NULL)/capture_rgb contracts; collapse the duplicate RuntimeHost subclasses; implement EventNotification-based log/event forwarding or formally capability-gate the six NOT_SUPPORTED functions.",
+          "Installable SDK (api-05, api-08, api-11): prune the installed header set to the supported public surface, resolve the forwarding-header/aibox install mismatch, move runtime_host into an installed library, adopt ranged struct_size semantics before external consumers exist, and add a cmake --install + external-embedder consumption test to CI.",
+          "Boundary enforcement catch-up (api-07): extend ModuleDAG verification to all six declared modules plus legends_app so the MIT/GPL link constraints underpinning the licensing story are enforced at configure time in both build modes."
+        ]
+      },
+      "verified": [
+        {
+          "id": "api-01",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified all cited lines and adversarially searched for mitigations; finding holds on all three legs. (1) No bootstrap: ProxyConnection::connect (proxy_connection.cpp:13-51) is declared only in the private src/legends_proxy/proxy_connection.h and repo-wide grep shows its sole callers are unit tests; proxy_api.cpp gates every API including legends_create (lines 23/33/57) on is_connected() -> LEGENDS_ERR_NOT_INITIALIZED; no getenv/auto-connect anywhere in legends_proxy; CrashHandler::restart (crash_handler.cpp:35) spawns only on restart and is never started by the app; IpcEngineRuntime ctor (runtime_host.cpp:328) just stores the handle and is constructed after legends_create at application.cpp:905, so Application::init always returns EngineCreateFailed (application.cpp:917) in IPC builds. (2) Link failure: project_legends compiles only src/main.cpp (CMakeLists.txt:1152-1156) and in IPC mode links only legends_proxy+legends_pal (1173-1180); main.cpp:9 needs legends::Application defined only in legends_app (503-505); checked the escape hatch legends_configure_app_entrypoint_target (585-602) — it adds only include dirs/defines, no sources/libs; legends_app PUBLIC-links GPL legends_core (571-574) so it cannot be added without defeating isolation. CMake comment 439-442 confirms SDL2+IPC is the intended design, so this is incomplete implementation, not an unsupported combo; same flaw in the SDL3 block (1268, 1273-1280). (3) CI: only ci.yml:116 sets LEGENDS_USE_IPC=ON, in the linux-ipc job with LEGENDS_HEADLESS=ON and PAL_BACKEND_SDL2 left at default OFF (CMakeLists.txt:48), so project_legends is never built under IPC; that job only tests existence of legends_engine_host/legends_unit_tests (ci.yml:121-124), and the jobs that build project_legends (ci.yml:184/251/323) are non-IPC and never run it. Mitigation found: tests/integration/test_ipc_integration.cpp does exercise EngineSpawner+handshake, proving the IPC layer itself, but nothing makes the end-user runtime mode work. High severity justified: the advertised GPL-isolation runtime mode cannot link and would fail at init even if it did."
+          }
+        },
+        {
+          "id": "api-02",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Attempted refutation; every cited claim held up on direct inspection. (1) Cited lines match exactly: proxy_api.cpp:424-426, :452-454, :571, :675 return LEGENDS_ERR_NOT_SUPPORTED unconditionally (set_log_callback, video-capture trio, set_ttf_font, register_event_callback); proxy_api.cpp:81-83 legends_destroy ignores its handle and always sends DestroyReq, and engine_dispatcher.cpp:67-73 then destroys the real singleton via legends_destroy(g_handle) — so legends_destroy(NULL) over IPC kills the live engine, whereas in-process legends_embed_api.cpp:960-964 documents NULL as a no-op returning LEGENDS_OK. proxy capture_rgb (proxy_api.cpp:214-233) returns LEGENDS_OK without copying when buffer_size < frame size and OK with *size_out=0 when no frame, vs in-process LEGENDS_ERR_BUFFER_TOO_SMALL and mandatory size_out (legends_embed_api.cpp:1286-1319); proxy also skips the NULL_HANDLE/NULL_POINTER checks the in-process version enforces. (2) Mitigations do NOT exist: application.cpp:1181/1193 calls runtime_->set_log_callback with the return value discarded, and IpcEngineRuntime::set_log_callback (runtime_host.cpp:523-525) forwards straight to the NOT_SUPPORTED stub — engine logs are silently lost in IPC builds even with logging enabled; no legends_has_capability gating anywhere in src/app (grep: zero hits); SetLogCallbackReq (0x0702) and EventNotification (0x1102) really are reserved in include/legends_ipc/message_types.h:84-85,152-154 but unimplemented. The only proxy tests (tests/unit/test_proxy_api.cpp) cover not-connected errors and are themselves stale — line 52 expects legends_joystick_event to be NOT_SUPPORTED but proxy_api.cpp:455-470 now implements it (returns NULL_HANDLE for null) — reinforcing the no-conformance-suite claim. Handle-validation split confirmed from the full export list (~15 functions take anonymous unchecked legends_handle, ~20 check !handle). WRONG_THREAD/REENTRANT guards: 9 occurrences in legends_embed_api.cpp, 0 in legends_proxy. (3) Severity: the proxy is explicitly a drop-in for the same legends_embed.h ABI (CMakeLists.txt:400, :1171 'link the proxy (MIT) instead of legends_core'), so divergence is a real contract break; capture_rgb OK-without-copy can yield stale-buffer consumption and log loss is silent. Mild attenuators: LEGENDS_USE_IPC is OFF by default (CMakeLists.txt:37) and the in-tree app guards handle_ before destroy (runtime_host.cpp:334-341), so the destroy(NULL) inversion is latent for external embedders rather than triggered in-tree. High severity is defensible; medium-high at minimum."
+          }
+        },
+        {
+          "id": "api-03",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified all six citations line-by-line; every factual claim holds. CreateReq (messages.h:112-127) carries only 7 numeric config fields; proxy_api.cpp:59-68 drops api_version/struct_size/config_path/working_dir from the caller's legends_config_t (fields confirmed at legends_embed.h:117-140). engine_dispatcher.cpp:48-65 rebuilds the config from LEGENDS_CONFIG_INIT, whose macro (legends_embed.h:148-150) hardcodes sizeof(legends_config_t) and LEGENDS_API_VERSION, so the real version gate (engine/src/misc/dosbox_library.cpp:370-375) always passes in IPC mode — confirmed self-check; wrong api_version fails in-process but silently succeeds over IPC. main.cpp:55-66 sends protocol_version/engine_version in HandshakeAck but proxy_connection.cpp:41-43 checks only error_code; project-wide grep shows IpcError::VersionMismatch (ipc_error.h:24, mapped at ipc_error_mapping.h:21) has no producer — dead code confirmed. Refutation attempts failed: engine host CLI accepts only --pipe/--shm/--version (cli_parser.h:11-22, errors on unknown flags), spawner passes only those (engine_spawner_win.cpp:42-53), no legends_get_api_version caller in src/app, and tests (test_proxy_connection.cpp, test_ipc_integration.cpp:83-86) assert only ack arrival, never version values — no mitigation exists. application.cpp:885-905 confirms the resolved .conf path is set then lost in IPC builds. Only caveat on severity: LEGENDS_USE_IPC is OFF by default (CMakeLists.txt:37) and proxy/host build from one tree, so high vs medium-high is arguable, but IPC mode is the GPL-isolation product configuration with CI integration tests, and the silent config divergence plus undetectable ABI skew justify high within that mode."
+          }
+        },
+        {
+          "id": "api-05",
+          "verdict": {
+            "isReal": false,
+            "confidence": "high",
+            "note": "Central evidence refuted: the finding claims engine/include/aibox is never installed, breaking all ~25 forwarding headers (e.g. include/legends/builder.h:3 '#include <aibox/builder.h>'). But engine/CMakeLists.txt:354-357 unconditionally runs install(DIRECTORY include/aibox DESTINATION include FILES_MATCHING PATTERN \"*.h\"); the engine is unconditionally added via add_subdirectory(engine) at CMakeLists.txt:173 (verified the install sits outside any if() block — the enclosing AIBOX_BUILD_TESTS block ends at line 347), and all 31 files in engine/include/aibox are .h so the pattern ships every one. aibox_core is also installed in the LegendsTargets export (CMakeLists.txt:1333/1343) with $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> (engine/CMakeLists.txt:245), so installed consumers resolve <aibox/...> includes. The claim 'only legends_embed.h + legends_export.h survive installation intact' is therefore false, and the 'high' severity collapses with it. Genuine but minor residuals: (1) runtime_host.h (installed) declares InProcessEngineRuntime/IpcEngineRuntime/create_runtime() whose sole implementation src/app/runtime_host.cpp is compiled only into the never-installed legends_app static lib (CMakeLists.txt:503-505) — a link-time gap for that single header (it compiles fine; it includes only legends_embed.h + std); (2) gsl.hpp ships via the unfiltered install(DIRECTORY include/legends) despite its internal-only comment, and 6 installed aibox headers include <gsl-lite/gsl-lite.hpp> while LegendsConfig.cmake.in has no find_dependency(gsl-lite) — but no installed legends public header transitively includes gsl-lite (contracts.hpp's gsl.hpp mention is a doc comment; verified its real includes are error.h/exceptions.h only); (3) include/legends_ipc and proxy/engine-host targets are indeed not installed, but no installed header references them — consistent with IPC being app-internal by design (CMakeLists.txt:422-423 licensing-boundary comments). (4) Confirmed no CI install/consumption test exists (.github/workflows greps match only apt-get installs), so that recommendation is independently sensible. At most this is a low/medium header-hygiene finding (runtime_host.h + gsl.hpp + missing find_dependency); as written — embedder-breaking forwarding headers due to never-installed aibox headers — it is factually wrong."
+          }
+        }
+      ]
+    },
+    {
+      "role": "memory-safety",
+      "report": {
+        "role": "Memory safety & C++ correctness auditor",
+        "summary": "The team has substantively closed the prior memory-safety backlog in this scope: H5 (destroy fallback), H6 (memory bounds overflow), H9 (unaligned reinterpret_cast), M7, M8 (sentinel handle), M9 (config string deep-copy), M11, and C2 are all genuinely resolved, with real fixes rather than cosmetic ones. However, the recently expanded V5 load path (RAM/VRAM RLE sub-blocks) introduced a NEW critical heap buffer overflow reachable from the public legends_load_state(): the engine deserializer overwrites ctx->memory.size from an attacker-controlled uint64_t and then uses it as the RLE decompression capacity with no check against the real allocation, so a tiny crafted blob (plain-CRC32 protected) writes far past a ~704KB buffer. There is also a create error-path engine-handle leak that permanently bricks the library, and M6 remains partially open because event callbacks are still invoked unguarded across the C ABI. Integrity is plain CRC32 (not a MAC) at both layers, so crafted save states are trivially constructed. Overall: good remediation discipline, but a corruption bug and a library-bricking leak sit in the freshly grown code.",
+        "health_grade": "C",
+        "findings": [
+          {
+            "id": "mem-01",
+            "title": "Heap buffer overflow: dosbox_lib_load_state trusts attacker-controlled memory.size as RLE decode capacity",
+            "severity": "critical",
+            "status": "new",
+            "files": [
+              "engine/src/misc/dosbox_library.cpp:1303",
+              "engine/src/misc/dosbox_library.cpp:1437",
+              "engine/src/misc/dosbox_library.cpp:522",
+              "engine/include/dosbox/engine_state.h:265",
+              "engine/include/dosbox/zero_rle.h:84",
+              "src/legends/legends_embed_api.cpp:2442"
+            ],
+            "evidence": "dosbox_library.cpp:1303 does `ctx->memory.size = static_cast<size_t>(mem.size)` from a uint64_t save field (engine_state.h:265) with no validation. memory.base is a fixed `bytes+65536` allocation made once (dosbox_context.cpp:39-41) and there is no separate capacity field. The RAM sub-block then calls zero_rle_decode(..., ctx->memory.base, ctx->memory.size) (1444) using the corrupted size as cap; zero_rle_decode honors cap (zero_rle.h:84-117) but cap is now attacker-chosen, and RLE expands a few input bytes into memory.size zero bytes. Reachable via public legends_load_state, which forwards the engine slice after only checking offsets are inside the legends buffer (legends_embed_api.cpp:2442-2449). Integrity is plain CRC32 (dosbox_library.cpp:1129-1136), trivially forged. Same corrupted size also drives the reset guard memset (522-527) and all read/write bounds checks (1723,1747).",
+            "effort": "S",
+            "recommendation": "Never overwrite ctx->memory.size from the save; validate mem.size == create-time allocation and reject on mismatch. Clamp RAM/VRAM decode cap to the true allocated size independently of any deserialized field. Add an engine-memory-field fuzz target."
+          },
+          {
+            "id": "mem-02",
+            "title": "Engine handle leak on legends_create error path bricks the library (g_instance_exists stuck true)",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "src/legends/legends_embed_api.cpp:951",
+              "src/legends/legends_embed_api.cpp:939",
+              "engine/src/misc/dosbox_library.cpp:360"
+            ],
+            "evidence": "legends_create's terminal catch (legends_embed_api.cpp:951-957) does inst->machine.reset(); g_active_instance.store(nullptr); delete inst; but never calls dosbox_lib_destroy(inst->engine_handle). dosbox_lib_create/init may already have succeeded (905-923), setting the engine g_instance_exists=true and allocating g_context. A throw after init — e.g. load_embedded_font()'s vector assign can throw bad_alloc (939; instance_state.h:161-164) — leaks the engine and leaves g_instance_exists=true, so every later dosbox_lib_create returns DOSBOX_LIB_ERR_ALREADY_CREATED (dosbox_library.cpp:360-363) until process restart. The init-failure branch (914-922) handles cleanup correctly; the catch does not. Catch also lacks catch(...), so a non-std throw escapes the extern \"C\" boundary (UB).",
+            "effort": "S",
+            "recommendation": "In the catch, destroy inst->engine_handle if non-null before delete inst; add a catch(...) arm that does the same."
+          },
+          {
+            "id": "mem-03",
+            "title": "Event callbacks invoked unguarded across the C ABI (M6 still partially open)",
+            "severity": "medium",
+            "status": "confirmed-open",
+            "existing_audit_ref": "M6",
+            "files": [
+              "src/legends/legends_embed_api.cpp:748",
+              "src/legends/legends_embed_api.cpp:2809",
+              "src/legends/legends_embed_api.cpp:2841"
+            ],
+            "evidence": "fire_event() calls cb.fn(...) with no try/catch (legends_embed_api.cpp:744-749). It is invoked from extern \"C\" functions with no surrounding try/catch: legends_mount_drive (2809,2814) and legends_unmount_drive (2841,2846). A throwing C++ embedder callback unwinds across the C ABI -> UB. The log-callback half of M6 is fixed (instance_state.h:50-57) but the event-callback half is not; fire_event in legends_step_cycles is only safe by accident of that function's own try/catch (1084,1177).",
+            "effort": "S",
+            "recommendation": "Wrap the cb.fn(...) call inside fire_event in try{...}catch(...){} mirroring LogState::log."
+          },
+          {
+            "id": "mem-04",
+            "title": "Cross-layer load atomicity gap: engine committed before wrapper staging can fail",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "src/legends/legends_embed_api.cpp:2435",
+              "src/legends/legends_embed_api.cpp:2504",
+              "src/legends/legends_embed_api.cpp:2228"
+            ],
+            "evidence": "legends_load_state mutates engine state in Phase 2 (2435-2453) before staging wrapper sections. Phase 3 staged_indexed_pixels.resize() can throw bad_alloc, which is caught and returns LEGENDS_ERR_OUT_OF_MEMORY (2504-2509) without reverting the engine, leaving the engine on the new state while wrapper time/frame/pic/input state stay old -> silent desync producing wrong hashes/frames. Same shape in the V2 loader (2228-2237).",
+            "effort": "M",
+            "recommendation": "Stage all allocations (including indexed_pixels) before the engine load, or snapshot/rollback engine state if wrapper staging fails."
+          },
+          {
+            "id": "mem-05",
+            "title": "Non-portable raw-struct serialization with indeterminate padding in V3 saves",
+            "severity": "low",
+            "status": "new",
+            "files": [
+              "src/legends/legends_embed_api.cpp:1927",
+              "src/legends/legends_embed_api.cpp:1889",
+              "src/legends/internal/instance_state.h:303"
+            ],
+            "evidence": "ScheduledEvent (instance_state.h:303-310: uint32_t id then uint64_t deadline -> 4-byte padding, sizeof 24) and the SaveStateTime/CPU/PIC/Frame headers are written by raw memcpy of structs with native byte order and indeterminate padding (legends_embed_api.cpp:1889,1900,1908,1927-1930,1967), despite the format being labeled portable. Padding bytes are CRC-covered, so logically identical states need not byte-match and cross-ABI loads mis-deserialize. Does not affect legends_get_state_hash (field-level) or single-platform round-trips, hence low.",
+            "effort": "M",
+            "recommendation": "Field-serialize these sections with the existing little-endian helpers (as already done for InputEvent/DMAChannelState), or zero-init structs and document the format as platform-local."
+          }
+        ],
+        "sprint_recommendations": [
+          "Harden untrusted deserialization: validate every length/size/offset in both save formats against real allocations, clamp all decode caps independently of deserialized fields (fixes mem-01), field-serialize padded structs (mem-05), and add an engine-memory/RAM-blob-targeted fuzz target.",
+          "Error-path resource safety at the C ABI: audit every extern \"C\" entry point for engine-handle cleanup on all throw/early-return paths (mem-02) and exception containment around every embedder callback via fire_event (mem-03); add catch(...) arms.",
+          "Load atomicity: move all wrapper-layer allocations ahead of any engine mutation, or add engine snapshot/rollback, so a failed load leaves the machine unchanged (mem-04).",
+          "Consider upgrading save-state integrity from plain CRC32 toward a keyed/authenticated check, since CRC offers no protection against crafted states that drive mem-01-class bugs."
+        ]
+      },
+      "verified": [
+        {
+          "id": "mem-01",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "VERIFIED REAL after attempting refutation on every cited line; all hold up.\n\n(1) Cited lines say what is claimed:\n- dosbox_library.cpp:1303 — `ctx->memory.size = static_cast<size_t>(mem.size)` copies the save's uint64 size field with no validation. CONFIRMED.\n- engine_state.h:265 — `uint64_t size` is the first field of attacker-deserialized EngineStateMemory. CONFIRMED.\n- dosbox_context.cpp:39-41 — base = `new uint8_t[bytes + 65536]()`, `memory.size = bytes`. memory.size IS the only capacity field; base is a fixed one-time allocation. CONFIRMED. (Production allocator memory.cpp:315/356 behaves the same.)\n- zero_rle.h:84-117 — decode honors `cap` (out>=cap / out+count>cap return 0) but writes up to cap; literal non-zero bytes are copied verbatim from src (line 94), so attacker controls length AND content. CONFIRMED.\n- dosbox_library.cpp:1437-1444 — RAM subtag calls zero_rle_decode(..., ctx->memory.base, ctx->memory.size) using the size set at 1303. CONFIRMED.\n- legends_embed_api.cpp:2440-2446 — public load path only VALIDATE_DATA_BOUNDS(engine_offset, engine_size) inside the legends buffer, then forwards the slice to dosbox_lib_load_state. CONFIRMED reachable from untrusted save.\n- Integrity is plain unkeyed CRC32 (1129-1136), recomputed over the data — trivially forged after tampering. CONFIRMED.\n- Reset memset (522-527) and read/write bounds (1723,1747) all use the same corrupted memory.size. CONFIRMED secondary corruption surface.\n\n(2) Refutation attempts all fail:\n- Guard at 1440 `if (entry.orig_size > ctx->memory.size) break` compares attacker-controlled orig_size against the ALREADY-corrupted memory.size, so it does not constrain anything; and orig_size is never passed to the decoder, so the only write bound is cap=memory.size.\n- Grepped memory.size/mem.size across the file and memory.base assignments across engine/src: between line 1303 and the RAM decode there is NO re-validation or clamp, and memory.base is never reallocated during load (only assigned in the create-time allocators). So base stays sized to configured RAM while size is overwritten to an attacker value (e.g., GB-scale), defeating the 64KB HLT guard.\n- Offset validation at 1138-1156 checks only that memory_offset is a valid location to read the struct, never that mem.size equals the real allocation.\n\n(3) Severity critical is justified: a controlled-length, partially controlled-content heap write primitive reachable by loading a forged save state, protected only by a forgeable CRC32, with the same poisoned size also corrupting reset and all subsequent memory read/write bounds. The recommendation (never overwrite memory.size from the save; clamp decode cap to the true allocation; reject on size mismatch; add a fuzz target) is correct."
+          }
+        },
+        {
+          "id": "mem-02",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified all cited evidence by direct read. legends_embed_api.cpp:951-957 catch(const std::exception&) does machine.reset()/g_active_instance=null/delete inst but never dosbox_lib_destroy(inst->engine_handle); contrast with the correct init-failure branch at 914-923 which does call it (916). struct legends_instance (src/legends/internal/legends_instance.h) has no destructor and destroy_cleanup() explicitly does not free the engine handle, so delete inst leaks it. dosbox_library.cpp: g_instance_exists set true at 360 and reset only on create's own failures (371/376/430) or dosbox_lib_destroy (493); after successful dosbox_lib_init the only reset is dosbox_lib_destroy. Since the catch never sets *handle_out and deletes inst, legends_destroy (the only other dosbox_lib_destroy caller, line 984) is unreachable — every later create fails with ALREADY_CREATED until process restart, exactly as claimed. Missing catch(...) in extern \"C\" legends_create also confirmed (block spans 753-3220). One tempering fact: I checked every statement after successful init (lines 924-949); time_state/frame_state/input_state resets and init_test_pattern use fixed std::arrays (non-throwing), so the only realistic throw site is load_embedded_font's ~4KB vector assign (instance_state.h:161-164) throwing bad_alloc — an OOM-only trigger, making likelihood low. Impact (unrecoverable process-wide brick of an embeddable C API) and the trivial fix justify keeping it real; high severity is defensible though medium-high would also be reasonable given the OOM-only trigger."
+          }
+        }
+      ]
+    },
+    {
+      "role": "security",
+      "report": {
+        "role": "Security & untrusted-input auditor",
+        "summary": "Save-state deserialization is genuinely well-hardened in both the legends layer (legends_embed_api.cpp) and engine bridge (dosbox_library.cpp): magic/version/size-underflow/CRC32 checks, overflow-safe subtraction-form bounds macros, count caps, pre-validation of input-event types, and four-phase atomic load. Prior findings H6 (memory-bounds overflow) and H9 (unaligned reinterpret_cast) are fixed; H7 (HashMode::Full) is partially fixed (RAM now hashed, VGA/device still not). The weak surface is the newer IPC/shared-memory isolation layer — the MIT-shell to GPL-engine-host trust boundary that by design runs untrusted guest code. Framebuffer/audio SHM consumers trust attacker-mappable geometry fields and read out of bounds in the trusted shell; the proxy never validates response type or sequence id; endpoints have no peer authentication and use predictable, world-reachable names; and the 89-struct/43-case IPC parser is entirely unfuzzed. The GPL isolation guarantees (REQ-ISO-016 symbol scan, crash recovery, SHM write path) are unverified — IPC mode is functional transport but not yet a real security boundary. IPC is opt-in (off by default), which bounds present exposure, but it is the roadmap direction.",
+        "health_grade": "C",
+        "findings": [
+          {
+            "id": "sec-01",
+            "title": "Shared-memory consumers trust attacker-controlled geometry → OOB read in trusted shell",
+            "severity": "high",
+            "files": [
+              "src/legends_ipc/framebuffer_shm.cpp:74-92",
+              "src/legends_ipc/framebuffer_shm.cpp:9-15",
+              "src/legends_proxy/proxy_api.cpp:222-232",
+              "src/legends_ipc/audio_ring.cpp:10-16",
+              "src/legends_ipc/audio_ring.cpp:63-110"
+            ],
+            "evidence": "FramebufferShm::read_if_new computes pixel_bytes = current_width*current_height*4 from SHM-resident header fields (written by the untrusted engine host) with no clamp to max_width/max_height or buf_size_, and returns a span of that length. legends_capture_rgb sets *size_out to that value and memcpy's frame->pixels.size() out of a buffer sized only for max_w*max_h*4 — a host setting current_width=current_height=0xFFFF causes a multi-GB OOB read. map_pointers derives buf_size_ from SHM-resident max_width/max_height rather than the mapped size. AudioRingBuffer::map_pointers caches capacity_/channels_ from the SHM header; pop/push index samples_[(idx%capacity_)*channels_] and divide by channels_, so an inflated capacity or channels==0 yields OOB access or divide-by-zero.",
+            "effort": "M",
+            "recommendation": "Validate all consumer-side geometry against the actually-mapped region size: clamp current_*<=max_*, require pixel_bytes<=buf_size_, reject channels==0 and capacity_frames larger than mapped; never recompute buffer extents from SHM-resident fields.",
+            "status": "new"
+          },
+          {
+            "id": "sec-02",
+            "title": "Proxy does not validate response message type or sequence id",
+            "severity": "medium",
+            "files": [
+              "src/legends_proxy/proxy_connection.h:39-45",
+              "src/legends_proxy/proxy_connection.cpp:74-88",
+              "include/legends_ipc/message_types.h:154"
+            ],
+            "evidence": "ProxyConnection::request<Resp> deserializes whatever bytes arrive as the expected Resp type; send_and_recv returns the first message read after sending with no check that header.msg_type==Resp::type or header.sequence_id==seq. The protocol defines an unsolicited push EventNotification=0x1102; if emitted it is consumed as the next request's response and desynchronizes the stream. A wrongly-typed but large-enough payload deserializes successfully and is read as a valid error_code/result (e.g. a forged LEGENDS_OK).",
+            "effort": "M",
+            "recommendation": "In send_and_recv, loop until a response whose msg_type and sequence_id match the request; route EventNotification to a separate queue.",
+            "status": "new"
+          },
+          {
+            "id": "sec-03",
+            "title": "IPC endpoints lack peer authentication and use predictable, world-reachable names",
+            "severity": "medium",
+            "files": [
+              "src/legends_ipc/platform/posix/control_channel_posix.cpp:51-107",
+              "src/legends_ipc/platform/posix/shared_memory_posix.cpp:57-67",
+              "src/legends_ipc/platform/windows/control_channel_win.cpp:46-66",
+              "src/legends_ipc/platform/windows/shared_memory_win.cpp:62-68"
+            ],
+            "evidence": "No check that the peer is the spawned engine host; handshake carries no token. POSIX server socket at /tmp/legends_<pid>.sock (predictable, world-writable /tmp), created with process umask, no SO_PEERCRED on accept; shm_open uses O_CREAT|O_RDWR|0600 with no O_EXCL. Windows CreateNamedPipeA passes nullptr security attrs with no FILE_FLAG_FIRST_PIPE_INSTANCE (name squatting) and no PIPE_REJECT_REMOTE_CLIENTS; CreateFileMappingA uses default DACL with no ERROR_ALREADY_EXISTS check.",
+            "effort": "M",
+            "recommendation": "Add peer-credential checks (SO_PEERCRED/getpeereid, GetNamedPipeClientProcessId), set FILE_FLAG_FIRST_PIPE_INSTANCE + PIPE_REJECT_REMOTE_CLIENTS + owner-only DACL, use O_EXCL on SHM create, use unguessable per-launch names in a 0700 dir, and add a handshake nonce.",
+            "status": "new"
+          },
+          {
+            "id": "sec-04",
+            "title": "IPC parsing layer (108 message types, 89 structs, 43-case dispatcher) is entirely unfuzzed",
+            "severity": "medium",
+            "files": [
+              "tests/fuzz/CMakeLists.txt:103-217",
+              ".github/workflows/ci.yml:496-543",
+              "src/legends_ipc/messages.cpp:1-905",
+              "src/engine_host/engine_dispatcher.cpp:34-541"
+            ],
+            "evidence": "The only fuzz targets are fuzz_legends_load_state, fuzz_engine_load_state, fuzz_input_injection, fuzz_config_parser. The IPC surface — MessageCodec/MessageHeader framing, ~89 hand-written deserialize() functions, and the 43-case dispatch() — parses untrusted bytes at the GPL trust boundary but has no fuzz target. Existing unit tests (test_ipc_messages.cpp etc.) use well-formed inputs only.",
+            "effort": "M",
+            "recommendation": "Add a libFuzzer target feeding raw bytes through MessageCodec::feed/try_decode and dispatch(), plus one driving each proxy-side Resp::deserialize; wire into the existing CI fuzz job.",
+            "status": "new"
+          },
+          {
+            "id": "sec-05",
+            "title": "GPL process-isolation guarantees unverified; missing half is assurance, not plumbing",
+            "severity": "high",
+            "files": [
+              ".github/workflows/ci.yml:93-127",
+              "src/engine_host/main.cpp:20-108",
+              "CMakeLists.txt:372-431",
+              "roadmap.md:3319-3332",
+              "TODO.md:19"
+            ],
+            "evidence": "LEGENDS_USE_IPC builds legends_engine_host + legends_proxy and a CI job configures/builds/unit-tests IPC mode, but: there is no REQ-ISO-016 GPL symbol-isolation scan (CI only does test -f build/legends_engine_host), so the core GPL-compliance guarantee that no aibox_core/legends_core symbols leak into the proprietary shell is unenforced; no REQ-ISO-013 crash detection/recovery (heartbeat/crash_handler exist but host loop has no watchdog); and engine_host main.cpp connects only the control channel and never opens the framebuffer/audio SHM, so the write path is unwired. TODO/roadmap mark REQ-ISO-003..016 Missing while the mechanism is substantially built, understating the code and overstating the guarantees.",
+            "effort": "XL",
+            "recommendation": "Implement the REQ-ISO-016 symbol-scan as a CI gate, wire crash detection/recovery, finish the SHM write path, and reconcile TODO/roadmap status with the shipped code.",
+            "status": "new"
+          },
+          {
+            "id": "sec-06",
+            "title": "MountDriveReq path length truncated to 8 bits while full bytes are copied",
+            "severity": "low",
+            "files": [
+              "src/legends_ipc/messages.cpp:341-359"
+            ],
+            "evidence": "MountDriveReq::serialize writes the path length as write_u8(buf,5,static_cast<uint8_t>(host_path.size())) but serialized_size_dynamic() and the memcpy use the full host_path.size(); a path >255 bytes records a wrapped length and deserialize reconstructs a silently truncated path. Mount host paths feed path-confinement (REQ-SEC-023 canonical resolution), so truncation can resolve to an unintended directory.",
+            "effort": "S",
+            "recommendation": "Use a u16/u32 length field and reject oversize paths explicitly.",
+            "status": "new"
+          },
+          {
+            "id": "sec-07",
+            "title": "Memory-bounds integer overflow now uses overflow-safe subtraction form",
+            "severity": "high",
+            "files": [
+              "engine/src/misc/dosbox_library.cpp:1723",
+              "engine/src/misc/dosbox_library.cpp:1747"
+            ],
+            "evidence": "dosbox_lib_read_memory and dosbox_lib_write_memory now check `size > g_context->memory.size || address > g_context->memory.size - size`, which cannot wrap, instead of the prior address+size form. Confirmed fixed at HEAD.",
+            "effort": "S",
+            "recommendation": "No action needed; close prior H6. Keep the subtraction-form pattern in any new bounds checks.",
+            "status": "resolved",
+            "existing_audit_ref": "H6"
+          },
+          {
+            "id": "sec-08",
+            "title": "HashMode::Full still omits VGA registers/VRAM and device state",
+            "severity": "low",
+            "files": [
+              "engine/src/misc/state_hash.cpp:300-305"
+            ],
+            "evidence": "HashMode::Full now hashes all conventional RAM (builder.update(ctx->memory.base, ctx->memory.size)) — an improvement over the prior 'FULL_MODE' marker — but the in-code comment confirms VGA registers/VRAM and device state are still not hashed ('VGA and device state will be added in Phase B serialization'). The header's documented contract is closer but not yet met.",
+            "effort": "M",
+            "recommendation": "Extend HashMode::Full to hash VGA registers/VRAM and device state, or narrow the documented contract until then.",
+            "status": "confirmed-open",
+            "existing_audit_ref": "H7"
+          }
+        ],
+        "sprint_recommendations": [
+          "Harden the shared-memory boundary: clamp/validate all consumer-side framebuffer and audio geometry against the mapped region size, and add response-type + sequence-id matching plus an event queue in the proxy (SEC-01, SEC-02) — these are the directly exploitable items reachable from a compromised engine host.",
+          "Authenticate and lock down IPC endpoints: peer-credential checks, FILE_FLAG_FIRST_PIPE_INSTANCE / PIPE_REJECT_REMOTE_CLIENTS / owner-only DACLs, O_EXCL on SHM, unguessable per-launch names, and a handshake nonce (SEC-03).",
+          "Fuzz the IPC surface: byte-level libFuzzer targets for MessageCodec + dispatch() and for each proxy-side Resp::deserialize, wired into the existing CI fuzz job (SEC-04).",
+          "Make GPL isolation a verifiable guarantee: add the REQ-ISO-016 symbol-isolation CI gate, crash detection/recovery, finish the SHM write path, and reconcile TODO/roadmap status with the shipped code (SEC-05)."
+        ]
+      },
+      "verified": [
+        {
+          "id": "sec-01",
+          "verdict": {
+            "isReal": false,
+            "confidence": "high",
+            "note": "Verified all cited lines; code descriptions are accurate but the claimed high-severity trusted-shell OOB does not hold up. (1) Framebuffer: the memcpy at src/legends_proxy/proxy_api.cpp:230 is guarded by `if (buffer && buffer_size >= frame->pixels.size())`. The finding's exact scenario (host sets current_width=current_height=0xFFFF -> pixel_bytes~17GB, caller buffer \"sized only for max_w*max_h*4\"~8MB) makes the guard FALSE, so the memcpy is SKIPPED -> no OOB. An OOB would require the caller to pass a destination buffer LARGER than max_w*max_h*4, the opposite of the cited trigger; the finding omits this guard. (2) Audio: trust direction is inverted. proxy_connection.cpp:24-29 shows the trusted proxy/shell CREATES both SHM regions (\"server side creates them\") with channels=2, capacity=audio_ring_frames(2048); create() rejects channels==0/capacity==0 (audio_ring.cpp:21). For audio, create sets header fields BEFORE map_pointers (audio_ring.cpp:32-41), so the consumer caches channels_=2,capacity_=2048 at creation, before the engine connects. pop() (only trusted-shell consumer, proxy_api.cpp:315) uses these CACHED members, NOT live header fields, so a malicious engine writing channels=0 or inflated capacity into SHM cannot reach the proxy: no divide-by-zero (divides by 2), and ri%capacity_ stays within the proxy-sized samples_ array (avail clamped to capacity_, to_read clamped to caller buffer). push() runs in the untrusted engine's own process, not the trusted shell. (3) buf_size_ derives from max_width/max_height which are proxy-written (trusted), not attacker-controlled. Production wiring: FramebufferShm::open/AudioRingBuffer::open/begin_write/end_write have no production callers (only benchmarks/tests); only read_if_new and pop are trusted-shell consumers. Residual minor gap: read_if_new lacks a current<=max clamp and *size_out can return an inflated value (proxy_api.cpp:227) -- worth hardening as defense-in-depth, but not the exploitable high OOB claimed. Files: src/legends_ipc/framebuffer_shm.cpp:74-92,9-15; src/legends_ipc/audio_ring.cpp:10-16,21,32-41,63-110; src/legends_proxy/proxy_api.cpp:222-232,309-317; src/legends_proxy/proxy_connection.cpp:24-29."
+          }
+        },
+        {
+          "id": "sec-05",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "VERIFIED — every cited line and every sub-claim checks out; severity high is justified. (1) Citations accurate: ci.yml:93-127 linux-ipc job builds with -DLEGENDS_USE_IPC=ON and its only isolation \"verification\" is `test -f build/legends_engine_host` plus generic ctest — no symbol scan step. CMakeLists.txt:372-434 defines legends_engine_host (links GPL legends_core) and legends_proxy (MIT, links only legends_ipc). roadmap.md:3319-3332 marks REQ-ISO-003..016 all \"Missing\"; TODO.md:19 says GPL isolation is \"STUB, 2 of 16\" — yet the serialization lib, control channel, SHM framebuffer, audio ring, host exe, proxy lib, compile switch, and CI job all exist, so docs understate the code exactly as claimed. (2) Attempted refutations failed. (a) Symbol scan: a scanner DOES exist (scripts/verify_gpl_isolation.py, cmake/VerifyGPLIsolation.cmake, tests/scripts/test_verify_gpl_isolation.py) — but VerifyGPLIsolation.cmake is never include()d in any CMakeLists (grep of all *.cmake/CMakeLists.txt: only self-reference in its own usage comment), the script is invoked by no CI workflow, and its self-test is not registered in CTest. Worse, CMakeLists.txt:362 asserts \"verified by REQ-ISO-003 and REQ-ISO-016\" — an assertion that never executes. So the enforcement gap is real and slightly worse than stated (assurance exists as dead code). (b) Crash detection: HeartbeatMonitor (src/legends_proxy/heartbeat.cpp) and CrashHandler (crash_handler.cpp, with restart()) are implemented and unit-tested (tests/unit/test_heartbeat.cpp, test_crash_handler.cpp), but grep shows zero instantiation in proxy_api.cpp/proxy_connection.cpp — not wired into the production connection lifecycle; also HeartbeatMonitor::heartbeat_loop returns permanently after one timeout. (c) SHM write path: proxy_connection.cpp:25-28 CREATEs FramebufferShm/AudioRingBuffer, but engine_host main.cpp only #includes the headers (lines 9-10) and never calls FramebufferShm::open/AudioRingBuffer::open; engine_dispatcher.cpp (~45 message handlers, the only other host logic) never touches SHM, and no CaptureFramebuffer message exists — so video/audio cannot flow in IPC mode. Host CLI requires --shm but the value is parsed and never used to map memory. (3) Severity: high is fair — the GPL-compliance guarantee is the legal core of the IPC architecture, the codebase claims verification that never runs, and CI's existence-check gives false assurance. Only softening factor: IPC mode is an opt-in build (not necessarily the shipped default), and the structural mechanism (proxy links only MIT legends_ipc) is sound plumbing; the finding itself already frames this correctly as \"missing half is assurance, not plumbing.\""
+          }
+        }
+      ]
+    },
+    {
+      "role": "concurrency-determinism",
+      "report": {
+        "findings": [
+          {
+            "id": "conc-01",
+            "title": "C2 'fix' is vacuous: library build links no-op PIC_RunQueue stub; no timer ticks or IRQ delivery during any legends step",
+            "severity": "critical",
+            "status": "confirmed-open",
+            "existing_audit_ref": "C2",
+            "files": [
+              "C:/projectLegends/engine/src/misc/cpu_bridge.cpp:112-119",
+              "C:/projectLegends/engine/src/cpu/cpu_library_stubs.cpp:53-60",
+              "C:/projectLegends/engine/CMakeLists.txt:198",
+              "C:/projectLegends/CMakeLists.txt:201-203"
+            ],
+            "evidence": "cpu_bridge.cpp:113 calls PIC_RunQueue() labeled '(C2 fix)', but AIBOX_CORE_SOURCES compiles cpu_library_stubs.cpp whose PIC_RunQueue is 'Stub: no PIC event queue in library mode yet' returning false; hardware/pic.cpp appears in no CMake target; legends_core links aibox_core. TIMER_AddTick is never called on the step path, so PIT/keyboard IRQs and per-ms handlers never fire and events_processed is always 0. CPU_Check_NMI does resolve to the real cpu.cpp:635 implementation. Latent bug: real PIC_RunQueue does CPU_CycleLeft+=CPU_Cycles; CPU_Cycles=0, which would corrupt the bridge's consumed=budget-CPU_Cycles accounting (cpu_bridge.cpp:110-130) when integrated.",
+            "effort": "XL",
+            "recommendation": "Integrate a deterministic PIC/PIT event queue into library mode (compile pic.cpp behind DOSBOX_LIBRARY_MODE guards or build a minimal Scheduler.tla-conformant queue); restructure execute_cycles into per-ms slices (PIC_RunQueue -> decoder -> TIMER_AddTick) with corrected cycle accounting; serialize the queue in save states; make events_processed truthful."
+          },
+          {
+            "id": "conc-02",
+            "title": "Two unsynchronized thread_local context globals remain (aibox + dosbox layers)",
+            "severity": "medium",
+            "status": "confirmed-open",
+            "existing_audit_ref": "H2",
+            "files": [
+              "C:/projectLegends/engine/src/aibox/machine_context.cpp:20",
+              "C:/projectLegends/engine/src/misc/dosbox_context.cpp:65",
+              "C:/projectLegends/src/legends/legends_embed_api.cpp:1098-1101"
+            ],
+            "evidence": "Both thread_local g_current_context pointers still exist. Mitigated since Feb: legends_step_cycles now installs both dosbox::ContextGuard and legends::compat::ContextGuard for the full step scope including input draining; engine entry points install their own guards. Residual risk is non-step engine paths consulting aibox::compat::current() without the legends guard.",
+            "effort": "L",
+            "recommendation": "Either merge to a single TLS context pointer or add a debug assertion that both pointers reference the same logical instance whenever either compat::current() is consulted. Downgrade from high to medium given guard coverage."
+          },
+          {
+            "id": "conc-03",
+            "title": "Dead stub execution path still present: MachineContext::step()/run(), dosbox_step(), 7 init_* no-ops",
+            "severity": "low",
+            "status": "confirmed-open",
+            "existing_audit_ref": "H3",
+            "files": [
+              "C:/projectLegends/engine/src/aibox/machine_context.cpp:201-246",
+              "C:/projectLegends/engine/src/aibox/machine_context.cpp:376-418",
+              "C:/projectLegends/engine/src/misc/dosbox_context.cpp:973-1007"
+            ],
+            "evidence": "MachineContext::step() is still a counter-incrementing no-op, now with a DEPRECATED(M10) banner; run() busy-loops on it. dosbox_step() carries the same banner and its only callers are engine/tests/unit/test_dosbox_context.cpp:382,404. The 7 init stubs (H4) return Ok() immediately, documented as 'intentional no-ops' delegating to the engine bridge. Covers prior H3, H4, and M10 jointly: quarantined and documented but not removed; the stub still silently reports success.",
+            "effort": "M",
+            "recommendation": "Delete MachineContext::step()/run(), dosbox_step(), the 7 init stubs and their forward-declared phantom classes; port the two unit tests to dosbox_lib_step_cycles. Closes H3/H4/M10 permanently."
+          },
+          {
+            "id": "conc-04",
+            "title": "Reentrancy guard extended to core APIs but missing on mount/unmount, joystick, and Phase-3 setters",
+            "severity": "medium",
+            "status": "confirmed-open",
+            "existing_audit_ref": "M1",
+            "files": [
+              "C:/projectLegends/src/legends/legends_embed_api.cpp:1010",
+              "C:/projectLegends/src/legends/legends_embed_api.cpp:2755",
+              "C:/projectLegends/src/legends/legends_embed_api.cpp:2819",
+              "C:/projectLegends/src/legends/legends_embed_api.cpp:2906"
+            ],
+            "evidence": "in_step is now checked in reset, step_cycles, key_event, key_event_ext, text_input, mouse_event, save_state, load_state (lines 1010, 1076, 1509, 1527, 1544, 1599, 1854, 2287) with a scope guard clearing on all exits. Mutating APIs added since lack it: legends_mount_drive (2755), legends_unmount_drive (2819), legends_joystick_event (2906), midi/printer/ipx/glide/pc98 setters (2959-3155). TLA ReentrancyMinimal PhaseConsistent/CallbackSafe remain PARTIAL.",
+            "effort": "S",
+            "recommendation": "Add the one-line in_step check to every remaining state-mutating API; add a callback-reentrancy unit test that exercises mount and joystick from a log callback."
+          },
+          {
+            "id": "conc-05",
+            "title": "MixerState/audio thread safety substantially fixed in library mode, but conformance is partly vacuous (no audio is ever produced)",
+            "severity": "medium",
+            "status": "confirmed-open",
+            "existing_audit_ref": "M3",
+            "files": [
+              "C:/projectLegends/engine/include/dosbox/dosbox_context.h:458-459",
+              "C:/projectLegends/engine/src/platform/headless/buffer_audio.cpp:60-63",
+              "C:/projectLegends/src/pal/sdl2/audio_sink_sdl2.cpp:275-279",
+              "C:/projectLegends/engine/src/aibox/headless_stub.cpp:270-276"
+            ],
+            "evidence": "MixerState ring indices are now std::atomic; BufferAudio is mutex-protected; the PAL SDL2 sink uses a correct acquire/release SPSC ring. Residual races: BufferAudio::push_samples reads is_open_/paused_ before locking and pause() writes paused_ unlocked; the SDL2 audio callback reads non-atomic volume_. Critically, aibox::headless::PushAudioSamples has zero production callers (tests only) and nothing pushes into buffer_audio(), so dosbox_lib_get_audio_samples always returns 0 samples — the ThreadSafety invariant is satisfied largely because no audio callback thread exists in library mode.",
+            "effort": "M",
+            "recommendation": "Fix the two residual benign races (atomic flags/volume); when mixer output is wired into library mode, drive per-ms mixing from virtual step time, not the SDL callback clock, to preserve determinism."
+          },
+          {
+            "id": "conc-06",
+            "title": "dosbox_lib_get_context_ptr now enforces LIB_CHECK_THREAD",
+            "severity": "low",
+            "status": "resolved",
+            "existing_audit_ref": "M7",
+            "files": [
+              "C:/projectLegends/engine/src/misc/dosbox_library.cpp:655-666"
+            ],
+            "evidence": "Function now begins with LIB_VALIDATE_HANDLE, LIB_CHECK_THREAD() (line 660), null-pointer and init checks. Closes the ThreadingMinimal CoreSingleThreaded/WrongThreadBlocked partial conformance from TLA_CONFORMANCE.md section 3.",
+            "effort": "S",
+            "recommendation": "Mark resolved in AUDIT.md and TLA_CONFORMANCE.md; no further action."
+          },
+          {
+            "id": "conc-07",
+            "title": "Determinism verification hash (Fast mode) excludes CPU GPRs/EIP/EFLAGS and all RAM/VRAM contents",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:/projectLegends/engine/src/misc/dosbox_library.cpp:684",
+              "C:/projectLegends/engine/src/misc/state_hash.cpp:300-305",
+              "C:/projectLegends/engine/src/misc/dosbox_context.cpp:103-130",
+              "C:/projectLegends/src/legends/legends_embed_api.cpp:2629-2696"
+            ],
+            "evidence": "dosbox_lib_get_state_hash uses HashMode::Fast. CpuState::hash_into hashes only cycle counters and NMI/halted flags — no GPRs/EIP/segments (those live in global cpu_regs, only captured by snapshot_cpu_gprs during save_state). MemoryState::hash_into hashes metadata only ('We do NOT hash the actual memory contents in Fast mode'); RAM is Full-mode only and nothing calls Full. legends_verify_determinism and all hash-comparing determinism tests (test_determinism_at_scale.cpp:78-127, determinism_harness.h:93-97) therefore cannot detect divergence in registers or memory — the most likely real divergence. TLA_CONFORMANCE marks TraceDeterminism CONFORMANT, which is overstated.",
+            "effort": "M",
+            "recommendation": "Add GPR/EIP/EFLAGS/segment state to the Fast hash (snapshot_cpu_gprs helper already exists); run determinism CI tests with a Full-mode hash including RAM/VRAM; correct the TraceDeterminism rating until done."
+          },
+          {
+            "id": "conc-08",
+            "title": "legends_joystick_event mutates guest RAM then returns LEGENDS_ERR_NOT_SUPPORTED; bypasses in_step guard and deterministic input queue",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:/projectLegends/src/legends/legends_embed_api.cpp:2906-2956"
+            ],
+            "evidence": "Function writes joystick axis/button state directly into guest BDA memory via dosbox_lib_write_memory (lines 2938, 2953) and then 'return LEGENDS_ERR_NOT_SUPPORTED;' (line 2955) — error returned after successful mutation, violating the error model (REQ-EX-004 / ErrorModel SuccessRequiresValidState). It also lacks the in_step reentrancy check that key/mouse have, and bypasses the sequenced input queue drained at step start, so joystick input is unordered relative to key/mouse for replay and invisible to the determinism hash. Appears to be a collision between commit 7f86dd7 (stubs return NOT_SUPPORTED) and 4b4c43b (real joystick bridge).",
+            "effort": "S",
+            "recommendation": "Return LEGENDS_OK on success, add the in_step guard, and route joystick through the input queue as a third InputEventType so replay ordering and hashing cover it."
+          },
+          {
+            "id": "conc-09",
+            "title": "IPC proxy never matches responses by sequence_id or msg_type; one recv timeout permanently desynchronizes the protocol",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:/projectLegends/src/legends_proxy/proxy_connection.h:39-45",
+              "C:/projectLegends/src/legends_proxy/proxy_connection.cpp:74-88",
+              "C:/projectLegends/src/engine_host/main.cpp:94-96",
+              "C:/projectLegends/src/legends_proxy/heartbeat.cpp:36-72"
+            ],
+            "evidence": "ProxyConnection::request<Resp> deserializes whatever message arrives next; send_and_recv sends with a fresh sequence_id (line 80) then recv(5000) hardcoded (line 85) without comparing header.msg_type or sequence_id, even though the engine host echoes sequence_id (main.cpp:94-96). A step_ms or save_state exceeding 5s times out, leaves the late response in the pipe, and every subsequent RPC reads the wrong (off-by-one) response, silently misdeserialized. The dormant HeartbeatMonitor sends on the same channel from its own thread without the connection mutex — a second desync source if ever wired.",
+            "effort": "M",
+            "recommendation": "Loop recv discarding mismatched sequence_ids, verify response msg_type against Resp::type, treat timeout as channel-desync requiring drain/reconnect, make timeouts per-operation, and route heartbeats through the connection mutex."
+          },
+          {
+            "id": "conc-10",
+            "title": "Cross-process audio ring violates SPSC: writer mutates read_index on overflow, racing the reader's read-modify-write",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:/projectLegends/src/legends_ipc/audio_ring.cpp:71-80",
+              "C:/projectLegends/src/legends_ipc/audio_ring.cpp:86-110",
+              "C:/projectLegends/src/legends_ipc/audio_ring.cpp:10-16"
+            ],
+            "evidence": "push() advances and stores read_index when full (lines 73-74) while pop() does an unconditional store of its stale local ri (line 108) — lost updates cause re-read of overwritten frames, duplicated/torn audio, and miscomputed availability. Indices are modded by capacity so memory safety holds. Additionally open()/map_pointers trusts capacity_frames/channels from the shared header; a zero value makes 'wi % capacity_' divide by zero in the embedder process.",
+            "effort": "S",
+            "recommendation": "Writer must never touch read_index: drop incoming frames when full (or CAS read_index for drop-oldest); validate header capacity/channels against expected values on open()."
+          },
+          {
+            "id": "conc-11",
+            "title": "TSan is allow_failure in CI with known, named data races (g_active_instance, CrashBreadcrumb::add)",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:/projectLegends/.github/workflows/ci.yml:347-355"
+            ],
+            "evidence": "CI comment: 'TSan detects pre-existing data races in engine global state (g_active_instance), CrashBreadcrumb::add(), and cross-thread tests... Mark allow-failure until REQ-TH-004 mixer/global state fixes land.' The mixer fixes (M3) substantially landed but allow_failure:true remains, so new concurrency regressions merge silently and the named races are untriaged in any audit doc.",
+            "effort": "M",
+            "recommendation": "Triage remaining TSan reports, suppress only the intentional wrong-thread tests, fix the named races, remove allow_failure so the sanitizer gates merges."
+          },
+          {
+            "id": "conc-12",
+            "title": "TLA_CONFORMANCE.md stale: 4 of 5 non-conformant invariants fixed at HEAD but undocumented; legends event queue is vestigial; memory_kb still unvalidated",
+            "severity": "low",
+            "status": "new",
+            "files": [
+              "C:/projectLegends/TLA_CONFORMANCE.md:1-343",
+              "C:/projectLegends/src/legends/legends_embed_api.cpp:79-82",
+              "C:/projectLegends/src/legends/legends_embed_api.cpp:1554-1559",
+              "C:/projectLegends/src/legends/internal/instance_state.h:332-342"
+            ],
+            "evidence": "At HEAD: HandleConsistency and NullHandleConsistent fixed (get_instance strict handle match); BufferNotCorrupted fixed (transactional text_input slot pre-check); cpu_cycles range-validated (841-847) though memory_kb still flows unchecked into memory_size (line 871) and audio_rate is absent; MixerState largely fixed. The doc (dated 2026-02-24) reports all five as NON-CONFORMANT. Conversely EventCount/EventDigestPreserved are vacuous: EventQueueState has no producer anywhere — only serialized (1921-1928), restored (2205, 2480), and hashed (2618-2623), always empty.",
+            "effort": "S",
+            "recommendation": "Re-baseline TLA_CONFORMANCE.md against HEAD with file:line anchors; validate memory_kb range in legends_create; either wire the event queue to real scheduled events (with conc-01) or delete it."
+          },
+          {
+            "id": "conc-13",
+            "title": "IPC runtime parity gap: shared-memory framebuffer/audio regions have no producer in engine_host; IPC capture_rgb silently returns empty",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:/projectLegends/src/legends_proxy/proxy_api.cpp:214-233",
+              "C:/projectLegends/src/engine_host/engine_dispatcher.cpp:82-111",
+              "C:/projectLegends/src/engine_host/main.cpp:9-10"
+            ],
+            "evidence": "The proxy's legends_capture_rgb reads the SHM framebuffer via fb->read_if_new(0) and returns LEGENDS_OK with 0 bytes when empty; ProxyConnection::connect creates both SHM regions. On the host side FramebufferShm/AudioRingBuffer are only #included in main.cpp — the 43-case dispatcher never opens or writes either region, and step handlers do not publish frames. InProcess vs Ipc runtimes therefore diverge observably (silent success with no data) — the successor to M10's dual-path divergence, one layer up. TODO.md GPL Process Isolation is 2/16, so likely known-incomplete, but the silent-success failure mode is unrecorded.",
+            "effort": "M",
+            "recommendation": "Publish framebuffer (and audio) into SHM after each step in the engine host loop with a sequence bump; until then, return LEGENDS_ERR_NOT_SUPPORTED from IPC capture_rgb rather than empty success; add a proxy-parity integration test comparing both runtimes."
+          }
+        ],
+        "role": "Concurrency, determinism & TLA+ conformance auditor",
+        "summary": "Thread discipline has genuinely improved since the 2026-02-24 audit: M7 is resolved, the handle-fallback (H5-class) and text_input non-conformances are fixed, the in_step guard now covers the core mutating APIs, and 4 of 5 NON-CONFORMANT TLA+ invariants are closed at HEAD — though TLA_CONFORMANCE.md was never re-baselined. The determinism story is weaker than documented: the headline C2 'fix' is vacuous because the library build links a no-op PIC_RunQueue stub (the real PIC is in no CMake target), so no timer ticks or IRQs ever fire during legends steps; the SHA-256 determinism oracle (Fast hash) excludes CPU GPRs/EIP and all RAM, blinding verify_determinism and the at-scale tests to the most likely divergence; and the legends event queue that the hash and save format cover is never populated. The newer IPC runtime adds protocol fragility (no response sequence/type matching, SPSC violation in the audio ring, SHM with no producer), and TSan remains allow-failure in CI with known races named in a comment. Single-owner-thread enforcement, input-queue ordering, and the fixed ms-to-cycles ratio are solid foundations; device-time integration and an honest oracle are the missing halves of the determinism promise.",
+        "health_grade": "C",
+        "sprint_recommendations": [
+          "Make time real: integrate a deterministic PIC/PIT event queue into library mode, restructure execute_cycles into per-ms slices (PIC_RunQueue -> decoder -> TIMER_AddTick) with corrected CPU_Cycles/CPU_CycleLeft accounting, serialize the queue in save states, and make Scheduler/PIC TLA specs testable (closes C2 for real).",
+          "Trustworthy oracle: add GPRs/EIP/EFLAGS/segments to the Fast state hash and run determinism CI with Full-mode (RAM+VRAM) hashing; fix legends_joystick_event (error code, in_step guard, route through input queue); delete or wire the vestigial EventQueueState; re-baseline TLA_CONFORMANCE.md.",
+          "IPC protocol robustness: sequence/type matching and timeout-desync recovery in ProxyConnection, SPSC-correct audio ring, framebuffer/audio producers in engine_host after each step, heartbeat wired through the connection mutex.",
+          "Green TSan: fix the named g_active_instance and CrashBreadcrumb::add races plus residual BufferAudio/volume_ nits, suppress intentional wrong-thread tests, and remove allow_failure from the TSan CI job so concurrency regressions gate merges."
+        ]
+      },
+      "verified": [
+        {
+          "id": "conc-07",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified all four citations directly; every claim holds. (1) dosbox_library.cpp:684: dosbox_lib_get_state_hash hard-codes dosbox::HashMode::Fast. (2) state_hash.cpp:300-305: RAM contents hashed only under `if (mode == HashMode::Full)`; in-code comment says VGA/device state \"will be added in Phase B\" even for Full. (3) dosbox_context.cpp:103-130: CpuState::hash_into hashes only cycle counters, auto-adjust flags, NMI flags, extflags_toggle, halted — no GPRs/EIP/EFLAGS/segments; those live in global cpu_regs/Segs and are read only by snapshot_cpu_gprs (cpu_bridge.cpp:166-179), invoked solely from the save_state path (dosbox_library.cpp:964), never from hashing. MemoryState::hash_into (dosbox_context.cpp:685-714) hashes layout metadata only, with explicit comment \"We do NOT hash the actual memory contents in Fast mode\". (4) legends_embed_api.cpp:2629-2696: legends_verify_determinism compares legends_get_state_hash outputs; that function (2552-2627) wraps the Fast engine hash plus input-queue/time/PIC/event-queue metadata — still no registers or RAM. Refutation attempts failed: grep shows HashMode::Full is called only by two unit tests checking hash-mode distinctness (test_dosbox_state_hash.cpp, test_dosbox_timing.cpp), never by any determinism verification path; determinism tests (tests/unit/test_determinism_at_scale.cpp:41-46, 78-127 via legends_get_state_hash; engine/tests/determinism/determinism_harness.h:93-97 via dosbox_lib_get_state_hash) all compare the Fast hash; the only full-buffer comparison test (test_portable_serialize.cpp DMAStateRoundTrip) is a save/load/save serialization check, not cross-run determinism, so it does not mitigate. TLA_CONFORMANCE.md:110 indeed marks TraceDeterminism CONFORMANT citing these tests. Severity high is justified for a project whose core claim is verified determinism: the verification hash is blind to architectural CPU state and all RAM/VRAM, so register- or memory-level divergence with matching cycle counts passes every determinism check (a false-negative verification gap, not runtime corruption). Minor nit only: \"nothing calls Full\" should read \"no determinism path calls Full\" — two hash-mode unit tests do call it."
+          }
+        },
+        {
+          "id": "conc-09",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified against source; could not refute. (1) Cited lines accurate: proxy_connection.h:41-44 request<Resp> blindly deserializes the next decoded message; proxy_connection.cpp:80-87 sends with fresh seq then recv(5000) hardcoded, never comparing header.sequence_id or msg_type (the proxy never reads seq from any response — grep confirms seq only appears on the send side); engine_host/main.cpp:94-96 and 85-87 echo sequence_id, so matching is possible but unused. (2) Desync mechanism confirmed one layer down: control_channel_win.cpp:156-181 recv feeds a persistent codec_ buffer and returns Timeout without discarding, so a late response is decoded by the next recv — permanent off-by-one thereafter. No mitigation exists: proxy_api.cpp maps timeout to an error code and continues on the same connection; no drain/resync/reconnect logic or tests anywhere (grep for desync/resync/drain). 'Silently misdeserialized' holds: messages.cpp deserializers check only minimum size, and many responses (incl. ErrorResponseMsg) share the identical 4-byte error_code layout. (3) Trigger plausible: engine_dispatcher.cpp:82-94 passes uncapped caller-controlled ms to legends_step_ms; SaveStateReq (503-523) serializes full state; VerifyDeterminism runs arbitrary test_cycles — any can exceed the fixed 5s budget. (4) Heartbeat claim accurate and fairly hedged: heartbeat.cpp:48-49 sends on the shared channel without the connection mutex, and HeartbeatMonitor is never instantiated (dormant). High severity justified: one slow RPC yields silent wrong results (step results, state hashes, save/load) on all subsequent calls in a project that documents determinism guarantees. Minor doc nit: control_channel.h:41 claims timeout returns BufferTooSmall but impl returns Timeout."
+          }
+        }
+      ]
+    },
+    {
+      "role": "build-ci",
+      "report": {
+        "role": "Build system & CI auditor",
+        "summary": "The build/CI machinery has unusual breadth (4-sanitizer matrix, libFuzzer, 17 TLA+ checks, coverage with an 80% release gate, configure-time module-DAG verification, CPack for 3 platforms, centralized dependency pins), but enforcement collapsed one day before this audit: commit 6900e7a (2026-06-08) demoted sanitizers, fuzz, TLA+, static analysis, dependency scan, macOS, and SDL3 builds to nightly/manual-only, silently regressing prior-audit fixes H7/H8/M12 and contradicting ci.yml's own header and RELEASING.md. The flagship GPL-2.0 process-isolation promise has zero automated enforcement: VerifyGPLIsolation.cmake is never included anywhere and the DAG verifier hardcodes only 3 of 6 modules, skipping legends_ipc/legends_proxy/legends_engine_host. The release pipeline has never executed once (the repo has no git tags, so tag-gated packaging, NSIS/DMG, checksums, and the 80% coverage gate are all unexercised), and committed UTF-16 build logs show the maintainer's own Windows clang dev preset failing to compile and link on a toolchain no CI job covers. Prior findings L6 and L7 are resolved; L5 is narrowed but still open on Windows (hardcoded mingw32/SDL2 link against a nonexistent external/SDL2 tree).",
+        "health_grade": "C",
+        "findings": [
+          {
+            "id": "ci-01",
+            "title": "Quality gates demoted to nightly/manual: sanitizers, fuzz, TLA+, static analysis, dep-scan no longer run on PRs or merges (regresses H7/H8/M12); PR-fuzz step is unreachable dead code",
+            "severity": "high",
+            "status": "new",
+            "existing_audit_ref": "H7",
+            "files": [
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:333",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:474",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:503-513",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:554",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:740",
+              "C:\\projectLegends\\RELEASING.md:7"
+            ],
+            "evidence": "Commit 6900e7a (2026-06-08, 'Stabilize CI and RuntimeHost adoption') added `if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'` to the sanitizers, fuzz, tlaplus, static-analysis, and dependency-scan jobs. The fuzz job's 'PR: Quick fuzz (30s)' step requires `github.event_name == 'pull_request'`, which the job-level if excludes, so it can never run. ci.yml:8-12 and RELEASING.md:7,38 still claim merge-to-main runs sanitizers and that sanitizers/fuzz/TLA+ must pass before tagging. ci.yml:11 promises nightly soak, but no workflow sets LEGENDS_SOAK_ENABLED and cmake/SoakTestLabels.cmake referenced at CMakeLists.txt:1020-1024 does not exist. TSan/MSan remain allow_failure (ci.yml:351-365) since March with no exit plan.",
+            "effort": "M",
+            "recommendation": "Restore sanitizers + fuzz + TLA+ on push to master/main per the documented tiering; fix the job-level if so the 30s PR fuzz step is reachable; set a dated exit plan for TSan/MSan allow-failure; implement or delete the soak claim; update RELEASING.md to match reality."
+          },
+          {
+            "id": "ci-02",
+            "title": "GPL isolation is unenforced: VerifyGPLIsolation.cmake never included by any CMakeLists, and ModuleDAG verification skips legends_ipc/legends_proxy/legends_engine_host",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\cmake\\VerifyGPLIsolation.cmake:8",
+              "C:\\projectLegends\\cmake\\ModuleDAG.cmake:124",
+              "C:\\projectLegends\\cmake\\ModuleDAG.cmake:191-213",
+              "C:\\projectLegends\\cmake\\ModuleManifest.cmake:66-68",
+              "C:\\projectLegends\\CMakeLists.txt:361-362",
+              "C:\\projectLegends\\openspec\\changes\\phase-iso-process-isolation\\tasks.md:54"
+            ],
+            "evidence": "Grep for VerifyGPLIsolation across the repo finds no include() call — only the module itself, docs, and openspec. tasks.md:54 shows '[ ] 8.3 Linker verification: verify_gpl_isolation.py + CMake integration' unchecked. legends_verify_all_dags() (ModuleDAG.cmake:191-213) verifies only legends_core/legends_pal/aibox_core and legends_detect_cycles() hardcodes those 3 modules, while ModuleManifest.cmake:66-68 defines DAG entries for ipc/proxy/engine_host that nothing checks. The 'MUST NOT link GPL' constraints exist only as comments (CMakeLists.txt:361-362, 422-423). The only IPC CI job (linux-ipc) builds without PAL_BACKEND_SDL2/3, so project_legends (the target VerifyGPLIsolation instruments) would not exist even if included.",
+            "effort": "M",
+            "recommendation": "Extend legends_verify_all_dags to iterate every LEGENDS_DAG_* manifest entry; include VerifyGPLIsolation.cmake guarded on target existence; add an nm/verify_gpl_isolation.py CI step over liblegends_proxy.a and liblegends_ipc.a in linux-ipc asserting no aibox_*/legends_core symbols (mirror pal-ci.yml's SDL symbol firewall at lines 165-172)."
+          },
+          {
+            "id": "ci-03",
+            "title": "Release pipeline never exercised: zero git tags, so tag-gated packaging, CPack NSIS/DMG, checksums, and the 80% coverage release gate have never run; version always falls back",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:767-771",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:844-888",
+              "C:\\projectLegends\\cmake\\version.cmake:24",
+              "C:\\projectLegends\\cmake\\packaging.cmake:17-23",
+              "C:\\projectLegends\\RELEASING.md:23-52"
+            ],
+            "evidence": "`git tag -l` returns nothing. packaging (ci.yml:771) and release-validation (ci.yml:846) are gated on refs/tags/v*. release-validation enforces src/app coverage >= 80% via lcov/bc that has never been evaluated. version.cmake matches 'v[0-9]*' tags that cannot match, so every build uses the '1.0.0+<hash>' fallback (version.cmake:46), and CPACK_PACKAGE_VERSION would carry a '+' into NSIS. RELEASING.md documents a release branch/tag workflow that has never been performed.",
+            "effort": "M",
+            "recommendation": "Perform a release dry-run now: push a v0.9.0-rc.1 tag from a throwaway branch, let packaging and release-validation run end-to-end, fix the fallout (coverage threshold, cpack/NSIS, version string). Add workflow_dispatch to release-validation so it can be rehearsed without tags."
+          },
+          {
+            "id": "ci-04",
+            "title": "PRs targeting develop bypass the primary CI pipeline",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:22-23",
+              "C:\\projectLegends\\.github\\workflows\\pal-ci.yml:13-14",
+              "C:\\projectLegends\\RELEASING.md:5-10"
+            ],
+            "evidence": "ci.yml restricts pull_request to branches [main, master], and pal-ci.yml likewise, but RELEASING.md's branch model routes feature/* PRs into develop. Such PRs get only sprint2-checks (Python lint + one test job) and module-dag (whose build jobs are schedule-gated at module-dag.yml:127,160). The main build+test matrix runs only post-merge on push to develop.",
+            "effort": "S",
+            "recommendation": "Add develop to pull_request.branches in ci.yml and pal-ci.yml (or remove the branch filter) so feature PRs are gated before merge."
+          },
+          {
+            "id": "ci-05",
+            "title": "Dependency vulnerability scan is a no-op (osv-scanner fed a CMake file as a lockfile, errors swallowed) while roadmap marks REQ-SEC-028 'Done'",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:744-754",
+              "C:\\projectLegends\\roadmap.md:1470",
+              "C:\\projectLegends\\roadmap.md:3279"
+            ],
+            "evidence": "ci.yml runs `./osv-scanner --lockfile cmake/dependencies.cmake || true` — osv-scanner does not support CMake files as lockfiles, so the command always fails and is swallowed by `|| true` plus `continue-on-error: true`; the binary is fetched from releases/latest unpinned; the job only runs on schedule/dispatch. roadmap.md:1470 lists 'dependency scanning (REQ-SEC-028)' as Fully implemented and roadmap.md:3279 marks it Done.",
+            "effort": "S",
+            "recommendation": "Generate an SBOM (CycloneDX/SPDX) from the pinned dependency versions plus the vendored DOSBox-X fork and scan that; pin the scanner version; remove `|| true`; downgrade REQ-SEC-028 status to partial until the scan produces real signal."
+          },
+          {
+            "id": "ci-06",
+            "title": "No compiler caching and heavy workflow duplication: the 1M-line vendored engine is rebuilt cold up to ~12 times per push against 15-minute timeouts",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:39",
+              "C:\\projectLegends\\.github\\workflows\\pal-ci.yml:26-265",
+              "C:\\projectLegends\\.github\\workflows\\sprint2-checks.yml:81-108",
+              "C:\\projectLegends\\CIFix.md"
+            ],
+            "evidence": "No workflow configures ccache/sccache; the only actions/cache entries cover build/_deps/sdl3-* sources. ci.yml linux (x2 compilers), linux-ipc, windows, coverage, sprint2-checks multi-instance, pal-ci's seven ungated jobs, and module-dag each compile the full engine from scratch. ci.yml linux has timeout-minutes: 15. CIFix.md itself states CI is duplicated across the four workflows causing one root cause to appear as several failures.",
+            "effort": "M",
+            "recommendation": "Add ccache keyed on compiler+flags; consolidate pal-ci's always-on jobs into the main matrix or path-gate them; reduce sprint2-checks to its Python lint role (its full-test job duplicates the linux job)."
+          },
+          {
+            "id": "build-01",
+            "title": "Dependency pinning is mutable-tag-based, duplicated, and directly violated by pal-ci building SDL3 from upstream main; Actions not SHA-pinned",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\cmake\\dependencies.cmake:19-26",
+              "C:\\projectLegends\\engine\\CMakeLists.txt:327-330",
+              "C:\\projectLegends\\.github\\workflows\\pal-ci.yml:98",
+              "C:\\projectLegends\\DEPENDENCIES.md:16"
+            ],
+            "evidence": "All FetchContent pins are git tags (gsl-lite v1.0.0, SDL3 release-3.2.8, googletest v1.14.0, benchmark v1.8.3) with no SHA or URL_HASH; DEPENDENCIES.md:16 claims these make builds 'reproducible'. engine/CMakeLists.txt:330 hardcodes GIT_TAG v1.14.0 instead of using LEGENDS_DEP_GOOGLETEST_TAG (two declarations for the same dependency can drift). pal-ci.yml:98 does `git clone --depth 1 https://github.com/libsdl-org/SDL.git -b main` — unpinned upstream HEAD on every PAL push (recent 'Stabilize optional SDL backend CI' commits are consistent with chasing a moving SDL). Actions are tag-pinned (@v4/@v5) and osv-scanner comes from releases/latest.",
+            "effort": "M",
+            "recommendation": "Convert LEGENDS_DEP_*_TAG to commit SHAs (tag in comment/DEPENDENCIES.md); make engine consume the root pin variable; pin pal-ci's SDL3 build to release-3.2.8; SHA-pin third-party GitHub Actions."
+          },
+          {
+            "id": "build-02",
+            "title": "Committed UTF-16 build logs show the Windows clang dev preset failing to compile and link; that toolchain (and the presets' MinGW default) has zero CI coverage",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\build_log.txt",
+              "C:\\projectLegends\\build_output.txt",
+              "C:\\projectLegends\\CMakePresets.json:12",
+              "C:\\projectLegends\\CMakePresets.json:63-64"
+            ],
+            "evidence": "build_log.txt and build_output.txt (committed 2026-06-08 in 1dd76b4) record dev-preset failures: 'use of undeclared identifier gsl' at src/app/cli_parser.cpp:102/133 and ai_config.cpp:24 under LLVM clang on Windows, and legends_unit_tests.exe link failures (undefined legends_ipc::FramebufferShm::create, legends::CrashReporter::enable, legends::overlay::*). Only a CMake-side fix followed (a5e70ca); no CI job builds Windows clang/Ninja or the presets' default 'MinGW Makefiles' generator (Windows CI is MSVC-only, ci.yml:189-220). Presets also hardcode clang-18/gcc-13 Linux compiler names, and CI never invokes --preset, so presets and CI drift independently.",
+            "effort": "S",
+            "recommendation": "git rm both logs and .gitignore them; add a windows-latest LLVM-clang job exercising `cmake --preset dev` (or align presets with what CI tests); verify HEAD builds clean on the dev preset."
+          },
+          {
+            "id": "build-03",
+            "title": "Root CMake FORCE-overrides engine options: engine tests + GoogleTest are always built even with LEGENDS_BUILD_TESTS=OFF, and embedders cannot disable them",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\CMakeLists.txt:165-167",
+              "C:\\projectLegends\\engine\\CMakeLists.txt:323-339",
+              "C:\\projectLegends\\.github\\workflows\\module-dag.yml:107"
+            ],
+            "evidence": "CMakeLists.txt:165 does `set(AIBOX_BUILD_TESTS ON CACHE BOOL ... FORCE)` unconditionally (likewise AIBOX_HEADLESS/AIBOX_LIBRARY_MODE), independent of LEGENDS_BUILD_TESTS. Configs with tests off — module-dag's cmake-dag job (LEGENDS_BUILD_TESTS=OFF) and the tag packaging job — still FetchContent GoogleTest and compile the ~33k-line engine test suite; add_subdirectory consumers of this 'embeddable framework' cannot opt out.",
+            "effort": "S",
+            "recommendation": "Tie AIBOX_BUILD_TESTS to LEGENDS_BUILD_TESTS instead of FORCE ON; only force options that must be invariant for correctness."
+          },
+          {
+            "id": "build-04",
+            "title": "L5 residual: project_legends SDL2 target still unbuildable on Windows (hardcoded mingw32/SDL2main link, nonexistent external/SDL2 tree); src/main.cpp now exists and Linux SDL2 builds in CI",
+            "severity": "low",
+            "status": "confirmed-open",
+            "existing_audit_ref": "L5",
+            "files": [
+              "C:\\projectLegends\\CMakeLists.txt:1189",
+              "C:\\projectLegends\\CMakeLists.txt:1162",
+              "C:\\projectLegends\\CMakeLists.txt:1167",
+              "C:\\projectLegends\\.github\\workflows\\pal-ci.yml:53-79"
+            ],
+            "evidence": "src/main.cpp exists at HEAD (it did not at the 2026-02-24 audit) and pal-ci's sdl2-tests job builds the SDL2 path on Linux via find_package(SDL2 REQUIRED). But on WIN32 the target still links `mingw32 SDL2main SDL2` (CMakeLists.txt:1189) and uses include/lib dirs under external/SDL2/ which does not exist (external/ contains only glad and stb), so any Windows SDL2 build (MSVC or MinGW) fails at link.",
+            "effort": "S",
+            "recommendation": "Replace the hardcoded WIN32 link line with SDL2::SDL2/SDL2::SDL2main imported targets and drop the phantom external/SDL2 paths, or delete the Windows SDL2 path and standardize on SDL3 for Windows."
+          },
+          {
+            "id": "build-05",
+            "title": "Hardening flags are configuration-blind: _FORTIFY_SOURCE=2 injected into -O0 Debug builds where it is inert and risks glibc #warning escalation under Tier A -Werror",
+            "severity": "low",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\CMakeLists.txt:85",
+              "C:\\projectLegends\\CMakeLists.txt:89-91",
+              "C:\\projectLegends\\CMakeLists.txt:121"
+            ],
+            "evidence": "legends_compile_options applies `-fstack-protector-strong -D_FORTIFY_SOURCE=2` unconditionally alongside `$<$<CONFIG:Debug>:-g -O0>`; Tier A targets add -Werror. _FORTIFY_SOURCE does nothing at -O0, glibc's features.h emits `#warning _FORTIFY_SOURCE requires compiling with optimization` in that case (Debug Linux jobs: linux-ipc, all sanitizer presets), and explicit =2 can collide with Ubuntu's default =3. The committed build_log.txt shows the flag also being passed on Windows where the CRT ignores it.",
+            "effort": "S",
+            "recommendation": "Gate the define: `$<$<NOT:$<CONFIG:Debug>>:-D_FORTIFY_SOURCE=2>` and restrict to glibc/GNU-CRT platforms."
+          },
+          {
+            "id": "build-06",
+            "title": "Warning policy weaker than documented: test targets opt out of -Werror despite 'tests should be strict too', header-guard CI check cannot fail, clang-tidy warnings unbounded",
+            "severity": "low",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\CMakeLists.txt:776",
+              "C:\\projectLegends\\CMakeLists.txt:811-813",
+              "C:\\projectLegends\\CMakeLists.txt:1006-1008",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:414-422",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:452-465"
+            ],
+            "evidence": "Comment at CMakeLists.txt:776 says 'Tier A - tests should be strict too' but legends_unit_tests gets -Wno-error on GCC/Clang (:811-813) and legends_integration_tests likewise (:1006-1008); committed build_output.txt shows engine tests emitting ignored-[[nodiscard]] warnings. The abi-check header-guard step only echoes WARNING lines and always exits 0. The clang-tidy job fails only on 'error:' lines, so modernize/bugprone/performance findings accumulate untracked.",
+            "effort": "M",
+            "recommendation": "Burn down test-target nodiscard warnings and remove -Wno-error; make the header-guard check exit non-zero; record a clang-tidy warning-count baseline that may only decrease."
+          },
+          {
+            "id": "build-07",
+            "title": "L6 resolved: check_gsl_lite_usage.py exclusion list now covers build_test and _deps",
+            "severity": "low",
+            "status": "resolved",
+            "existing_audit_ref": "L6",
+            "files": [
+              "C:\\projectLegends\\scripts\\check_gsl_lite_usage.py:207"
+            ],
+            "evidence": "exclude_dirs at line 207 now reads ['build', 'build_test', 'cmake-build', 'third_party', 'vendor', 'external', '_deps']; fixed in commit 1bdf92b (2026-02-24). Residual nit: exact path-component matching misses names like cmake-build-debug, but presets standardize on build/<preset>.",
+            "effort": "S",
+            "recommendation": "Close L6. Optionally switch to prefix matching (part.startswith('build') / 'cmake-build') to cover IDE build dirs."
+          },
+          {
+            "id": "build-08",
+            "title": "L7 resolved: requirements-dev.txt declares pyyaml; CI still installs ad hoc rather than from the file",
+            "severity": "low",
+            "status": "resolved",
+            "existing_audit_ref": "L7",
+            "files": [
+              "C:\\projectLegends\\requirements-dev.txt",
+              "C:\\projectLegends\\.github\\workflows\\sprint2-checks.yml:42"
+            ],
+            "evidence": "requirements-dev.txt exists at the root containing 'pyyaml>=6.0' (added in 1bdf92b). Verified pyyaml is the only non-stdlib import across scripts/*.py (check_globals.py:21, check_migration_status.py:18, both with graceful ImportError messages). sprint2-checks.yml:42 still runs `pip install pyyaml` directly instead of `pip install -r requirements-dev.txt`, so the file is not exercised by CI and could rot.",
+            "effort": "S",
+            "recommendation": "Close L7. Switch the CI install step to `pip install -r requirements-dev.txt` so the declared file is the single source of truth."
+          }
+        ],
+        "sprint_recommendations": [
+          "Re-arm the quality gates: revert the 6900e7a demotions so sanitizers, fuzz (60s), and TLA+ run on push to master; fix the unreachable PR-fuzz step; add develop to pull_request branches in ci.yml/pal-ci.yml; set a dated exit plan for TSan/MSan allow-failure; implement or delete the nightly-soak claim; realign RELEASING.md with actual CI behavior.",
+          "Mechanically enforce GPL isolation: extend legends_verify_all_dags to all six manifest modules, wire VerifyGPLIsolation.cmake into IPC builds, add an nm/verify_gpl_isolation.py firewall over liblegends_proxy.a and liblegends_ipc.a in the linux-ipc job, and add a Windows IPC (engine_host + proxy) build job — the project's central legal promise currently rests on comments.",
+          "Release dry-run: push a v0.9.0-rc.1 tag from a throwaway branch to execute packaging, CPack NSIS/DMG/TGZ, checksum generation, and the never-run 80% coverage release gate end-to-end; make release-validation workflow_dispatchable; fix version-string fallback ('1.0.0+hash') and cpack fallout before v1.0 pressure.",
+          "Supply-chain and build hygiene: SHA-pin FetchContent deps and GitHub Actions, de-duplicate the GoogleTest pin in engine/CMakeLists.txt, stop building SDL3 from upstream main in pal-ci, replace the osv-scanner lockfile no-op with an SBOM-based scan, add ccache and consolidate the four overlapping workflows, delete committed build_log.txt/build_output.txt, and un-FORCE AIBOX_BUILD_TESTS for embedders."
+        ]
+      },
+      "verified": [
+        {
+          "id": "ci-02",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified all cited evidence directly. (1) cmake/VerifyGPLIsolation.cmake:8 documents 'include(VerifyGPLIsolation)' usage but repo-wide grep finds no include() call in any CMake file — only the module itself, audit docs, and an openspec spec example. (2) ModuleDAG.cmake:124 hardcodes MODULES to legends_core/legends_pal/aibox_core and legends_verify_all_dags (191-213) verifies only those 3 targets, while ModuleManifest.cmake:63-68 defines LEGENDS_DAG_ entries for legends_ipc/legends_proxy/legends_engine_host that nothing checks (legends_verify_dag never called on them anywhere). (3) The GPL constraints at CMakeLists.txt:361-362 and 422-423 are comments only. (4) tasks.md:54 confirms unchecked '8.3 Linker verification: verify_gpl_isolation.py + CMake integration'. (5) No mitigation elsewhere: the linux-ipc CI job (ci.yml:95-127) builds with LEGENDS_USE_IPC=ON but no PAL backend and has no nm/symbol step; project_legends is guarded by if(PAL_BACKEND_SDL2) at CMakeLists.txt:1151, so even if VerifyGPLIsolation were included it would be a no-op in that job; tests/scripts/test_verify_gpl_isolation.py only tests the script on synthetic map files and is not registered in ctest or any workflow. (6) pal-ci.yml:165-172 SDL symbol firewall exists exactly as cited as the pattern to mirror. Severity high is justified: a stray target_link_libraries(legends_proxy legends_core) would pass configure and all CI silently, defeating the project's central GPL-isolation promise. Finding could not be refuted on any point."
+          }
+        },
+        {
+          "id": "ci-03",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified, finding holds. (1) Zero tags confirmed three ways: `git tag -l` empty, `git ls-remote --tags origin` empty, `gh api repos/CharlesHoskinson/ProjectLegends/tags` and `gh release list` both empty. (2) All cited lines say what is claimed: ci.yml:771 and ci.yml:846 gate packaging and release-validation on startsWith(github.ref, 'refs/tags/v'); ci.yml:874-888 enforce src/app lcov coverage >= 80% via bc only in that tag-gated job; version.cmake:24 matches 'v[0-9]*' tags. (3) Fallback verified live: `git describe --tags --always --dirty --match \"v[0-9]*\"` outputs `ef11f20-dirty` (bare hash), failing the semver regex at version.cmake:37, so line 46 yields `1.0.0+ef11f20-dirty` (PROJECT_VERSION=1.0.0 at CMakeLists.txt:14); packaging.cmake:14 feeds that '+'-bearing string into CPACK_PACKAGE_VERSION with NSIS selected on WIN32 (lines 17-18). (4) Mitigation search found none: the only other coverage job (ci.yml:674-730) is explicitly report-only (\"no minimum threshold is enforced by CI yet\", line 716); no other workflow (module-dag.yml, pal-ci.yml, sprint2-checks.yml) or script runs cpack/generate_checksums; no release/* branch has ever existed. The ci.yml `on:` block does include tags: [\"v[0-9]*\"], so the wiring is plausible but unproven — exactly the finding's point. Minor caveat: the implication that '+' breaks NSIS is plausible but untested speculation; the literal claim (CPACK_PACKAGE_VERSION carries '+') is accurate. High severity is justified given the repo's release-readiness plan and feature/beta-blockers branch indicate an upcoming release relying on this never-run path."
+          }
+        }
+      ]
+    },
+    {
+      "role": "test-coverage",
+      "report": {
+        "findings": [
+          {
+            "id": "test-ci-01",
+            "title": "Merge gate stripped: sanitizers, fuzzing, TLA+, static analysis demoted to nightly/manual-only on 2026-06-08",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:333",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:474",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:503-504",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:554"
+            ],
+            "evidence": "git show 6900e7a ('Stabilize CI and RuntimeHost adoption', 2026-06-08) changed sanitizers from 'main || master || schedule' to schedule/workflow_dispatch only, fuzz from 'schedule || pull_request || main' to schedule/dispatch only, and made tlaplus/static-analysis/macOS conditional; jobs renamed 'Optional ...'. The fuzz job's 'PR: Quick fuzz' step (ci.yml:503) is dead code since the job-level if excludes pull_request. TSan/MSan were already allow_failure:true (ci.yml:351-365). PR/merge path now runs only Linux+Windows headless build+test, linux-ipc, abi-check, and report-only coverage.",
+            "effort": "M",
+            "recommendation": "Restore ASan+UBSan and a 30s fuzz smoke to the merge-to-main path (keep TSan/MSan nightly with documented allow-failure rationale); delete or re-enable the dead PR-fuzz step; update the stale ci.yml header comment claiming 'merge-to-main: + sanitizers'."
+          },
+          {
+            "id": "test-oracle-02",
+            "title": "Determinism and save/load roundtrip tests assert on Fast-mode hash that excludes guest RAM, CPU GPRs/EIP, and VRAM",
+            "severity": "high",
+            "status": "confirmed-open",
+            "existing_audit_ref": "H7",
+            "files": [
+              "C:\\projectLegends\\engine\\src\\misc\\dosbox_library.cpp:684",
+              "C:\\projectLegends\\engine\\src\\misc\\state_hash.cpp:300-305",
+              "C:\\projectLegends\\engine\\src\\misc\\dosbox_context.cpp:103-118",
+              "C:\\projectLegends\\tests\\unit\\test_determinism_at_scale.cpp:43",
+              "C:\\projectLegends\\tests\\integration\\test_workflow_determinism.cpp:39"
+            ],
+            "evidence": "All hash-based tests call legends_get_state_hash -> dosbox_lib_get_state_hash which hard-codes HashMode::Fast (dosbox_library.cpp:684). Fast mode hashes cycle counters only for CPU (no GPRs/EIP, dosbox_context.cpp:103-118) and page config for memory; guest RAM is hashed only in HashMode::Full (state_hash.cpp:301-303) which nothing calls; VRAM absent even from Full. H7 is partially fixed (Full now hashes RAM, not just a 'FULL_MODE' string) but the gap moved into the test oracle: TwoRunsProduceSameHash, MidpointSaveLoadMatchesStraightRun, RepeatedSaveLoadCycle, and legends_verify_determinism cannot detect divergence or corruption in the bulk of machine state.",
+            "effort": "M",
+            "recommendation": "Expose Full-mode hashing to tests (legends_get_state_hash_ex or test hook), extend Full to VRAM/GPRs with Phase B, switch determinism/roundtrip tests to it, and add a direct write-pattern/save/perturb/load/read-pattern memory test that bypasses hashing."
+          },
+          {
+            "id": "test-stub-03",
+            "title": "8 of 33 registered integration test files are one-line GTEST_SKIP 'Not yet implemented' stubs, including replay determinism and save-state compat",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\tests\\integration\\test_replay_determinism.cpp:2",
+              "C:\\projectLegends\\tests\\integration\\test_save_state_compat.cpp:2",
+              "C:\\projectLegends\\tests\\integration\\test_visual_regression.cpp:2",
+              "C:\\projectLegends\\tests\\integration\\test_determinism_hash.cpp:2",
+              "C:\\projectLegends\\CMakeLists.txt:941-979"
+            ],
+            "evidence": "Each file is exactly two lines, e.g. TEST(ReplayDeterminismStub, NotYetImplemented) { GTEST_SKIP() << \"Not yet implemented\"; }. Stubs: replay_determinism, save_state_compat, visual_regression, golden_visual, determinism_hash, cross_platform_smoke, frame_timing, pairwise_config — all registered in CMakeLists.txt:941-979 and reporting green/skipped every CI run. These are exactly the headline product promises (deterministic replay, save-state compatibility, visual regression).",
+            "effort": "L",
+            "recommendation": "Implement replay-determinism (record trace, replay from save, compare Full-mode hashes) and save-state-compat (golden V3/V4 fixture blobs) first; convert remaining stubs to tracked issues and delete the stub files so skips stop masquerading as suite breadth."
+          },
+          {
+            "id": "test-ipc-04",
+            "title": "IPC/process-isolation path has no enabled E2E or parity coverage; dispatcher tested for 8 of 43 message cases, proxy only for not-connected errors",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\tests\\integration\\test_ipc_integration.cpp:42",
+              "C:\\projectLegends\\tests\\unit\\test_engine_dispatcher.cpp:38-174",
+              "C:\\projectLegends\\tests\\unit\\test_proxy_api.cpp:14-55",
+              "C:\\projectLegends\\src\\engine_host\\engine_dispatcher.cpp:39-525",
+              "C:\\projectLegends\\CMakeLists.txt:1173-1180"
+            ],
+            "evidence": "Only true cross-process test is TEST_F(IpcIntegrationTest, DISABLED_FullE2E) (never runs; also GTEST_SKIPs at lines 66/79). engine_dispatcher.cpp has 43 case MsgType:: handlers; test_engine_dispatcher.cpp covers 8, all happy-path with no malformed/truncated payload cases. test_proxy_api.cpp asserts only NOT_INITIALIZED/NOT_SUPPORTED when unconnected. In the linux-ipc CI job, legends_unit_tests still links legends_app->legends_core (only project_legends links legends_proxy, CMakeLists.txt:1173-1180), so the proxy->pipe->engine_host chain is never exercised under assertion. Commit 274ef4d 'Add RuntimeHost proxy parity' added openspec docs and dispatcher cases, zero parity tests; src/app/runtime_host.cpp (655 lines) has no direct unit test.",
+            "effort": "L",
+            "recommendation": "Un-disable FullE2E with engine-host path discovery and run it in linux-ipc; add a parameterized in-process vs proxy parity suite diffing step results, text captures, and hashes; add table-driven malformed-payload dispatch tests over all 43 cases."
+          },
+          {
+            "id": "test-fuzz-05",
+            "title": "Fuzzing is shallow: CRC32 wall blocks the load-state fuzzers past the header, no IPC fuzz target, 30-60s nightly-only budget, no persisted corpus",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\tests\\fuzz\\fuzz_legends_load_state.cpp:56-90",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:2072-2073",
+              "C:\\projectLegends\\tests\\fuzz\\fuzz_input_injection.cpp:20-47",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:499-545"
+            ],
+            "evidence": "legends_load_state verifies CRC32 before any section parsing (legends_embed_api.cpp:2072-2073, V2 path at 2335); the custom mutator patches magic/version bytes but never the checksum, so mutated inputs die at the CRC check and deep deserialization (including the H9 reinterpret_cast paths) is effectively unfuzzed. grep -i ipc tests/fuzz/ -> no matches: the message codec/dispatcher trust boundary (108 msg types, 64MB cap) has no fuzz target. fuzz_input_injection covers only key/mouse/step, not text_input (known M2 bug) or key_event_ext. Corpus regenerated from scratch each run (ci.yml:499-500); whole job nightly/dispatch-only since 6900e7a.",
+            "effort": "M",
+            "recommendation": "Recompute CRC after mutation in the custom mutator (or LEGENDS_FUZZING define downgrading CRC mismatch); persist corpus via actions/cache; add fuzz_ipc_codec and fuzz_engine_dispatch targets; fuzz legends_text_input."
+          },
+          {
+            "id": "test-l8-06",
+            "title": "L8 sentinel invalid-handle destroy pattern fixed; test now proves rejection and instance survival (H5 also closed)",
+            "severity": "low",
+            "status": "resolved",
+            "existing_audit_ref": "L8",
+            "files": [
+              "C:\\projectLegends\\tests\\unit\\test_legends_embed_lifecycle.cpp:206-215",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:79-82"
+            ],
+            "evidence": "test_legends_embed_lifecycle.cpp:210-212 passes fake handle 0xDEADBEEF to legends_destroy and asserts EXPECT_NE(err, LEGENDS_OK), then verifies the real instance is still alive and destroys it cleanly. get_instance() (legends_embed_api.cpp:79-82) now returns the instance only when handle == active instance — no g_active_instance fallback remains.",
+            "effort": "S",
+            "recommendation": "Mark L8 and H5 resolved in AUDIT.md; see test-weak-07 for assertion-free residue in older tests that should now pin exact error codes."
+          },
+          {
+            "id": "test-weak-07",
+            "title": "Assertion-free 'no crash' tests persist after the H5 fix made exact error-code assertions possible",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\tests\\unit\\test_negative.cpp:74-85",
+              "C:\\projectLegends\\tests\\unit\\test_negative.cpp:105-118",
+              "C:\\projectLegends\\tests\\unit\\test_negative.cpp:124-139",
+              "C:\\projectLegends\\tests\\unit\\test_legends_embed.cpp:709-726"
+            ],
+            "evidence": "InvalidFakeHandle discards the error with (void)err and comments 'might be NULL_HANDLE, INVALID_STATE, or even OK'; DoubleDestroyIsSafe: 'err2 can be OK or an error'; OperationsOnDestroyedHandleDontCrash ignores every return; InvalidHandlesRejected asserts nothing despite its name ('or accept if handle validation is minimal'). Since get_instance is now strict, all have deterministic correct answers (LEGENDS_ERR_NULL_HANDLE); a regression reintroducing the H5 fallback would not be caught by the tests named for it.",
+            "effort": "S",
+            "recommendation": "Assert exact error codes in all four tests; grep the suite for '(void)err' and triage remaining assertion-free calls."
+          },
+          {
+            "id": "test-api-08",
+            "title": "API coverage map: legends_set_ttf_font has zero tests; 15 device APIs have null-handle-only coverage; capability-gated APIs never asserted in headless-only CI",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\tests\\unit\\test_phase3_bridge.cpp:16-124",
+              "C:\\projectLegends\\include\\legends\\legends_embed.h:861",
+              "C:\\projectLegends\\tests\\integration\\test_video_capture_lifecycle.cpp:58",
+              "C:\\projectLegends\\tests\\integration\\test_mount_lifecycle.cpp:59-80"
+            ],
+            "evidence": "Per-API grep of all 50 legends_* functions: legends_set_ttf_font appears in zero test files. pc98 (x2), glide (x2), printer (x3), ipx (x4), midi (x3), capture_midi_audio are referenced substantively only by test_phase3_bridge.cpp, which asserts LEGENDS_ERR_NULL_HANDLE against nullptr — no live-handle test exists. Video capture (start/stop/is_capturing), mount happy paths, and drive event callbacks skip in headless ('not available in headless mode', 'backend not wired in headless build'), and every CI job configures -DLEGENDS_HEADLESS=ON, so they never execute under assertion in CI.",
+            "effort": "M",
+            "recommendation": "Add a live-handle contract test per device API pinning the defined headless return code (e.g. NOT_SUPPORTED); add a TTF font test with a fixture; run one SDL2 dummy-driver job in ci.yml so capability-gated paths execute."
+          },
+          {
+            "id": "test-headless-09",
+            "title": "SDL backend tests are path-filtered/nightly only, and 'Relax SDL backend startup event tests' deleted an assertion instead of refining it",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\tests\\unit\\test_pal_sdl2_backend.cpp:141-144",
+              "C:\\projectLegends\\tests\\unit\\test_pal_sdl3_backend.cpp:144-147",
+              "C:\\projectLegends\\.github\\workflows\\pal-ci.yml:3-21"
+            ],
+            "evidence": "Commit 911692f replaced EXPECT_EQ(count, 0u) after input init with (void)input->poll(events, 10) in both SDL2 and SDL3 tests — the test now verifies only that poll doesn't crash. The stated reason (backends may emit window/device events at startup) justifies a type-whitelist assertion, not none. pal-ci.yml triggers only on src/pal/include/cmake/test_pal path changes plus nightly cron, so changes in src/legends or src/app never run any SDL test pre-merge. By contrast, sibling commit 8fdd4c6 (dummy drivers + GTEST_SKIP on missing audio device) is a defensible stabilization.",
+            "effort": "S",
+            "recommendation": "Restore the startup-event test as a whitelist assertion (each returned event must be Window/Device type); broaden pal-ci path filters to src/legends/** and src/app/** or move the SDL2-dummy job into ci.yml."
+          },
+          {
+            "id": "test-soak-10",
+            "title": "Soak/endurance suite can never run: no workflow sets LEGENDS_SOAK_ENABLED and the soak-label cmake module does not exist",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\tests\\integration\\test_soak_endurance.cpp:78-82",
+              "C:\\projectLegends\\CMakeLists.txt:1016-1036",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:11"
+            ],
+            "evidence": "test_soak_endurance.cpp skips unless LEGENDS_SOAK_ENABLED/LEGENDS_SOAK_SHORT is set; no workflow sets either (grep of .github/workflows finds only comments and a --label-exclude). CMakeLists.txt:1021 references cmake/SoakTestLabels.cmake '(if present)' — the file does not exist, so the soak label is never applied and the test-soak target acts on nothing. ci.yml header advertises 'nightly (cron): soak tests, fuzz' but the nightly schedule contains no soak step.",
+            "effort": "S",
+            "recommendation": "Add a nightly step running LEGENDS_SOAK_SHORT=1 ctest -R SoakEndurance; either write SoakTestLabels.cmake or remove the dead label plumbing and stale comments."
+          },
+          {
+            "id": "test-bench-11",
+            "title": "Benchmarks (emulation, PAL, IPC overhead) are never built or run in any CI workflow; no performance regression tracking",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\CMakeLists.txt:1078",
+              "C:\\projectLegends\\benchmarks\\bench_emulation.cpp",
+              "C:\\projectLegends\\benchmarks\\bench_ipc_overhead.cpp"
+            ],
+            "evidence": "LEGENDS_BUILD_BENCHMARKS defaults OFF (CMakeLists.txt:1078); grep -rn bench .github/workflows/ returns zero matches; no baseline JSON or comparison script exists. The three google-benchmark targets (564 lines total) bit-rot silently since no configuration compiles them, and IPC-mode per-call overhead — the exact thing bench_ipc_overhead measures — can regress without detection.",
+            "effort": "M",
+            "recommendation": "Add a nightly job building with -DLEGENDS_BUILD_BENCHMARKS=ON (catches bit-rot at minimum), emit --benchmark_format=json, and compare against a checked-in baseline with a generous regression threshold."
+          },
+          {
+            "id": "test-dead-12",
+            "title": "Dead/orphaned test assets: 3 uncompilable integration tests calling nonexistent legends_init(), 6 unregistered engine tests, 3 unused COM fixtures",
+            "severity": "low",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\tests\\integration\\test_context_synchronization.cpp:13",
+              "C:\\projectLegends\\tests\\integration\\test_error_propagation.cpp:12",
+              "C:\\projectLegends\\engine\\tests\\unit\\test_serialization_completeness.cpp",
+              "C:\\projectLegends\\tests\\fixtures\\README.md"
+            ],
+            "evidence": "test_context_synchronization.cpp and test_error_propagation.cpp call legends_init(handle), which exists nowhere in include/ — they cannot compile and are absent from CMakeLists registration (as is test_dual_ffi.cpp). engine/tests/unit has 6 files not in engine/tests/CMakeLists.txt:23-92, including test_serialization_completeness.cpp (executable assertions documenting the H1 keyboard truncation, never built) and test_multi_instance_smoke.cpp. tests/fixtures/{counter,graphics,input}.com are referenced only by the fixtures README — the prior audit's 'no test runs a real DOS program' gap remains open.",
+            "effort": "S",
+            "recommendation": "Delete or modernize the three uncompilable stubs; register salvageable engine tests (at minimum test_serialization_completeness.cpp); write the COM-fixture execution test (mount, run counter.com, assert text output)."
+          },
+          {
+            "id": "test-cov-13",
+            "title": "Coverage is report-only; the single enforced 80% threshold covers only src/app/ and runs only on release tags",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:707-716",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:874-888"
+            ],
+            "evidence": "Coverage job writes 'Coverage policy: report-only; no minimum threshold is enforced by CI yet.' (ci.yml:716). The only enforced gate is in release-validation (tag pushes only) and extracts only '*/src/app/*' before checking >= 80% (ci.yml:879-888) — src/legends, src/legends_ipc, src/legends_proxy, src/engine_host, src/pal are outside every enforced gate. lcov error suppression widened in 46e6bd5 to mismatch,gcov,negative and unused,empty. Exclusions themselves are honest (/usr, _deps, tests only; engine and src remain in the report).",
+            "effort": "M",
+            "recommendation": "Take a baseline and enforce a no-decrease ratchet on src/legends + src/legends_ipc + src/legends_proxy line coverage in the per-push coverage job; document each --ignore-errors flag."
+          },
+          {
+            "id": "test-readme-14",
+            "title": "README 'tests: 1500+ passing' is a static hardcoded badge; 'passing' includes 65+ skips, 8 stub files, and a DISABLED E2E",
+            "severity": "low",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\README.md:8"
+            ],
+            "evidence": "README.md:8 is a static shields.io badge linking to nothing, not CI-generated. Actual TEST macro counts: ~2,788 under tests/ and ~1,878 under engine/tests (registered subset), so the figure is stale-low rather than inflated — but the green 'passing' framing silently includes 65+ GTEST_SKIP sites, the 8 'Not yet implemented' stubs, the never-run soak suite, and the DISABLED_ IPC E2E. Build/coverage badges on adjacent lines are equally static.",
+            "effort": "S",
+            "recommendation": "Replace with CI-generated workflow and Codecov badges (a Codecov upload already exists at ci.yml:726-731), or state the count with a date and skip tally."
+          }
+        ],
+        "health_grade": "C",
+        "role": "Tests, fuzzing & benchmarks auditor",
+        "summary": "The suite is broad and much of it is real — ~2,788 TEST macros in tests/ plus ~1,878 in engine/tests, a genuine boot-to-DOS-prompt test, exact-assertion save-state security tests, and prior finding L8 (and underlying H5) properly fixed. But three structural problems undercut it: (1) commit 6900e7a (2026-06-08, one day before this audit) demoted all four sanitizers, fuzzing, TLA+ checking, static analysis, and macOS jobs to nightly/manual-only, so the merge gate is now just Linux+Windows headless build-and-test — flakiness was suppressed by demotion, not fixed; (2) every determinism and save/load roundtrip test asserts on the Fast-mode state hash, which excludes guest RAM, CPU GPRs/EIP, and VRAM, so the headline invariants are asserted-by-sentinel; (3) the IPC/GPL-isolation path has no enabled end-to-end test (the only cross-process test is DISABLED_), the dispatcher is tested for 8 of 43 cases, and no in-process-vs-proxy parity suite exists despite a 'proxy parity' commit that added only docs. Eight of 33 integration test files — including replay determinism and save-state compat — are one-line skip stubs; fuzzers are walled off by an unfixed CRC check; benchmarks and the soak suite never run anywhere.",
+        "sprint_recommendations": [
+          "Restore the merge gate: ASan/UBSan plus a 30s fuzz smoke back on merge-to-main, fix the dead PR-fuzz step, nightly soak step with LEGENDS_SOAK_SHORT=1, and a coverage ratchet on src/legends*/src/legends_ipc/src/legends_proxy (test-ci-01, test-cov-13, test-soak-10)",
+          "Strengthen the oracles: plumb Full-mode (RAM-inclusive) state hashing into the determinism and roundtrip tests, add a direct write-pattern/save/load/read-back memory test, and implement the replay-determinism and save-state-compat integration tests that are currently skip stubs (test-oracle-02, test-stub-03)",
+          "Test the trust boundary: enable the IPC FullE2E in the linux-ipc job, build an in-process-vs-proxy parity suite over the 43 dispatch cases with malformed-payload table tests, add fuzz_ipc_codec/fuzz_engine_dispatch targets, and fix the CRC wall in the load-state fuzz mutator with a persisted corpus (test-ipc-04, test-fuzz-05)",
+          "Burn down dishonest residue: exact error-code assertions in the no-crash tests, live-handle contract tests for the 15 device APIs and legends_set_ttf_font, delete/register orphaned test files, wire the COM fixtures into a real DOS-program execution test, and replace the static '1500+ passing' badge with CI-generated badges (test-weak-07, test-api-08, test-dead-12, test-readme-14)"
+        ]
+      },
+      "verified": [
+        {
+          "id": "test-ci-01",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified, could not refute. (1) All cited lines match: C:\\projectLegends\\.github\\workflows\\ci.yml:333 (sanitizers), :431 (static-analysis), :474 (fuzz), :554 (tlaplus) are gated `schedule || workflow_dispatch` only, jobs renamed 'Optional ...'; TSan/MSan allow_failure at :355/:365 as the finding states. (2) `git show 6900e7a` (2026-06-08, 'Stabilize CI and RuntimeHost adoption') shows the exact claimed before/after: sanitizers were `main || master || schedule`, fuzz was `schedule || pull_request || main || master`; static-analysis/tlaplus/macOS/SDL3 lanes and dependency-scan (REQ-SEC-028, not even cited by the finding) gained schedule/dispatch-only conditions. Follow-up commit 46e6bd5 same day restored nothing. (3) Dead-code claim confirmed: step at ci.yml:503-504 has `if: github.event_name == 'pull_request'` but the job-level if excludes pull_request, so it can never run. (4) Header comment ci.yml:10 still claims 'merge-to-main: + sanitizers' — stale as claimed. PR/merge path inventory matches (linux, linux-ipc, windows, abi-check, report-only coverage). Mitigations examined and insufficient to refute: nightly 03:00 UTC cron still runs the demoted jobs (post-merge detection only, failures block nothing); pal-ci.yml runs ASan on PAL-path PRs but only with --gtest_filter=ContractGate_Lifecycle*; the demotion was deliberate and documented in CIFix.md ('non-blocking until green') and openspec change ci-stabilization-and-coverage-control, but no task tracks re-promotion and all spec tasks are checked complete. High severity is justified: ASan/UBSan were passing hard gates on merge-to-main and memory-safety regressions can now land gated only by build+unit tests, with the workflow header masking the change."
+          }
+        },
+        {
+          "id": "test-stub-03",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified: all 8 claimed stub files (replay_determinism, save_state_compat, visual_regression, golden_visual, determinism_hash, cross_platform_smoke, frame_timing, pairwise_config) are exactly two lines each, containing only GTEST_SKIP() << \"Not yet implemented\" (confirmed by reading the 4 cited files and grepping tests/integration; sizes 111-118 bytes). All 8 are registered in legends_integration_tests at CMakeLists.txt:964-973 with gtest_discover_tests, and ci.yml runs ctest broadly, so they appear as skipped/green in CI. Attempted refutation via mitigation search: test_workflow_determinism.cpp and test_workflow_saveload.cpp (incl. DeterministicReplayAfterLoad) provide real same-version determinism/round-trip coverage, but they run on the Headless backend (the file's own comment at lines 64-66 says full emulation isn't running), test_v2_load_safety.cpp only tests rejection of malformed V2 blobs (not V3/V4 cross-version compat), and visual regression has zero real coverage despite CMakeLists.txt:984-987 compiling ssim.cpp specifically for the (stub) visual tests. README.md headlines deterministic execution and save/state replay, supporting the framing. One minor inaccuracy: the count is 8 of 31 registered integration files (34 on disk, 3 unregistered), not 8 of 33 — immaterial. High severity is justified for save-state compat and visual regression; determinism is partially mitigated by the headless workflow tests."
+          }
+        },
+        {
+          "id": "test-ipc-04",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified every cited claim against source. (1) test_ipc_integration.cpp:42 is TEST_F(IpcIntegrationTest, DISABLED_FullE2E) with GTEST_SKIP at lines 66/79; it is the only cross-process test and nothing in scripts/CI passes --gtest_also_run_disabled_tests, so it never runs. (2) engine_dispatcher.cpp has exactly 43 'case MsgType::' handlers; test_engine_dispatcher.cpp has exactly 8 TEST_Fs (7 distinct cases + unknown-type default) — '8 of 43' accurate; minor nit that DispatchUnknownReturnsError is a negative test. (3) Proxy claim is UNDERSTATED: test_proxy_api.cpp is wrapped in #ifdef LEGENDS_USE_IPC, but legends_unit_tests never gets that define (CMakeLists.txt:800-806) and never links legends_proxy (only legends_proxy propagates LEGENDS_USE_IPC PUBLIC, line 429-433) — so even the not-connected tests are dead code in every build; test_proxy_connection.cpp only simulates the proxy with raw ControlChannel calls, never executing proxy_api.cpp/proxy_connection.cpp. (4) CMakeLists.txt:1173-1180 confirmed: only project_legends links legends_proxy; legends_unit_tests links legends_app which PUBLIC-links legends_core (line 571-577), so the linux-ipc CI job (ci.yml:95-127, -DLEGENDS_USE_IPC=ON) only test-f's that binaries exist and runs ctest against the monolithic engine — proxy->pipe->engine_host chain never asserted. (5) git show 274ef4d confirmed 'Add RuntimeHost proxy parity': +418 proxy_api lines, +323 dispatcher lines, 3 openspec dirs; tests added were 3 happy-path dispatcher tests and 2 capability tests, zero proxy-vs-in-process parity tests. (6) runtime_host.cpp is exactly 655 lines; only RuntimeHost mention in tests/ is test_ai_screen_context.cpp (not a direct test). Partial mitigation found: per-message TooSmall deserialize tests exist in test_ipc_messages.cpp and dispatcher propagates deserialize errors, so the malformed-payload recommendation has lower marginal value — but the E2E/parity gap stands. High severity justified: IPC mode is the GPL-isolation shipping configuration with a dedicated CI job that passes while exercising none of the IPC runtime path."
+          }
+        },
+        {
+          "id": "test-fuzz-05",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "All four evidence legs verified against source. (1) CRC wall: legends_embed_api.cpp checks CRC32 before section parsing at 2335-2338 (V3) and 2072-2075 (V2); the custom mutator in fuzz_legends_load_state.cpp:56-90 fixes magic/version but never the checksum, and grep finds no FUZZING define in src/ that bypasses CRC — body mutations cannot pass (2^-32), so only the 96-byte header is meaningfully fuzzed. (2) No IPC fuzz target: tests/fuzz/ has only 4 targets, zero 'ipc' matches; the layer exists with exactly 108 MsgType entries (message_types.h) and kMaxPayloadSize = 64MB (message_codec.h:22). (3) fuzz_input_injection.cpp:20-47 dispatches only key_event/mouse_event/step_cycles; legends_text_input and key_event_ext are uncovered. (4) ci.yml:474 gates the fuzz job to schedule/workflow_dispatch (commit 6900e7a removed PR/main triggers, leaving the 30s PR step dead code), and the corpus is regenerated each run with no actions/cache entry for it. Mitigations checked: test_legends_embed_security.cpp deterministically covers header-offset validation (header is outside the CRC region), and the load path uses defensive VALIDATE_* macros and memcpy-to-aligned-locals — but that post-CRC body-parsing code is exactly what fuzzing cannot reach. Minor stale detail: the evidence cites 'H9 reinterpret_cast paths' but the load path now uses memcpy (H9 appears fixed). Severity: high is defensible since save-state load and the IPC codec/dispatcher are untrusted-input trust boundaries with effectively vacuous or zero fuzz coverage, though it is a coverage gap rather than a demonstrated vulnerability — medium-high would also be reasonable."
+          }
+        }
+      ]
+    },
+    {
+      "role": "docs-spec",
+      "report": {
+        "role": "Documentation, spec drift & licensing auditor",
+        "summary": "Recently refreshed docs are accurate — the README architecture diagram's counts (50 C APIs, 108 IPC message types, 89 structs, 43 dispatcher cases) all verified exactly against source, and RELEASING.md matches the real ci.yml job set. Everything older has drifted, in both directions: REQUIREMENTS.md still reports February GAP statuses for at least six requirements fixed in code since, TODO.md marks the same requirement IDs both complete and missing, and ARCHITECTURE.md documents a save-state format (96-byte header, LEGS magic, v2) contradicting both README (64 bytes) and code (DBXS, v3). Licensing is the most serious area: the repo root LICENSE is a bare MIT grant over a codebase that vendors a 1M-line GPL DOSBox-X fork (README falsely calls it a \"multi-component license overview\"), docs say GPL-2.0-only while every actual SPDX tag says GPL-2.0-or-later, the MIT proxy and \"proprietary shell\" compile against a GPL-licensed legends_embed.h that the isolation design never addresses, and the linker-map GPL verification the docs claim CI runs is never included in any build. Finally, the README capability bullet \"Wasm sandbox support\" references wasm.md and wit/legends-emulator.wit files that have never existed in git history while TODO.md says Wasm is 0/50 not started.",
+        "health_grade": "D",
+        "findings": [
+          {
+            "id": "lic-01",
+            "title": "Root LICENSE file is a bare MIT grant over a GPL codebase, mislabeled as a multi-component overview",
+            "severity": "critical",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\LICENSE:1-21",
+              "C:\\projectLegends\\README.md:312",
+              "C:\\projectLegends\\README.md:367",
+              "C:\\projectLegends\\COPYING:1",
+              "C:\\projectLegends\\CHANGELOG.md:52"
+            ],
+            "evidence": "LICENSE contains verbatim MIT text covering 'the Software' with no component scoping; README.md:312/367 describe it as 'Multi-component license overview'; COPYING is full GPLv2; engine/ vendors GPL DOSBox-X (engine/src/cpu/cpu.cpp:4-7 'version 2 ... or any later version'). Introduced by commit 8e78bfe as a 21-line file (the MIT text).",
+            "effort": "S",
+            "recommendation": "Replace LICENSE content with an actual component->license->directory overview pointing at COPYING and the MIT-scoped dirs; fix the README/CHANGELOG descriptions so SPDX scanners and GitHub detection stop reading the project as MIT."
+          },
+          {
+            "id": "lic-02",
+            "title": "GPL-2.0-only vs GPL-2.0-or-later: README/CONTRIBUTING say -only, all 100+ actual SPDX tags and DEPENDENCIES.md say -or-later",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\README.md:355",
+              "C:\\projectLegends\\README.md:364",
+              "C:\\projectLegends\\CONTRIBUTING.md:226-233",
+              "C:\\projectLegends\\DEPENDENCIES.md:18",
+              "C:\\projectLegends\\src\\app\\application.cpp:1",
+              "C:\\projectLegends\\src\\engine_host\\engine_dispatcher.cpp:1",
+              "C:\\projectLegends\\engine\\src\\cpu\\cpu.cpp:4-7"
+            ],
+            "evidence": "SPDX tally: 107 src/ files + 9 include/ files tagged GPL-2.0-or-later, zero tagged GPL-2.0-only, while CONTRIBUTING.md mandates GPL-2.0-only headers and README declares 'SPDX expression: GPL-2.0-only AND MIT'. README's claim that -only is 'consistent with DOSBox-X' is wrong: vendored upstream files are GPL-2.0-or-later. legends_embed.h has no SPDX tag at all; engine/ ships no license text of its own.",
+            "effort": "M",
+            "recommendation": "Pick one GPL version expression (simplest: GPL-2.0-or-later matching the file tags and upstream), align README/CONTRIBUTING/NOTICE/DEPENDENCIES.md, add an SPDX tag to legends_embed.h, and add a CI lint comparing SPDX tags to the per-directory policy."
+          },
+          {
+            "id": "lic-03",
+            "title": "Non-GPL shell story glosses over the GPL-licensed API header; design doc calls the GPL-tagged shell 'proprietary'",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:1-6",
+              "C:\\projectLegends\\include\\legends\\legends_embed.h:5-7",
+              "C:\\projectLegends\\DEPENDENCIES.md:18",
+              "C:\\projectLegends\\docs\\design\\GPL2_PROCESS_ISOLATION_DESIGN.md:5",
+              "C:\\projectLegends\\CONTRIBUTING.md:258",
+              "C:\\projectLegends\\README.md:154-185"
+            ],
+            "evidence": "MIT-tagged proxy_api.cpp #includes GPL-licensed legends_embed.h (header says 'Licensed under GNU GPL v2.0'; CONTRIBUTING assigns include/legends/ GPL-2.0-only) while DEPENDENCIES.md:18 claims the MIT proxy 'does not link any GPL code'. Design doc says the shell is a 'proprietary application shell' with 'zero GPL object code' but CONTRIBUTING.md:258 assigns src/app GPL-2.0-only and src/app/application.cpp:1 is tagged GPL-2.0-or-later. README Quick Start statically links the GPL core and advertises Rust/Python FFI with no statement of the GPL obligations on in-process embedders (only ARCHITECTURE.md:553 mentions it).",
+            "effort": "M",
+            "recommendation": "Dual-license or MIT-license legends_embed.h explicitly and document it in TDD-LIC-001; reconcile the proprietary-shell claim with src/app's GPL tags; add an explicit 'GPL obligations when embedding in-process' paragraph to README's License section."
+          },
+          {
+            "id": "doc-01",
+            "title": "'Wasm sandbox support' advertised as a capability; referenced wasm.md and wit/legends-emulator.wit have never existed in git history",
+            "severity": "high",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\README.md:28",
+              "C:\\projectLegends\\README.md:302-309",
+              "C:\\projectLegends\\ARCHITECTURE.md:611-716",
+              "C:\\projectLegends\\CMakeLists.txt:452",
+              "C:\\projectLegends\\TODO.md:20",
+              "C:\\projectLegends\\TODO.md:258"
+            ],
+            "evidence": "README capability bullet lists 'Wasm sandbox support' in present tense; ARCHITECTURE.md has a 100-line section claiming 'The project supports an optional Wasm/WASI build target' and 'CI enforces parity (REQ-WASM-026, REQ-WASM-040)'; CMakeLists.txt:452 says 'See wasm.md ... and wit/' and the wit-bindgen target lists wit/legends-emulator.wit as SOURCES. git log --all -- wasm.md and -- wit return nothing (never committed); TODO.md says Wasm Sandbox NOT STARTED 0/50, 'documentation only'; no CI job mentions wasm.",
+            "effort": "S",
+            "recommendation": "Remove or mark '(planned, 0/50)' the README capability bullet, move the ARCHITECTURE.md Wasm section to a clearly-labeled design/planned doc, and either commit a real wit stub or remove the dangling CMake target sources."
+          },
+          {
+            "id": "doc-02",
+            "title": "REQUIREMENTS.md status column is 3.5 months stale; 6 of 10 sampled statuses wrong at HEAD",
+            "severity": "high",
+            "status": "new",
+            "existing_audit_ref": "H5",
+            "files": [
+              "C:\\projectLegends\\REQUIREMENTS.md:56",
+              "C:\\projectLegends\\REQUIREMENTS.md:99-109",
+              "C:\\projectLegends\\REQUIREMENTS.md:355",
+              "C:\\projectLegends\\REQUIREMENTS.md:471",
+              "C:\\projectLegends\\REQUIREMENTS.md:560",
+              "C:\\projectLegends\\engine\\src\\misc\\cpu_bridge.cpp:113-119",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:79-82",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:841-845",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:1626-1685",
+              "C:\\projectLegends\\engine\\src\\misc\\state_hash_compat.cpp:48-50"
+            ],
+            "evidence": "Doc claims 24 GAP / 22 OK as of 2026-02-24. Sampled at HEAD: REQ-EX-001/002 fixed (cpu_bridge.cpp:113 PIC_RunQueue, :119 CPU_Check_NMI), REQ-LC-003 fixed (strict handle match, returns LEGENDS_ERR_NULL_HANDLE), REQ-CF-002 fixed (cycles range check), REQ-BQ-004 fixed (requirements-dev.txt exists), REQ-CP-003 substantially fixed (engine framebuffer/palette/text sync) — all still marked GAP. REQ-DT-004 genuinely still open (FULL_MODE marker string only).",
+            "effort": "M",
+            "recommendation": "Re-verify all 50 EARS statuses against HEAD, add a verified-at-commit column, and regenerate the summary table; consider deriving status from per-requirement tests."
+          },
+          {
+            "id": "doc-03",
+            "title": "TODO.md self-contradictory: same REQ IDs marked complete and missing; IPC called 'STUB ONLY' despite ~2,700 lines of IPC code; LICENSES/ checkboxes false",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\TODO.md:78-92",
+              "C:\\projectLegends\\TODO.md:167-186",
+              "C:\\projectLegends\\TODO.md:257",
+              "C:\\projectLegends\\TODO.md:47",
+              "C:\\projectLegends\\TODO.md:156",
+              "C:\\projectLegends\\src\\legends_ipc\\messages.cpp:1",
+              "C:\\projectLegends\\src\\legends_proxy\\proxy_api.cpp:1"
+            ],
+            "evidence": "REQ-MOUNT-001/002, REQ-MENU-001, REQ-MAPPER-001, REQ-SAVE-003, REQ-CAPTURE-003 appear [x] complete in Phase 2 AND in 'Not Yet Implemented' tables. TODO.md:257 says IPC isolation is 'STUB ONLY' but messages.cpp (905 lines), proxy_api.cpp (677), engine_dispatcher.cpp (543) exist and ci.yml runs a linux-ipc job. TODO.md:47/156 check REQ-ISO-002/REQ-OPS-022 'LICENSES/ directory' as done; the directory has never existed (git log --all -- LICENSES empty). Workflow count says 6, actual is 4.",
+            "effort": "S",
+            "recommendation": "Regenerate TODO.md in one pass over HEAD; remove duplicated rows; uncheck the LICENSES/ items or create the directory they claim."
+          },
+          {
+            "id": "doc-04",
+            "title": "ARCHITECTURE.md save-state format contradicts code and README (96 B/LEGS/v2 vs 64 B and DBXS/v3); cpu_bridge still labeled 'stub'",
+            "severity": "medium",
+            "status": "confirmed-open",
+            "existing_audit_ref": "L2",
+            "files": [
+              "C:\\projectLegends\\ARCHITECTURE.md:195-198",
+              "C:\\projectLegends\\ARCHITECTURE.md:410",
+              "C:\\projectLegends\\ARCHITECTURE.md:377-426",
+              "C:\\projectLegends\\src\\legends\\legends_embed_api.cpp:92-93",
+              "C:\\projectLegends\\README.md:111"
+            ],
+            "evidence": "ARCHITECTURE.md:195-198 documents header 96 bytes, magic 0x4C454753 'LEGS', version 2; code defines SAVESTATE_MAGIC=0x53584244 'DBXS' and SAVESTATE_VERSION=3; README (fixed per prior L2) says 64 bytes. ARCHITECTURE.md:410 labels cpu_bridge.cpp '(stub)' though it executes real cycles with PIC_RunQueue/CPU_Check_NMI; the File Organization tree omits src/app, src/engine_host, src/legends_proxy, include/legends_ipc.",
+            "effort": "S",
+            "recommendation": "Update format constants from the header (or generate the table), remove stale 'stub' labels, refresh the file tree. Prior L2 fix covered README only."
+          },
+          {
+            "id": "lic-04",
+            "title": "NOTICE and DEPENDENCIES.md omit vendored stb and glad; NOTICE lacks the SPDX/per-directory content three docs claim it has",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\NOTICE:1-46",
+              "C:\\projectLegends\\DEPENDENCIES.md:5-11",
+              "C:\\projectLegends\\external\\stb\\stb_truetype.h",
+              "C:\\projectLegends\\external\\glad\\glad.c",
+              "C:\\projectLegends\\README.md:313",
+              "C:\\projectLegends\\CONTRIBUTING.md:245",
+              "C:\\projectLegends\\src\\app\\ttf_renderer.cpp:1"
+            ],
+            "evidence": "external/ contains glad (+KHR) and stb (stb_truetype.h, stb_image_write.h), compiled into src/app (ttf_renderer.cpp, capture.cpp, shader_renderer.cpp); neither appears in NOTICE's 8-entry list nor DEPENDENCIES.md's 5-row table. README.md:313 claims 'NOTICE: Copyright attributions + SPDX' and CONTRIBUTING.md:245 claims NOTICE has 'per-directory license assignments' — NOTICE contains neither.",
+            "effort": "S",
+            "recommendation": "Add stb and glad/KHR entries to NOTICE and DEPENDENCIES.md, vendor license texts in a LICENSES/ directory (also satisfying the false TODO checkboxes), and fix or fulfill the per-directory SPDX claims."
+          },
+          {
+            "id": "spec-01",
+            "title": "GPL-isolation linker-map verification documented as a CI gate but never wired into any build or workflow",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\ARCHITECTURE.md:606-607",
+              "C:\\projectLegends\\docs\\design\\GPL2_PROCESS_ISOLATION_DESIGN.md:108-110",
+              "C:\\projectLegends\\cmake\\VerifyGPLIsolation.cmake:8",
+              "C:\\projectLegends\\scripts\\verify_gpl_isolation.py",
+              "C:\\projectLegends\\.github\\workflows\\ci.yml:95-126"
+            ],
+            "evidence": "ARCHITECTURE.md:607 states 'CI verifies this isolation by scanning the linker map (REQ-ISO-016)'. VerifyGPLIsolation.cmake exists and requires include(VerifyGPLIsolation) after the project_legends target, but no CMakeLists or cmake module includes it (grep returns nothing) and no workflow references it. The linux-ipc CI job only checks that IPC executables exist.",
+            "effort": "S",
+            "recommendation": "include(VerifyGPLIsolation) in the IPC build path and make the linux-ipc job assert the post-build scan ran; this is the only technical control behind the 'zero GPL object code in shell' licensing claim."
+          },
+          {
+            "id": "spec-02",
+            "title": "OpenSpec loop never closes: specs/ and changes/archive/ empty while 17 changes (incl. completed Feb work) stay active",
+            "severity": "medium",
+            "status": "new",
+            "files": [
+              "C:\\projectLegends\\openspec\\specs",
+              "C:\\projectLegends\\openspec\\changes\\archive",
+              "C:\\projectLegends\\openspec\\changes\\phase-0-quick-wins\\tasks.md:1-5",
+              "C:\\projectLegends\\openspec\\changes\\phase-a-cpu-bridge\\tasks.md:1-6",
+              "C:\\projectLegends\\README.md:90-93"
+            ],
+            "evidence": "openspec/specs/ and openspec/changes/archive/ are both empty directories. phase-0-quick-wins (.openspec.yaml created 2026-02-22) and phase-a-cpu-bridge have all tasks checked [x] yet remain active. git log --name-status -- openspec shows only additions (f128e6a, 274ef4d, 6900e7a), never archival. README presents OpenSpec as one of the project's 'Quality and architecture gates'.",
+            "effort": "S",
+            "recommendation": "Archive the completed phase-* changes to populate openspec/specs/, and add a CI staleness check for changes with all tasks complete and no archival."
+          },
+          {
+            "id": "doc-05",
+            "title": "README API reference covers 23 of 50 exported functions and omits 5 error codes; CONTRIBUTING names a nonexistent legends_status_t type",
+            "severity": "low",
+            "status": "confirmed-open",
+            "existing_audit_ref": "L1",
+            "files": [
+              "C:\\projectLegends\\README.md:191-243",
+              "C:\\projectLegends\\README.md:249-259",
+              "C:\\projectLegends\\include\\legends\\legends_embed.h:72-85",
+              "C:\\projectLegends\\include\\legends\\legends_embed.h:676",
+              "C:\\projectLegends\\CONTRIBUTING.md:148"
+            ],
+            "evidence": "legends_embed.h exports exactly 50 LEGENDS_API functions; README tables document 23 (mount/ipx/glide/pc98/audio/midi/capability families absent). README error table omits -3, -7, -10, -12, -13 (all defined at legends_embed.h:74-84). CONTRIBUTING.md:148 says APIs return 'legends_status_t'; the real type is legends_error_t. Prior audit L1 (18 of 22 documented) confirmed open with a worse ratio.",
+            "effort": "S",
+            "recommendation": "Generate the README API and error tables from the header via a small script run in CI; fix the type name in CONTRIBUTING.md."
+          }
+        ],
+        "sprint_recommendations": [
+          "Licensing reconciliation sprint (~1 week): rewrite root LICENSE as a real multi-component overview, settle GPL-2.0-only vs -or-later and align README/CONTRIBUTING/NOTICE/DEPENDENCIES + add SPDX to legends_embed.h, attribute stb/glad, create the LICENSES/ directory TODO.md already claims exists, and add a CI SPDX-policy lint (lic-01, lic-02, lic-04, doc-03 checkboxes).",
+          "Make the GPL-isolation claim enforceable (2-3 days): dual-license legends_embed.h and document it in TDD-LIC-001, fix the 'proprietary shell' vs GPL src/app contradiction, wire VerifyGPLIsolation.cmake into the IPC build and linux-ipc CI job, and add an in-process GPL-obligations paragraph to README's License section (lic-03, spec-01).",
+          "Doc-truth sweep (3-5 days): demote Wasm to clearly-planned status across README/ARCHITECTURE/CMake comments, re-verify all 50 EARS requirement statuses at HEAD with verified-at-commit stamps, regenerate TODO.md, fix ARCHITECTURE.md save-state constants and file tree, and generate the README API/error tables from the header (doc-01 through doc-05).",
+          "OpenSpec hygiene (1-2 days): archive the completed phase-* changes, populate openspec/specs/ as the canonical baseline, and add a CI staleness check so the README's 'quality gate' description of OpenSpec becomes true (spec-02)."
+        ]
+      },
+      "verified": [
+        {
+          "id": "lic-01",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified all citations directly. LICENSE:1-21 is verbatim bare MIT over \"the Software\" with no scoping (confirmed by Read). README.md:312 and :367 both call it \"Multi-component license overview\" (confirmed); CHANGELOG.md:50-51 says the same (cited as :52, trivially off). COPYING is full GPLv2. engine/src/cpu/cpu.cpp:1-17 carries the DOSBox GPL-2.0-or-later header, and other engine/src files have GPL SPDX headers. git show 8e78bfe confirms LICENSE was added as a 21-line file, and the commit message itself says \"LICENSE (MIT)\" — contradicting the docs. Refutation attempts failed: per-file SPDX MIT headers in include/legends_ipc/ and the accurate README License section (351-364) inform careful readers, but nothing overrides the root LICENSE that GitHub/SPDX scanners read; there is no engine/COPYING or per-directory scoping (only vendored libchdr lzma/zstd LICENSE files), and NOTICE only covers third-party attribution. Severity critical is justified: the root LICENSE legally purports to grant MIT rights (sublicense/sell) over vendored GPLv2 code the copyright holder cannot relicense, creating GPL-violation exposure for downstream users. Recommendation in the finding is correct."
+          }
+        },
+        {
+          "id": "lic-02",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Confirmed all cited evidence. README.md:355/364 declare GPL-2.0-only ('consistent with DOSBox-X') and 'GPL-2.0-only AND MIT'; CONTRIBUTING.md:226-233 mandates GPL-2.0-only headers; DEPENDENCIES.md:18 says 'GPL-2.0-or-later license'. Independent repo-wide tally (excluding audit-wiki/build): 200 files tagged GPL-2.0-or-later, 48 MIT, 2 Zlib, ZERO GPL-2.0-only — the only -only strings are in CONTRIBUTING.md and the audit report itself, so the finding's 116-file count was conservative. engine/src/cpu/cpu.cpp:4-7 carries DOSBox 'version 2 or (at your option) any later version' boilerplate, refuting README's claim that -only is consistent with upstream. include/legends/legends_embed.h has no SPDX tag (only ambiguous 'GPL v2.0' prose); engine/ contains only 1-byte stubs, no license text. No mitigation exists: no SPDX lint in any .github/workflows file; scripts/verify_gpl_isolation.py checks linker-map symbols, not headers. Bonus contradiction: root LICENSE (README calls it 'multi-component overview') is pure MIT text. High severity is justified for a compliance finding: docs vs file headers grant materially different rights, and contributors following CONTRIBUTING would mix -only into an -or-later tree, in a project whose architecture centers on GPL isolation."
+          }
+        },
+        {
+          "id": "lic-03",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified all six citations; every quote is accurate. proxy_api.cpp is SPDX MIT (line 1) and includes legends_embed.h (line 6), whose own header text (line 7) says GPL v2.0 and which CONTRIBUTING.md:253 assigns GPL-2.0-only — yet DEPENDENCIES.md:18 claims the MIT proxy 'does not link any GPL code' with no mention of the GPL header at the ABI boundary (true at object-link level per CMakeLists.txt:422-427, but the compile-time dependency is undocumented and the design doc TDD-LIC-001 never addresses header licensing). Design doc line 5 verbatim calls the shell a 'proprietary application shell' with 'zero GPL object code', contradicted by CONTRIBUTING.md:258 (src/app GPL-2.0-only) and src/app/application.cpp:1 (GPL-2.0-or-later — also inconsistent with '-only'). README Quick Start (154-185) embeds in-process against legends_core (STATIC lib, CMakeLists.txt:186) and README:29 advertises Rust/Python FFI, while the README License section (351-368) omits in-process embedder obligations; ARCHITECTURE.md:553 is the only mention. Refutation attempts failed: NOTICE is third-party-only, root LICENSE is plain MIT text (an extra inconsistency vs the GPL-2.0 README badge), no doc reconciles the contradictions. Only caveat: whether #include of an API header legally creates a derivative is contested, but the internal documentation contradictions are real regardless. High severity is justified because GPL isolation is the project's core advertised feature and the contradictions could mislead downstream embedders into license violations."
+          }
+        },
+        {
+          "id": "doc-01",
+          "verdict": {
+            "isReal": true,
+            "confidence": "high",
+            "note": "Verified every citation. README.md:28 advertises 'Wasm sandbox support' present-tense under Capabilities; ARCHITECTURE.md:611-716 claims 'The project supports an optional Wasm/WASI build target' and 'CI enforces parity (REQ-WASM-026, REQ-WASM-040)'; CMakeLists.txt:452 references wasm.md/wit/ and line 478 lists SOURCES wit/legends-emulator.wit. Confirmed wasm.md and wit/ are absent from the working tree and `git log --all -- wasm.md` / `-- wit` are empty (never committed). Word-precise grep of .github/workflows for wasm|wasi|wasmtime returns zero matches, so the CI-parity claim is false. Grep for LEGENDS_BUILD_WASM shows only the OFF-by-default CMake option and docs — no wasm code exists. Refutation attempts found only partial mitigations: README.md:309 marks wasm.md '(planned)' in the directory tree, TODO.md:20/258 honestly says NOT STARTED 0/50 documentation-only, and the dangling CMake target is gated behind LEGENDS_BUILD_WASM=ON plus wit-bindgen being installed (default builds unaffected). These do not cure the README Capabilities bullet or the present-tense ARCHITECTURE.md section. Severity: high is defensible because the false claim concerns a security boundary (sandboxed execution, default-deny capabilities) plus nonexistent CI enforcement that an embedder could rely on; downgrade to medium only if treated purely as a docs-accuracy issue since no default build or runtime behavior is affected. Recommendation in the finding is appropriate."
+          }
+        }
+      ]
+    }
+  ]
+}
