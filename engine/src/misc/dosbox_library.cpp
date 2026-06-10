@@ -31,6 +31,7 @@
 #include <string>
 #include <thread>
 #include <mutex>
+#include <vector>
 
 namespace {
 
@@ -1168,6 +1169,62 @@ dosbox_lib_error_t dosbox_lib_load_state(
 
     auto* ctx = g_context.get();
 
+    dosbox::EngineStateMemory mem{};
+    std::memcpy(&mem, ptr + header.memory_offset, sizeof(mem));
+
+    if (header.version >= 5) {
+        const size_t live_memory_size = ctx->memory.size;
+        if (mem.size > live_memory_size) {
+            g_last_error = "Saved memory size exceeds live allocation";
+            return DOSBOX_LIB_ERR_INVALID_STATE;
+        }
+
+        const size_t dir_offset = dosbox::ENGINE_STATE_SIZE_V5_BASE;
+        if (header.total_size > dir_offset + sizeof(dosbox::V5SubBlockDir)) {
+            dosbox::V5SubBlockDir dir{};
+            std::memcpy(&dir, ptr + dir_offset, sizeof(dir));
+
+            if (dir.dir_magic == dosbox::V5_DIR_MAGIC && dir.entry_count > 0) {
+                const size_t entries_offset = dir_offset + sizeof(dosbox::V5SubBlockDir);
+                const size_t entries_bytes =
+                    static_cast<size_t>(dir.entry_count) * sizeof(dosbox::V5DirEntry);
+                if (entries_offset > header.total_size ||
+                    entries_bytes > header.total_size - entries_offset) {
+                    g_last_error = "Invalid V5 sub-block directory";
+                    return DOSBOX_LIB_ERR_INVALID_STATE;
+                }
+
+                for (uint16_t i = 0; i < dir.entry_count; ++i) {
+                    dosbox::V5DirEntry entry{};
+                    std::memcpy(&entry, ptr + entries_offset + i * sizeof(dosbox::V5DirEntry),
+                                sizeof(entry));
+
+                    if (entry.offset > header.total_size ||
+                        entry.size > header.total_size - entry.offset) {
+                        g_last_error = "Invalid V5 sub-block bounds";
+                        return DOSBOX_LIB_ERR_INVALID_STATE;
+                    }
+
+                    if (entry.tag == dosbox::V5_SUBTAG_RAM) {
+                        if (ctx->memory.base == nullptr && entry.orig_size > 0) {
+                            g_last_error = "RAM blob present without live memory";
+                            return DOSBOX_LIB_ERR_INVALID_STATE;
+                        }
+                        if (entry.orig_size > live_memory_size || entry.orig_size > mem.size) {
+                            g_last_error = "RAM blob exceeds live allocation";
+                            return DOSBOX_LIB_ERR_INVALID_STATE;
+                        }
+                    } else if (entry.tag == dosbox::V5_SUBTAG_VRAM) {
+                        if (entry.orig_size > dosbox::vga_mem_size()) {
+                            g_last_error = "VRAM blob exceeds live allocation";
+                            return DOSBOX_LIB_ERR_INVALID_STATE;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Deserialize timing state (H2: memcpy into local struct)
     dosbox::EngineStateTiming timing{};
     std::memcpy(&timing, ptr + header.timing_offset, sizeof(timing));
@@ -1298,11 +1355,7 @@ dosbox_lib_error_t dosbox_lib_load_state(
     dosbox::restore_cpu_control(cpu);
 
     // Deserialize Memory state (H2: memcpy into local struct)
-    dosbox::EngineStateMemory mem{};
-    std::memcpy(&mem, ptr + header.memory_offset, sizeof(mem));
-    ctx->memory.size = static_cast<size_t>(mem.size);
-    ctx->memory.pages = mem.pages;
-    ctx->memory.handler_pages = mem.handler_pages;
+    // Allocation fields (base/size/pages/handlers) are owned by the live engine.
     ctx->memory.reported_pages = mem.reported_pages;
     ctx->memory.reported_pages_4gb = mem.reported_pages_4gb;
     ctx->memory.lfb.start_page = mem.lfb_start_page;
@@ -1437,15 +1490,15 @@ dosbox_lib_error_t dosbox_lib_load_state(
                         case dosbox::V5_SUBTAG_RAM: {
                             if (ctx->memory.base == nullptr || ctx->memory.size == 0)
                                 break;
-                            if (entry.orig_size > ctx->memory.size)
-                                break;  // Saved RAM larger than current allocation
+                            std::vector<uint8_t> decoded_ram(ctx->memory.size);
                             size_t decoded = dosbox::zero_rle_decode(
                                 ptr + entry.offset, entry.size,
-                                ctx->memory.base, ctx->memory.size);
-                            if (decoded == 0 && entry.orig_size > 0) {
+                                decoded_ram.data(), decoded_ram.size());
+                            if (decoded != entry.orig_size) {
                                 g_last_error = "RAM blob decompression failed";
                                 return DOSBOX_LIB_ERR_INVALID_STATE;
                             }
+                            std::memcpy(ctx->memory.base, decoded_ram.data(), decoded);
                             break;
                         }
                         case dosbox::V5_SUBTAG_VGA_REG: {
@@ -1463,13 +1516,15 @@ dosbox_lib_error_t dosbox_lib_load_state(
                                 break;
                             if (entry.orig_size > dosbox::vga_mem_size())
                                 break;
+                            std::vector<uint8_t> decoded_vram(dosbox::vga_mem_size());
                             size_t decoded = dosbox::zero_rle_decode(
                                 ptr + entry.offset, entry.size,
-                                dosbox::vga_mem_linear(), dosbox::vga_mem_size());
-                            if (decoded == 0 && entry.orig_size > 0) {
+                                decoded_vram.data(), decoded_vram.size());
+                            if (decoded != entry.orig_size) {
                                 g_last_error = "VRAM blob decompression failed";
                                 return DOSBOX_LIB_ERR_INVALID_STATE;
                             }
+                            std::memcpy(dosbox::vga_mem_linear(), decoded_vram.data(), decoded);
                             break;
                         }
                         default:

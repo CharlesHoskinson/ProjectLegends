@@ -13,6 +13,10 @@
 #include "dosbox/dosbox_library.h"
 #include "dosbox/error_mapping.h"
 
+#include <algorithm>
+#include <cstring>
+#include <vector>
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Version API Tests
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -717,6 +721,54 @@ protected:
     dosbox_lib_handle_t handle_ = nullptr;
 };
 
+namespace {
+
+void RefreshEngineStateChecksum(std::vector<uint8_t>& buffer) {
+    auto* header = reinterpret_cast<dosbox::EngineStateHeader*>(buffer.data());
+    const uint8_t* data_start = buffer.data() + sizeof(dosbox::EngineStateHeader);
+    const size_t data_size = header->total_size - sizeof(dosbox::EngineStateHeader);
+    header->checksum = dosbox::compute_crc32(data_start, data_size);
+}
+
+dosbox::V5DirEntry* FindV5DirectoryEntry(std::vector<uint8_t>& buffer, uint16_t tag) {
+    auto* header = reinterpret_cast<dosbox::EngineStateHeader*>(buffer.data());
+    if (header->version < 5 || header->total_size <= dosbox::ENGINE_STATE_SIZE_V5_BASE) {
+        return nullptr;
+    }
+
+    auto* dir = reinterpret_cast<dosbox::V5SubBlockDir*>(
+        buffer.data() + dosbox::ENGINE_STATE_SIZE_V5_BASE);
+    if (dir->dir_magic != dosbox::V5_DIR_MAGIC) {
+        return nullptr;
+    }
+
+    auto* entries = reinterpret_cast<dosbox::V5DirEntry*>(
+        buffer.data() + dosbox::ENGINE_STATE_SIZE_V5_BASE + sizeof(dosbox::V5SubBlockDir));
+    for (uint16_t i = 0; i < dir->entry_count; ++i) {
+        if (entries[i].tag == tag) {
+            return &entries[i];
+        }
+    }
+    return nullptr;
+}
+
+size_t EncodeZeroBytes(size_t count, uint8_t* dst, size_t cap) {
+    size_t out = 0;
+    while (count > 0) {
+        const size_t run = std::min<size_t>(count, 65535);
+        if (out + 3 > cap) {
+            return 0;
+        }
+        dst[out++] = 0x00;
+        dst[out++] = static_cast<uint8_t>((run >> 8) & 0xFF);
+        dst[out++] = static_cast<uint8_t>(run & 0xFF);
+        count -= run;
+    }
+    return out;
+}
+
+} // namespace
+
 TEST_F(DOSBoxLibraryEngineStateTest, SaveStateReturnsCorrectSize) {
     size_t size = 0;
     auto err = dosbox_lib_save_state(handle_, nullptr, 0, &size);
@@ -999,6 +1051,48 @@ TEST_F(DOSBoxLibraryEngineStateTest, MultipleRoundTripsPreserveState) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Test Hardening: Engine State Security Tests
 // ═══════════════════════════════════════════════════════════════════════════════
+
+TEST_F(DOSBoxLibraryEngineStateTest, LoadRejectsOversizedSerializedMemorySizeBeforeRamDecode) {
+    uint8_t hash_before[32] = {0};
+    ASSERT_EQ(dosbox_lib_get_state_hash(handle_, hash_before), DOSBOX_LIB_OK);
+
+    size_t size = 0;
+    ASSERT_EQ(dosbox_lib_save_state(handle_, nullptr, 0, &size), DOSBOX_LIB_OK);
+    std::vector<uint8_t> buffer(size);
+    ASSERT_EQ(dosbox_lib_save_state(handle_, buffer.data(), buffer.size(), &size), DOSBOX_LIB_OK);
+    buffer.resize(size);
+
+    auto* header = reinterpret_cast<dosbox::EngineStateHeader*>(buffer.data());
+    ASSERT_EQ(header->version, dosbox::ENGINE_STATE_VERSION);
+
+    auto* memory = reinterpret_cast<dosbox::EngineStateMemory*>(
+        buffer.data() + header->memory_offset);
+    const uint64_t live_size = memory->size;
+    ASSERT_GT(live_size, 0u);
+
+    auto* ram = FindV5DirectoryEntry(buffer, dosbox::V5_SUBTAG_RAM);
+    ASSERT_NE(ram, nullptr);
+    ASSERT_GT(ram->size, 0u);
+    ASSERT_LE(static_cast<size_t>(ram->offset) + ram->size, buffer.size());
+
+    const uint64_t oversized_size = live_size + 1;
+    memory->size = oversized_size;
+    ram->orig_size = static_cast<uint32_t>(oversized_size);
+    const size_t encoded = EncodeZeroBytes(
+        static_cast<size_t>(oversized_size),
+        buffer.data() + ram->offset,
+        buffer.size() - ram->offset);
+    ASSERT_GT(encoded, 0u);
+    ram->size = static_cast<uint32_t>(encoded);
+    RefreshEngineStateChecksum(buffer);
+
+    const auto err = dosbox_lib_load_state(handle_, buffer.data(), buffer.size());
+    EXPECT_EQ(err, DOSBOX_LIB_ERR_INVALID_STATE);
+
+    uint8_t hash_after[32] = {0};
+    ASSERT_EQ(dosbox_lib_get_state_hash(handle_, hash_after), DOSBOX_LIB_OK);
+    EXPECT_EQ(std::memcmp(hash_before, hash_after, sizeof(hash_before)), 0);
+}
 
 TEST_F(DOSBoxLibraryEngineStateTest, LoadRejectsTotalSizeSmallerThanHeader) {
     std::vector<uint8_t> buffer(dosbox::ENGINE_STATE_SIZE, 0);

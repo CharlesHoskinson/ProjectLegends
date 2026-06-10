@@ -1,21 +1,52 @@
-MIT License
+Project Legends License Overview
+================================
 
-Copyright (c) 2024-2025 Charles Hoskinson and Contributors
+Project Legends is a multi-component repository. It is not distributed under a
+single MIT license. This file is an overview of the licenses and license
+markers currently present in the repository; it does not relicense any file.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Where a source file has an SPDX-License-Identifier, that identifier is the
+file-level license marker. Where third-party code carries its own license text
+or notice, that text controls that component. See `COPYING` for the GNU General
+Public License version 2 text and `NOTICE` for third-party attribution.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The GPL-2.0-only versus GPL-2.0-or-later question is not resolved here. Some
+project documentation currently uses GPL-2.0-only language, while many current
+Project Legends source files use `SPDX-License-Identifier: GPL-2.0-or-later`.
+This overview records those facts only; the owner decision is reserved for the
+separate licensing cleanup work.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Component license table
+-----------------------
+
+| Path | Current license markers / notices | Notes |
+|---|---|---|
+| `engine/` | GPL, from the vendored DOSBox-X fork and related engine code. `NOTICE` identifies DOSBox-X as GNU GPL v2.0; `COPYING` contains GPL v2 text. | Includes the vendored DOSBox-X-derived engine and local engine bridge code. This row does not decide GPL-only versus or-later beyond the current notices. |
+| `src/legends/`, `src/app/`, `src/pal/`, `src/engine_host/`, `src/main.cpp` | Current source SPDX tags observed in these trees are `GPL-2.0-or-later`. | These components link to or participate in the GPL engine path. |
+| `include/legends/`, `include/pal/` | Current source SPDX tags observed in these trees are `GPL-2.0-or-later`. | Public headers for the GPL-linked embedding and PAL surfaces. |
+| `src/legends_ipc/`, `include/legends_ipc/` | Current source SPDX tags are `MIT`. | IPC protocol and serialization code intended to remain independent of GPL engine objects. |
+| `src/legends_proxy/` | Current source SPDX tags are `MIT`. | IPC proxy surface intended to link only MIT IPC code. |
+| `external/glad/` | Current source SPDX tags are `GPL-2.0-or-later`. | Repository-local GL loader files as currently tagged. |
+| `external/stb/` | `stb_truetype.h` states public domain. `stb_image_write.h` offers MIT License or public domain. | Third-party stb single-header components retain their embedded notices. |
+| `tests/` | Mixed current SPDX tags: mostly `GPL-2.0-or-later`, with IPC/proxy/isolation tests and helpers tagged `MIT`. | Test files follow their file-level SPDX markers. |
+| `benchmarks/` | Mixed current SPDX tags: `GPL-2.0-or-later` and `MIT`. | Benchmark files follow their file-level SPDX markers. |
+| `scripts/` | Mixed current SPDX tags: `GPL-2.0-or-later` and `MIT`. | Script files follow their file-level SPDX markers. |
+| `cmake/` and root CMake files | Current tagged template file uses `GPL-2.0-or-later`; root `CMakeLists.txt` says GNU GPL v2.0 in comments. | Build metadata does not create a new license grant. |
+| `.github/`, `.githooks/` | Workflow comments currently say GNU GPL v2.0 where marked; other automation files may be unmarked. | CI and repository automation follow their explicit notices where present. |
+| `docs/`, `spec/`, `openspec/` | Documentation/specification files are a mix of unmarked project documentation and explicit component statements; `openspec/changes/phase-iso-process-isolation/specs/wire-format/spec.md` references an MIT SPDX requirement for the wire format. | Existing documentation statements are descriptive and may not match current source SPDX tags. |
+| `DEPENDENCIES.md` and CMake FetchContent dependencies | Dependency manifest lists gsl-lite (MIT), SDL3 (Zlib), GoogleTest (BSD-3-Clause), Google Benchmark (Apache-2.0), SDL2 (Zlib), FluidSynth (LGPL-2.1), MUNT/mt32emu (LGPL-2.1), and zlib (Zlib). | `NOTICE` contains third-party attribution. CMake fetches pinned dependency versions when they are not installed locally. |
+| `COPYING` | GNU General Public License version 2 text. | License text, not a source component. |
+| `NOTICE` | Third-party attribution and license summary. | Attribution file; no source headers changed by this overview. |
+| `AGENTS.md`, `ARCHITECTURE.md`, `AUDIT.md`, `AUDIT_REPORT.md`, `CIFix.md`, `CONTRIBUTING.md`, `README.md`, `REFACTORING_CHANGELOG.md`, `RELEASING.md`, `REQUIREMENTS.md`, `TLA_CONFORMANCE.md`, `tlaAudit.md` | Top-level project documentation; some files describe GPL/MIT component boundaries and some are unmarked. | This overview does not add a separate license grant for documentation beyond existing notices. |
+| `CHANGELOG.md`, `ROADMAP.md`, `roadmap.md`, `TODO.md` | Top-level project planning/release notes; unmarked in this pass. | Not modified by this Sprint 0 license overview. |
+| `CMakePresets.json`, `requirements-dev.txt`, `.gitattributes`, `.gitignore`, `.codex/`, `.claude/`, `audit-wiki/`, `graphify-out/`, `build_log.txt`, `build_output.txt` | Repository metadata, generated/audit output, or local tooling records; no separate source license marker was added here. | These entries are listed so top-level repository contents are not hidden by the old single-license file. |
+
+External dependency attribution
+-------------------------------
+
+The root `NOTICE` file identifies the third-party projects incorporated by or
+used by Project Legends. The current dependency manifest is `DEPENDENCIES.md`;
+the pinned versions used by CMake are in `cmake/dependencies.cmake`.
+
+No source SPDX headers were added, removed, or changed as part of this
+overview.

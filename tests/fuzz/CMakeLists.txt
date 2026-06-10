@@ -30,6 +30,10 @@ target_link_libraries(generate_fuzz_corpus PRIVATE
     aibox_core
 )
 
+target_include_directories(generate_fuzz_corpus PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+
 target_compile_definitions(generate_fuzz_corpus PRIVATE
     AIBOX_LIBRARY_MODE=1
     AIBOX_HEADLESS=1
@@ -81,6 +85,13 @@ set(FUZZ_LINK_OPTIONS
 if(ENABLE_ASAN)
     list(APPEND FUZZ_COMPILE_OPTIONS -fsanitize=address)
     list(APPEND FUZZ_LINK_OPTIONS -fsanitize=address)
+    if(WIN32)
+        list(APPEND FUZZ_COMPILE_OPTIONS
+            -D_DISABLE_STRING_ANNOTATION
+            -D_DISABLE_VECTOR_ANNOTATION
+            -D_DISABLE_OPTIONAL_ANNOTATION
+        )
+    endif()
     message(STATUS "  AddressSanitizer enabled")
 endif()
 
@@ -152,6 +163,35 @@ target_compile_definitions(fuzz_engine_load_state PRIVATE
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Fuzz target: V5 RAM blob with CRC-aware mutator
+# ─────────────────────────────────────────────────────────────────────────────
+
+add_executable(fuzz_engine_memory_blob
+    fuzz_engine_memory_blob.cpp
+)
+
+target_link_libraries(fuzz_engine_memory_blob PRIVATE
+    aibox_core
+)
+
+target_include_directories(fuzz_engine_memory_blob PRIVATE
+    ${CMAKE_SOURCE_DIR}/engine/include
+)
+
+target_compile_options(fuzz_engine_memory_blob PRIVATE
+    ${FUZZ_COMPILE_OPTIONS}
+)
+
+target_link_options(fuzz_engine_memory_blob PRIVATE
+    ${FUZZ_LINK_OPTIONS}
+)
+
+target_compile_definitions(fuzz_engine_memory_blob PRIVATE
+    AIBOX_LIBRARY_MODE=1
+    AIBOX_HEADLESS=1
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Fuzz target: input injection (legends API level)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -212,16 +252,20 @@ target_compile_definitions(fuzz_config_parser PRIVATE
 # ─────────────────────────────────────────────────────────────────────────────
 
 add_custom_target(fuzz-all
-    DEPENDS fuzz_legends_load_state fuzz_engine_load_state fuzz_input_injection fuzz_config_parser
+    DEPENDS fuzz_legends_load_state fuzz_engine_load_state fuzz_engine_memory_blob fuzz_input_injection fuzz_config_parser
     COMMENT "Building all fuzz targets"
 )
 
 # Run fuzzers (short run for CI)
 add_custom_target(fuzz-quick
+    COMMAND $<TARGET_FILE:fuzz_engine_memory_blob>
+            ${CMAKE_CURRENT_BINARY_DIR}/corpus/engine_memory_blob
+            -max_len=1048576
+            -max_total_time=60
     COMMAND $<TARGET_FILE:fuzz_legends_load_state>
             ${CMAKE_CURRENT_BINARY_DIR}/corpus
             -max_len=8192
             -max_total_time=60
-    DEPENDS fuzz_legends_load_state
+    DEPENDS fuzz_engine_memory_blob fuzz_legends_load_state generate-corpus
     COMMENT "Running quick fuzz test (60 seconds)"
 )

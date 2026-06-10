@@ -16,10 +16,24 @@
  */
 
 #include <legends/legends_embed.h>
+#include <dosbox/dosbox_library.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <direct.h>
+static void make_dir(const char* path) {
+    _mkdir(path);
+}
+#else
+#include <sys/stat.h>
+static void make_dir(const char* path) {
+    mkdir(path, 0777);
+}
+#endif
 
 static bool write_file(const char* path, const void* data, size_t size) {
     FILE* f = fopen(path, "wb");
@@ -32,7 +46,57 @@ static bool write_file(const char* path, const void* data, size_t size) {
     return written == size;
 }
 
+static void save_engine_state(dosbox_lib_handle_t handle, const char* path) {
+    size_t size = 0;
+    if (dosbox_lib_save_state(handle, nullptr, 0, &size) != DOSBOX_LIB_OK || size == 0) {
+        fprintf(stderr, "Failed to query engine state size for %s\n", path);
+        return;
+    }
+
+    std::vector<uint8_t> buffer(size);
+    if (dosbox_lib_save_state(handle, buffer.data(), buffer.size(), &size) != DOSBOX_LIB_OK) {
+        fprintf(stderr, "Failed to save engine state for %s\n", path);
+        return;
+    }
+    buffer.resize(size);
+
+    if (write_file(path, buffer.data(), buffer.size())) {
+        printf("Created: %s (%zu bytes)\n", path, buffer.size());
+    }
+}
+
+static void generate_engine_memory_blob_corpus(const char* output_dir) {
+    std::string engine_dir = std::string(output_dir) + "/engine_memory_blob";
+    make_dir(engine_dir.c_str());
+
+    dosbox_lib_handle_t handle = nullptr;
+    dosbox_lib_destroy(nullptr);
+
+    if (dosbox_lib_create(nullptr, &handle) != DOSBOX_LIB_OK ||
+        dosbox_lib_init(handle) != DOSBOX_LIB_OK) {
+        fprintf(stderr, "Failed to create engine instance for memory blob corpus\n");
+        if (handle != nullptr) {
+            dosbox_lib_destroy(handle);
+        }
+        return;
+    }
+
+    auto path = engine_dir + "/fresh_v5_engine_state.bin";
+    save_engine_state(handle, path.c_str());
+
+    dosbox_lib_step_cycles(handle, 2048, nullptr);
+    path = engine_dir + "/stepped_v5_engine_state.bin";
+    save_engine_state(handle, path.c_str());
+
+    dosbox_lib_reset(handle);
+    path = engine_dir + "/reset_v5_engine_state.bin";
+    save_engine_state(handle, path.c_str());
+
+    dosbox_lib_destroy(handle);
+}
+
 static void generate_corpus(const char* output_dir) {
+    make_dir(output_dir);
     legends_handle handle = nullptr;
 
     // Clean up any existing instance
@@ -173,6 +237,8 @@ static void generate_corpus(const char* output_dir) {
     }
 
     legends_destroy(handle);
+
+    generate_engine_memory_blob_corpus(output_dir);
     printf("\nCorpus generation complete.\n");
 }
 

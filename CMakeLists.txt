@@ -211,6 +211,7 @@ target_compile_definitions(legends_core
     PRIVATE
         $<$<BOOL:${LEGENDS_HEADLESS}>:LEGENDS_HEADLESS=1>
         $<$<BOOL:${LEGENDS_LIBRARY_MODE}>:LEGENDS_LIBRARY_MODE=1>
+        $<$<BOOL:${LEGENDS_BUILD_TESTS}>:LEGENDS_TESTING=1>
         # gsl-lite v1 strict C++23 configuration
         gsl_CONFIG_DEFAULTS_VERSION=1
         gsl_FEATURE_GSL_COMPATIBILITY_MODE=0
@@ -799,6 +800,7 @@ if(LEGENDS_BUILD_TESTS)
 
     target_compile_definitions(legends_unit_tests PRIVATE
         LEGENDS_LIBRARY_MODE=1
+        LEGENDS_TESTING=1
         # gsl-lite contract config (must match legends_core)
         gsl_CONFIG_DEFAULTS_VERSION=1
         gsl_CONFIG_CONTRACT_CHECKING_ON
