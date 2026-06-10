@@ -7,8 +7,8 @@
 #
 # Tiered triggers (REQ-OPS-004):
 #   - PR / push to develop: build + unit tests (~15 min)
-#   - merge-to-main: + sanitizers
-#   - nightly (cron): soak tests, fuzz
+#   - PR / push to master: + required ASan/UBSan and fuzz smoke
+#   - nightly (cron): soak tests, extended fuzz
 #   - tag push (vX.Y.Z): packaging job
 #
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -20,7 +20,7 @@ on:
     branches: [main, master, develop]
     tags: ["v[0-9]*"]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, develop]
   schedule:
     # Nightly at 03:00 UTC (soak + fuzz)
     - cron: "0 3 * * *"
@@ -323,14 +323,18 @@ jobs:
         run: test -f build/project_legends
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Sanitizer Builds (merge-to-main + nightly)
+  # Sanitizer Builds (PR + push-to-master + nightly)
   # ─────────────────────────────────────────────────────────────────────────────
   sanitizers:
-    name: Optional ${{ matrix.sanitizer }} Sanitizer
+    name: ${{ matrix.sanitizer }} Sanitizer
     runs-on: ubuntu-latest
     timeout-minutes: 20
     continue-on-error: ${{ matrix.allow_failure == true }}
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: >
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         sanitizer: [address, undefined, thread, memory]
@@ -348,6 +352,8 @@ jobs:
           # (g_active_instance), CrashBreadcrumb::add(), and cross-thread
           # tests that intentionally exercise wrong-thread paths.
           # Mark allow-failure until REQ-TH-004 mixer/global state fixes land.
+          # Exit plan (2026-06-10): Sprint 7 tracks removing allow_failure
+          # after the remaining engine global-state races are fixed.
           - sanitizer: thread
             flags: "-stdlib=libc++ -fsanitize=thread -fno-omit-frame-pointer"
             c_flags: "-fsanitize=thread -fno-omit-frame-pointer"
@@ -357,6 +363,8 @@ jobs:
           # CI uses stock libc++ which is NOT MSan-instrumented, so test
           # executables crash on startup. Mark as allow-failure until we
           # build an instrumented libc++ or switch to a pre-built one.
+          # Exit plan (2026-06-10): Sprint 7 tracks replacing stock libc++
+          # with an instrumented runtime or retiring the MSan gate.
           - sanitizer: memory
             flags: "-stdlib=libc++ -fsanitize=memory -fPIE -fno-omit-frame-pointer"
             c_flags: "-fsanitize=memory -fPIE -fno-omit-frame-pointer"
@@ -465,13 +473,17 @@ jobs:
           echo "Static analysis passed (warnings only)."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Fuzz Testing (libFuzzer) — PR: quick 30s, merge-to-main: 60s
+  # Fuzz Testing (libFuzzer) — PR/push-to-master: quick 30s, nightly: 60s
   # ─────────────────────────────────────────────────────────────────────────────
   fuzz:
-    name: Optional Fuzz Testing
+    name: Fuzz Testing
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: >
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
     needs: [linux]
 
     steps:
@@ -499,13 +511,20 @@ jobs:
       - name: Generate seed corpus
         run: ./build/tests/fuzz/generate_fuzz_corpus build/tests/fuzz/corpus
 
-      # PR runs: quick 30s smoke test
-      - name: "PR: Quick fuzz (30s per target)"
-        if: github.event_name == 'pull_request'
+      # PR and push-to-master runs: quick 30s smoke test
+      - name: "Smoke: Quick fuzz (30s per target)"
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
         run: |
+          ./build/tests/fuzz/fuzz_engine_load_state \
+            build/tests/fuzz/corpus \
+            -max_len=8192 \
+            -max_total_time=30
           ./build/tests/fuzz/fuzz_legends_load_state \
             build/tests/fuzz/corpus \
             -max_len=8192 \
+            -max_total_time=30
+          ./build/tests/fuzz/fuzz_input_injection \
+            -max_len=4096 \
             -max_total_time=30
           ./build/tests/fuzz/fuzz_config_parser \
             build/tests/fuzz/corpus/config \
