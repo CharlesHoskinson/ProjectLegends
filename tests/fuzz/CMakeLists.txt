@@ -107,6 +107,33 @@ if(ENABLE_MSAN)
     message(STATUS "  MemorySanitizer enabled")
 endif()
 
+# When the project builds against libc++, the prebuilt libFuzzer runtime
+# still references libstdc++ internals (iostreams, __throw_* helpers). The
+# driver appends the runtime archive after every user library, where nothing
+# can resolve those references, so link the archive explicitly and follow it
+# with libstdc++. FUZZER_RUNTIME_LIBS is empty in plain-libstdc++ builds.
+set(FUZZER_RUNTIME_LIBS "")
+if(CMAKE_CXX_FLAGS MATCHES "-stdlib=libc\\+\\+")
+    if(NOT CMAKE_SYSTEM_PROCESSOR)
+        set(_fuzzer_rt_arch "x86_64")
+    else()
+        set(_fuzzer_rt_arch "${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+    execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -print-file-name=libclang_rt.fuzzer-${_fuzzer_rt_arch}.a
+        OUTPUT_VARIABLE LIBFUZZER_RT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(EXISTS "${LIBFUZZER_RT}")
+        list(REMOVE_ITEM FUZZ_LINK_OPTIONS -fsanitize=fuzzer)
+        list(PREPEND FUZZ_LINK_OPTIONS -fsanitize=fuzzer-no-link)
+        set(FUZZER_RUNTIME_LIBS "${LIBFUZZER_RT}" stdc++)
+        message(STATUS "  libc++ build: linking libFuzzer runtime explicitly + libstdc++")
+    else()
+        message(WARNING "  libc++ build but libFuzzer runtime archive not found (${LIBFUZZER_RT}); relying on driver link")
+    endif()
+endif()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Fuzz target: legends_load_state
 # ─────────────────────────────────────────────────────────────────────────────
@@ -118,6 +145,7 @@ add_executable(fuzz_legends_load_state
 target_link_libraries(fuzz_legends_load_state PRIVATE
     legends_core
     aibox_core
+    ${FUZZER_RUNTIME_LIBS}
 )
 
 target_compile_options(fuzz_legends_load_state PRIVATE
@@ -143,6 +171,7 @@ add_executable(fuzz_engine_load_state
 
 target_link_libraries(fuzz_engine_load_state PRIVATE
     aibox_core
+    ${FUZZER_RUNTIME_LIBS}
 )
 
 target_include_directories(fuzz_engine_load_state PRIVATE
@@ -172,6 +201,7 @@ add_executable(fuzz_engine_memory_blob
 
 target_link_libraries(fuzz_engine_memory_blob PRIVATE
     aibox_core
+    ${FUZZER_RUNTIME_LIBS}
 )
 
 target_include_directories(fuzz_engine_memory_blob PRIVATE
@@ -202,6 +232,7 @@ add_executable(fuzz_input_injection
 target_link_libraries(fuzz_input_injection PRIVATE
     legends_core
     aibox_core
+    ${FUZZER_RUNTIME_LIBS}
 )
 
 target_compile_options(fuzz_input_injection PRIVATE
@@ -232,6 +263,7 @@ target_link_libraries(fuzz_config_parser PRIVATE
     # gsl-lite itself — the dep is deliberately PRIVATE to legends_core and
     # does not propagate.
     gsl::gsl-lite-v1
+    ${FUZZER_RUNTIME_LIBS}
 )
 
 target_include_directories(fuzz_config_parser PRIVATE
