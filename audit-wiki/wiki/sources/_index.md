@@ -16,3 +16,4 @@ Each entry: `[[Page]] — one-line summary`.
 - [[CI Design for C++-CMake Monorepos (2026-06)]] — presets as single source of truth (CI uses none today), never path-filter a required workflow, ClusterFuzzLite-style fuzz tiering.
 - [[Compiler Caching on GitHub Actions (2026-06)]] — ccache for the six Ninja Linux jobs, sccache+Ninja for MSVC, 10GB/7-day cache-pool key design; launcher propagates into FetchContent sub-builds.
 - [[Test Impact Analysis & Selection (2026-06)]] — module-grained CTest labels, ModuleManifest-driven reverse-closure selection, safe fallbacks; monolithic unit binary is the degenerate case and red CI makes history-based selection unlearnable.
+- [[Coverage Policy Ratcheting (2026-06)]] — diff-cover on the existing lcov artifact, exclude the vendored engine from the denominator, per-module floors on the DAG; enforcement must not ride on the Codecov token.
