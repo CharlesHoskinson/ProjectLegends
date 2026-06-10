@@ -19,3 +19,4 @@ Each entry: `[[Page]] — one-line summary`.
 - [[Coverage Policy Ratcheting (2026-06)]] — diff-cover on the existing lcov artifact, exclude the vendored engine from the denominator, per-module floors on the DAG; enforcement must not ride on the Codecov token.
 - [[Continuous Fuzzing in CI (2026-06)]] — persist corpus + capture crash artifacts (currently discarded), PR replay vs scheduled real fuzzing (30-60s below every documented floor), ClusterFuzzLite as the managed fit.
 - [[Flaky-Test Detection & Quarantine (2026-06)]] — burn-in detection without rerun data, DISABLED_/label quarantine with ticket+exit criteria, the relaxed SDL tests as the relax-the-assertion antipattern in pure form.
+- [[Vendored & License-Isolated Dependency CI (2026-06)]] — activate the DAG gate on the three license-critical targets, resurrect orphaned VerifyGPLIsolation.cmake fail-closed, REUSE compliance job; FSF shared-memory IPC caveat flagged for counsel.
