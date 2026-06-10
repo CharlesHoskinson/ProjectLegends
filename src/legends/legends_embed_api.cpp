@@ -67,6 +67,14 @@ using legends::internal::deserialize_input_event;
 // ─────────────────────────────────────────────────────────────────────────────
 static std::atomic<legends_instance*> g_active_instance{nullptr};
 
+#ifdef LEGENDS_TESTING
+static std::atomic<bool> g_test_fail_create_after_engine_acquire{false};
+
+extern "C" void legends_test_set_fail_create_after_engine_acquire(int enabled) {
+    g_test_fail_create_after_engine_acquire.store(enabled != 0, std::memory_order_release);
+}
+#endif
+
 // Thread-local error for pre-creation error reporting
 static thread_local std::string g_pre_creation_error;
 
@@ -824,26 +832,33 @@ legends_error_t legends_create(
     // Store owner thread ID for thread affinity checking
     inst->owner_thread_id = std::this_thread::get_id();
 
+    auto fail_create = [&](legends_error_t err, const char* message) -> legends_error_t {
+        if (message != nullptr && message[0] != '\0') {
+            inst->last_error = message;
+            g_pre_creation_error = message;
+        }
+        if (inst->engine_handle != nullptr) {
+            dosbox_lib_destroy(inst->engine_handle);
+            inst->engine_handle = nullptr;
+        }
+        inst->machine.reset();
+        g_active_instance.store(nullptr, std::memory_order_release);
+        delete inst;
+        return err;
+    };
+
     // Validate config if provided
     if (config != nullptr) {
         if (config->struct_size != sizeof(legends_config_t)) {
-            g_active_instance.store(nullptr, std::memory_order_release);
-            delete inst;
-            g_pre_creation_error = "Invalid config struct size";
-            return LEGENDS_ERR_INVALID_CONFIG;
+            return fail_create(LEGENDS_ERR_INVALID_CONFIG, "Invalid config struct size");
         }
         if (config->api_version != LEGENDS_API_VERSION) {
-            g_active_instance.store(nullptr, std::memory_order_release);
-            delete inst;
-            g_pre_creation_error = "API version mismatch";
-            return LEGENDS_ERR_VERSION_MISMATCH;
+            return fail_create(LEGENDS_ERR_VERSION_MISMATCH, "API version mismatch");
         }
         if (config->cpu_cycles != 0 &&
             (config->cpu_cycles < 100 || config->cpu_cycles > 1000000)) {
-            g_active_instance.store(nullptr, std::memory_order_release);
-            delete inst;
-            g_pre_creation_error = "cpu_cycles out of range (0=auto, or 100..1000000)";
-            return LEGENDS_ERR_INVALID_CONFIG;
+            return fail_create(LEGENDS_ERR_INVALID_CONFIG,
+                               "cpu_cycles out of range (0=auto, or 100..1000000)");
         }
         // Store config (deep copy strings so caller can free originals)
         inst->config = *config;
@@ -886,11 +901,8 @@ legends_error_t legends_create(
         inst->machine = std::make_unique<legends::MachineContext>(mc);
         auto result = inst->machine->initialize();
         if (!result.has_value()) {
-            inst->last_error = result.error().format();
-            inst->machine.reset();
-            g_active_instance.store(nullptr, std::memory_order_release);
-            delete inst;
-            return LEGENDS_ERR_INTERNAL;
+            const auto message = result.error().format();
+            return fail_create(LEGENDS_ERR_INTERNAL, message.c_str());
         }
 
         // Enable audio before engine creation (Phase -1)
@@ -904,22 +916,21 @@ legends_error_t legends_create(
 
         auto engine_err = dosbox_lib_create(&engine_config, &inst->engine_handle);
         if (engine_err != DOSBOX_LIB_OK) {
-            inst->last_error = "Failed to create DOSBox-X engine";
-            inst->machine.reset();
-            g_active_instance.store(nullptr, std::memory_order_release);
-            delete inst;
-            return dosbox_to_legends_error(engine_err);
+            return fail_create(dosbox_to_legends_error(engine_err),
+                               "Failed to create DOSBox-X engine");
         }
+
+#ifdef LEGENDS_TESTING
+        if (g_test_fail_create_after_engine_acquire.exchange(false, std::memory_order_acq_rel)) {
+            return fail_create(LEGENDS_ERR_INTERNAL,
+                               "Injected create failure after engine acquisition");
+        }
+#endif
 
         engine_err = dosbox_lib_init(inst->engine_handle);
         if (engine_err != DOSBOX_LIB_OK) {
-            dosbox_lib_destroy(inst->engine_handle);
-            inst->engine_handle = nullptr;
-            inst->last_error = "Failed to initialize DOSBox-X engine";
-            inst->machine.reset();
-            g_active_instance.store(nullptr, std::memory_order_release);
-            delete inst;
-            return dosbox_to_legends_error(engine_err);
+            return fail_create(dosbox_to_legends_error(engine_err),
+                               "Failed to initialize DOSBox-X engine");
         }
 
         // Initialize time state
@@ -949,11 +960,7 @@ legends_error_t legends_create(
         return LEGENDS_OK;
 
     } catch (const std::exception& e) {
-        inst->last_error = e.what();
-        inst->machine.reset();
-        g_active_instance.store(nullptr, std::memory_order_release);
-        delete inst;
-        return LEGENDS_ERR_INTERNAL;
+        return fail_create(LEGENDS_ERR_INTERNAL, e.what());
     }
 }
 

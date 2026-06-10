@@ -10,6 +10,10 @@
 #include "internal/legends_instance.h"
 #include <cstring>
 
+#ifdef LEGENDS_TESTING
+extern "C" void legends_test_set_fail_create_after_engine_acquire(int enabled);
+#endif
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Test Fixture - Ensures clean state between tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,6 +127,26 @@ TEST_F(DosboxxEmbedLifecycleTest, CreateRejectsWrongApiVersion) {
 
     EXPECT_EQ(err, LEGENDS_ERR_VERSION_MISMATCH);
     EXPECT_EQ(handle, nullptr);
+}
+
+TEST_F(DosboxxEmbedLifecycleTest, CreateLateFailureReleasesEngineHandle) {
+#ifndef LEGENDS_TESTING
+    GTEST_SKIP() << "requires LEGENDS_TESTING failure injection";
+#else
+    legends_test_set_fail_create_after_engine_acquire(1);
+
+    legends_handle failed = nullptr;
+    auto err = legends_create(nullptr, &failed);
+    EXPECT_EQ(err, LEGENDS_ERR_INTERNAL);
+    EXPECT_EQ(failed, nullptr);
+
+    legends_handle recovered = nullptr;
+    err = legends_create(nullptr, &recovered);
+    EXPECT_EQ(err, LEGENDS_OK);
+    EXPECT_NE(recovered, nullptr);
+
+    legends_destroy(recovered);
+#endif
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
