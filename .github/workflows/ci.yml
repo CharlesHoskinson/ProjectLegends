@@ -495,7 +495,10 @@ jobs:
       # clang-18 against the runner's libstdc++ lacks <expected> (libstdc++
       # gates it on __cpp_concepts >= 202002L, which clang-18 doesn't
       # advertise), so this lane builds with libc++ like every other clang
-      # lane. The flag is CXX-only.
+      # lane. The flag is CXX-only. The prebuilt libclang_rt.fuzzer runtime
+      # is compiled against libstdc++ internals, so the link also needs
+      # libstdc++ marked needed up front (--no-as-needed, since the runtime
+      # archive is appended after user libraries by the driver).
       - name: Configure
         run: |
           cmake -B build -G Ninja \
@@ -503,6 +506,7 @@ jobs:
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-Wl,--no-as-needed -lstdc++" \
             -DENABLE_FUZZING=ON \
             -DENABLE_ASAN=ON \
             -DLEGENDS_BUILD_TESTS=ON \

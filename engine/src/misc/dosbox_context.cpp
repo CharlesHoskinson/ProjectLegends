@@ -1108,11 +1108,7 @@ DOSBoxContext::~DOSBoxContext() {
 }
 
 DOSBoxContext::DOSBoxContext(DOSBoxContext&& other) noexcept
-    : config_(std::move(other.config_))
-    , initialized_(other.initialized_)
-    , stop_requested_(other.stop_requested_.load())
-    , last_error_(std::move(other.last_error_))
-    , timing(std::move(other.timing))
+    : timing(std::move(other.timing))
     , cpu_state(std::move(other.cpu_state))
     , mixer(std::move(other.mixer))
     , vga(std::move(other.vga))
@@ -1123,6 +1119,10 @@ DOSBoxContext::DOSBoxContext(DOSBoxContext&& other) noexcept
     , dma(other.dma)
     , dos(other.dos)
     , dos_filesystem(other.dos_filesystem)
+    , config_(std::move(other.config_))
+    , initialized_(other.initialized_)
+    , stop_requested_(other.stop_requested_.load())
+    , last_error_(std::move(other.last_error_))
 {
     // The owning-raw-pointer aggregates (memory.base, dma.controllers,
     // dos_filesystem.files/drives/devices) were copied above; reset the
