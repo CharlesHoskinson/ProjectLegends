@@ -39,3 +39,4 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - All three pre-flagged corrections honored and verified: roadmap de-dup (not restore); CHANGELOG TLS reworded (not deleted); REQ-EX-001/002 PARTIAL (confirmed cpu_library_stubs.cpp:56-60 is a real no-op PIC stub — C2 nuance preserved).
 - 6 TODO contradictions resolved; AUDIT.md 22/8 tally; ARCHITECTURE constants fixed 64/DBXS/v3; Wasm demoted to planned. Two owner decisions queued (GPL -or-later; Wasm defer).
 - [[Documentation Drift]] marked substantially resolved. Full report: `raw/sprint-1-audit-2026-06-10.md`, synthesis [[Sprint 1 Implementation Audit (2026-06-10)]].
+- 2026-06-10 — ingest: CI Gate Coverage Map (graphify + ModuleDAG + workflow triggers).
