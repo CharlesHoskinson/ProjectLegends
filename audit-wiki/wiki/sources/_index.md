@@ -14,3 +14,4 @@ Each entry: `[[Page]] — one-line summary`.
 - [[Sprint 1 Implementation Audit (2026-06-10)]] — auditor verdict on Sprint 1 (Truthful Record): PASS 8/8, no defects; all three corrections honored (roadmap de-dup, CHANGELOG reword, REQ-EX PARTIAL); docs reconciled, 3 CI guard scripts added, 2 owner decisions queued.
 - [[CI Run History (2026-06)]] — observational stats over all 397 retained Actions runs (2026-01-16..2026-06-10): 77.6% failure overall, CI workflow 6 successes ever (all post-gate-demotion), PAL CI zero, ~3h05m serial compute per full cycle.
 - [[CI Design for C++-CMake Monorepos (2026-06)]] — presets as single source of truth (CI uses none today), never path-filter a required workflow, ClusterFuzzLite-style fuzz tiering.
+- [[Compiler Caching on GitHub Actions (2026-06)]] — ccache for the six Ninja Linux jobs, sccache+Ninja for MSVC, 10GB/7-day cache-pool key design; launcher propagates into FetchContent sub-builds.
