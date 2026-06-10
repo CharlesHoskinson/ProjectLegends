@@ -192,9 +192,9 @@ Host App                    Legends Core                 DOSBox-X Core
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ SaveStateHeader (96 bytes)                                  │
-│   magic: 0x4C454753 ("LEGS")                                │
-│   version: 2                                                │
+│ SaveStateHeader (64 bytes)                                  │
+│   magic: 0x53584244 ("DBXS")                                │
+│   version: 3                                                │
 │   total_size, checksum                                      │
 │   section offsets and sizes                                 │
 ├─────────────────────────────────────────────────────────────┤
@@ -407,7 +407,7 @@ ProjectLegends/
 │   │
 │   └── src/misc/
 │       ├── dosbox_library.cpp      # Library implementation
-│       └── cpu_bridge.cpp          # CPU bridge (stub)
+│       └── cpu_bridge.cpp          # CPU bridge; library-mode PIC queue remains stubbed
 │
 ├── tests/
 │   └── unit/

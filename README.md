@@ -5,7 +5,7 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-GPL--2.0-blue)]()
 [![C++ Standard](https://img.shields.io/badge/C%2B%2B-23-blue)]()
-[![Tests](https://img.shields.io/badge/tests-1500%2B%20passing-brightgreen)]()
+[![Tests](https://github.com/CharlesHoskinson/projectLegends/actions/workflows/ci.yml/badge.svg)](https://github.com/CharlesHoskinson/projectLegends/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/CharlesHoskinson/projectLegends/graph/badge.svg)](https://codecov.io/gh/CharlesHoskinson/projectLegends)
 
 ---
@@ -188,75 +188,86 @@ int main() {
 
 ## API Reference
 
-### Lifecycle
+<!-- BEGIN GENERATED: legends-api-table -->
+Generated from `include/legends/legends_embed.h` (50 `LEGENDS_API` functions).
 
 | Function | Description |
 |----------|-------------|
-| `legends_create(config, handle_out)` | Create emulator instance |
-| `legends_destroy(handle)` | Release instance and resources |
-| `legends_reset(handle)` | Reset to initial state |
-| `legends_get_api_version(major, minor, patch)` | Query library version |
-| `legends_get_config(handle, config_out)` | Read active config |
-
-### Stepping
-
-| Function | Description |
-|----------|-------------|
-| `legends_step_ms(handle, ms, result)` | Advance by milliseconds |
-| `legends_step_cycles(handle, cycles, result)` | Advance by CPU cycles |
-| `legends_get_emu_time(handle, time_us)` | Query emulated time |
-| `legends_get_total_cycles(handle, cycles)` | Query cycle counter |
-
-### State Management
-
-| Function | Description |
-|----------|-------------|
-| `legends_save_state(handle, buf, size, size_out)` | Serialize state |
-| `legends_load_state(handle, buf, size)` | Restore state |
-| `legends_get_state_hash(handle, hash_out)` | SHA-256 of observable state |
-| `legends_verify_determinism(handle, cycles, result)` | Round-trip test |
-
-### Input
-
-| Function | Description |
-|----------|-------------|
-| `legends_key_event(handle, scancode, pressed)` | Inject key event |
-| `legends_key_event_ext(handle, scancode, pressed, flags)` | Inject key event with modifier flags |
-| `legends_text_input(handle, text)` | Type string |
-| `legends_mouse_event(handle, dx, dy, buttons)` | Inject mouse event |
-
-### Capture
-
-| Function | Description |
-|----------|-------------|
-| `legends_capture_text(handle, cells, cols, rows)` | Read text mode screen |
-| `legends_capture_rgb(handle, buf, stride, w, h)` | Read graphics as RGB24 |
-| `legends_is_frame_dirty(handle, dirty_out)` | Check if display changed since last capture |
-| `legends_get_cursor(handle, cursor_out)` | Get text cursor position and shape |
-
-### Diagnostics
-
-| Function | Description |
-|----------|-------------|
-| `legends_get_last_error(handle, buf, size)` | Get last error message string |
-| `legends_set_log_callback(handle, callback, userdata)` | Register log message callback |
-
----
+| `legends_get_api_version` | Get API version. |
+| `legends_create` | Create emulator instance. |
+| `legends_destroy` | Destroy emulator instance. |
+| `legends_force_destroy` | Force-destroy the active instance (test cleanup). |
+| `legends_reset` | Soft reset the emulator. |
+| `legends_get_config` | Get current configuration. |
+| `legends_step_ms` | Step emulation by milliseconds of emulated time. |
+| `legends_step_cycles` | Step emulation by exact CPU cycles. |
+| `legends_get_emu_time` | Get current emulated time. |
+| `legends_get_total_cycles` | Get total CPU cycles executed since creation/reset. |
+| `legends_capture_text` | Capture text-mode screen. |
+| `legends_capture_rgb` | Capture graphics framebuffer as RGB24. |
+| `legends_is_frame_dirty` | Check if framebuffer changed since last capture. |
+| `legends_get_cursor` | Get cursor position. |
+| `legends_key_event` | Inject keyboard scancode (Set 1 / AT scancodes). |
+| `legends_key_event_ext` | Inject extended scancode (E0-prefixed keys). |
+| `legends_text_input` | Type UTF-8 text string (convenience wrapper). |
+| `legends_mouse_event` | Inject mouse movement and button event. |
+| `legends_capture_audio` | Capture audio samples from the emulator. |
+| `legends_is_audio_active` | Check if audio subsystem is active. |
+| `legends_save_state` | Save complete machine state. |
+| `legends_load_state` | Load machine state from buffer. |
+| `legends_get_state_hash` | Get SHA-256 hash of current machine state. |
+| `legends_verify_determinism` | Verify determinism via round-trip test. |
+| `legends_get_last_error` | Get human-readable error message for last error. |
+| `legends_mount_drive` | Mount a host directory or image file to a DOS drive letter. |
+| `legends_unmount_drive` | Unmount a DOS drive letter. |
+| `legends_start_video_capture` | Start video capture to an AVI file. |
+| `legends_stop_video_capture` | Stop video capture and finalize the AVI file. |
+| `legends_is_video_capturing` | Check if video capture is active. |
+| `legends_joystick_event` | Inject joystick axis + button event. |
+| `legends_midi_set_device` | Set MIDI output device type. |
+| `legends_midi_set_soundfont` | Set SoundFont path for FluidSynth. |
+| `legends_midi_set_romdir` | Set ROM directory for MT-32 emulation. |
+| `legends_capture_midi_audio` | Capture MIDI synthesizer audio. |
+| `legends_printer_set_output` | Set printer output file path. |
+| `legends_printer_is_active` | Check if printer is active (has pending data). |
+| `legends_printer_flush` | Flush printer buffer to output file. |
+| `legends_set_ttf_font` | Set TrueType font for text mode rendering. |
+| `legends_ipx_enable` | Enable or disable IPX networking. |
+| `legends_ipx_connect` | Connect to an IPX server. |
+| `legends_ipx_disconnect` | Disconnect from IPX server. |
+| `legends_ipx_is_connected` | Check if connected to IPX server. |
+| `legends_glide_enable` | Enable or disable 3dfx Glide emulation. |
+| `legends_glide_set_resolution` | Set Glide rendering resolution. |
+| `legends_set_machine_pc98` | Enable or disable NEC PC-98 machine mode. |
+| `legends_is_pc98_mode` | Check if PC-98 mode is active. |
+| `legends_set_log_callback` | Set log callback for debug output. |
+| `legends_register_event_callback` | Register an event callback. |
+| `legends_has_capability` | Query whether a named capability is available. |
+<!-- END GENERATED: legends-api-table -->
 
 ## Error Codes
+
+<!-- BEGIN GENERATED: legends-error-table -->
+Generated from `include/legends/legends_embed.h` (15 public status codes).
 
 | Code | Value | Description |
 |------|-------|-------------|
 | `LEGENDS_OK` | 0 | Success |
 | `LEGENDS_ERR_NULL_HANDLE` | -1 | Null handle passed |
 | `LEGENDS_ERR_NULL_POINTER` | -2 | Null pointer argument |
+| `LEGENDS_ERR_ALREADY_CREATED` | -3 | Single instance violation |
 | `LEGENDS_ERR_NOT_INITIALIZED` | -4 | Instance not initialized |
 | `LEGENDS_ERR_REENTRANT_CALL` | -5 | Step called from within callback |
 | `LEGENDS_ERR_BUFFER_TOO_SMALL` | -6 | Buffer too small |
+| `LEGENDS_ERR_INVALID_CONFIG` | -7 | Invalid configuration |
 | `LEGENDS_ERR_INVALID_STATE` | -8 | Invalid state data |
-| `LEGENDS_ERR_VERSION_MISMATCH` | -9 | Save state version mismatch |
+| `LEGENDS_ERR_VERSION_MISMATCH` | -9 | API or save-state version mismatch |
+| `LEGENDS_ERR_IO_FAILED` | -10 | I/O operation failed |
 | `LEGENDS_ERR_OUT_OF_MEMORY` | -11 | Allocation failed |
-| `LEGENDS_ERR_WRONG_THREAD` | -14 | Called from wrong thread |
+| `LEGENDS_ERR_NOT_SUPPORTED` | -12 | Operation not supported |
+| `LEGENDS_ERR_INTERNAL` | -13 | Internal error |
+| `LEGENDS_ERR_WRONG_THREAD` | -14 | Called from non-owner thread |
+<!-- END GENERATED: legends-error-table -->
 
 ---
 
