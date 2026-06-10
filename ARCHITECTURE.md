@@ -16,7 +16,7 @@ This document describes the architectural design of Project Legends, an embeddab
 8. [File Organization](#file-organization)
 9. [Module Graph (Sprint 3)](#module-graph-sprint-3)
 10. [Process Isolation Architecture](#process-isolation-architecture)
-11. [Wasm Sandbox Architecture](#wasm-sandbox-architecture)
+11. [Planned Wasm Sandbox Architecture](#planned-wasm-sandbox-architecture)
 
 ---
 
@@ -608,24 +608,27 @@ isolation by scanning the linker map (REQ-ISO-016).
 
 ---
 
-## Wasm Sandbox Architecture
+## Planned Wasm Sandbox Architecture
 
-> **Requirements document:** `wasm.md`
+> **Requirements document:** planned `wasm.md` (not present at HEAD).
+> `git log --all -- wasm.md "wit/legends-emulator.wit"` returns no history for
+> either artifact, so this section is a design plan, not a shipped capability.
 
-The project supports an optional Wasm/WASI build target for running the emulator
-in a Wasmtime-based sandbox. This enables headless emulation in capability-scoped
-environments (CI runners, cloud workers, embedding hosts) without GUI dependencies.
+The project plans an optional Wasm/WASI build target for running the emulator in
+a Wasmtime-based sandbox. The design goal is headless emulation in
+capability-scoped environments (CI runners, cloud workers, embedding hosts)
+without GUI dependencies.
 
 ### Build Modes
 
 | Mode | CMake Option | Output Artifact | Runtime |
 |------|-------------|-----------------|---------|
 | **Native** (default) | `LEGENDS_BUILD_WASM=OFF` | Platform binary | Direct OS execution |
-| **Wasm Sandbox** | `LEGENDS_BUILD_WASM=ON` | `.wasm` component | Wasmtime host runner |
+| **Wasm Sandbox** | `LEGENDS_BUILD_WASM=ON` | Planned `.wasm` component | Wasmtime host runner |
 
-Both modes share the same core emulation logic. The Wasm build replaces PAL
-backends with WASI interfaces and exposes the API through a WIT component
-interface rather than the C ABI.
+The planned Wasm mode would share the same core emulation logic. The planned
+Wasm build would replace PAL backends with WASI interfaces and expose the API
+through a WIT component interface rather than the C ABI.
 
 ### Component Architecture
 
@@ -700,20 +703,24 @@ Preopened directories map to ProjectLegends platform directories:
 
 ### WIT Interface
 
-The component interface is defined in `wit/legends-emulator.wit` and mirrors
-the `legends_embed.h` C API. All functions return `result<T, legends-error>`
-for deterministic error handling. Variable-size outputs use bounded `list<u8>`.
+The planned component interface would live in `wit/legends-emulator.wit` and
+mirror the `legends_embed.h` C API. That file is not present at HEAD. The design
+uses `result<T, legends-error>` for deterministic error handling and bounded
+`list<u8>` values for variable-size outputs.
 
 ### Determinism Guarantee
 
-The Wasm build maintains the same determinism guarantee as native headless:
+The planned Wasm build should maintain the same determinism guarantee as native
+headless:
 
 ```
 f(config, input_trace, step_schedule) → state_hash
 ```
 
-CI enforces parity: native and Wasm headless must produce identical state hashes
-for identical inputs (REQ-WASM-026, REQ-WASM-040).
+Future CI parity should require native and Wasm headless to produce identical
+state hashes for identical inputs (REQ-WASM-026, REQ-WASM-040). No current CI
+job enforces this because the Wasm artifacts and toolchain integration are not
+present.
 
 ---
 

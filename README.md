@@ -25,7 +25,7 @@ Project Legends treats the emulator as a library. The host application controls 
 - Deterministic stepping via `step_ms()` and `step_cycles()`
 - Full state serialization with integrity verification
 - Platform abstraction supporting headless, SDL2, and SDL3 backends
-- Wasm sandbox support (headless Wasmtime/WASI target for sandboxed execution)
+- Planned Wasm sandbox support (headless Wasmtime/WASI target for sandboxed execution)
 - Stable C ABI for FFI from Rust, Python, or other languages
 
 ---
@@ -299,14 +299,10 @@ ProjectLegends/
 │   ├── CONTRACT.md             # API contract
 │   └── tla/                    # TLA+ specifications
 │
-├── wit/                       # WIT interface for Wasm component
-│   └── legends-emulator.wit   # Core emulator WIT package
-│
 ├── docs/
 │   └── design/
 │       └── GPL2_PROCESS_ISOLATION_DESIGN.md  # TDD-LIC-001
 │
-├── wasm.md                    # Wasm sandbox requirements (planned)
 ├── ARCHITECTURE.md
 ├── COPYING                     # GNU GPL v2 license text
 ├── LICENSE                     # Multi-component license overview
@@ -314,6 +310,10 @@ ProjectLegends/
 ├── TODO.md
 └── README.md
 ```
+
+Planned Wasm artifacts are not present at HEAD: `git log --all -- wasm.md
+"wit/legends-emulator.wit"` returns no history for `wasm.md` or the WIT file.
+The Wasm design remains tracked in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
