@@ -1,0 +1,236 @@
+{
+  "handoff_version": 1,
+  "sprint": {
+    "id": 1,
+    "name": "Truthful record",
+    "items_in_scope": ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"]
+  },
+  "session": {
+    "agent": "gpt-5.5-codex",
+    "started_at_utc": "2026-06-10T06:57:16.2612937Z",
+    "finished_at_utc": "2026-06-10T07:30:48.4142533Z",
+    "os": "Microsoft Windows NT 10.0.26200.0"
+  },
+  "repo": {
+    "path": "C:\\projectLegends",
+    "branch": "sprint-1/truthful-record",
+    "base_commit": "866a24daee96302713a3f904603eaa457c3407f0",
+    "head_commit": "d9e81da905c2234b69a53340b1c2ea2ad9002617",
+    "working_tree_clean": true,
+    "diffstat": ".github/workflows/sprint2-checks.yml | 6 +\nARCHITECTURE.md | 47 +-\nAUDIT.md | 44 +\nCHANGELOG.md | 6 +-\nCMakeLists.txt | 6 +-\nREADME.md | 129 +-\nREQUIREMENTS.md | 128 +-\nROADMAP.md | 14 +-\nTLA_CONFORMANCE.md | 129 +-\nTODO.md | 14 +-\ndocs/superpowers/handoffs/decision-gpl-license.md | 273 ++\ndocs/superpowers/handoffs/decision-wasm.md | 81 +\ndocs/superpowers/handoffs/sprint-1-kickoff.json | 1 +\nroadmap.md | 4061 --------------------\nscripts/check_case_collisions.py | 97 +\nscripts/check_openspec_staleness.py | 98 +\nscripts/gen_readme_api_table.py | 131 +\n46 files changed, 1197 insertions(+), 4285 deletions(-)"
+  },
+  "items": [
+    {
+      "id": "1.1",
+      "finding": "doc-01,N1",
+      "status": "complete",
+      "commits": ["a2268bce03b0af01b653b012768df5dfaf9e8a46"],
+      "files_changed": [
+        { "path": "ROADMAP.md", "lines": "4-15" },
+        { "path": "roadmap.md", "lines": "deleted from index" },
+        { "path": "scripts/check_case_collisions.py", "lines": "1-97" },
+        { "path": ".github/workflows/sprint2-checks.yml", "lines": "59-60" }
+      ],
+      "verification": [
+        { "command": "python scripts\\check_case_collisions.py --path .", "exit_code": 0, "evidence_excerpt": "OK: No case-insensitive path collisions found in 2324 git index path(s)." },
+        { "command": "cmd.exe /c \"git ls-files | findstr /I roadmap\"", "exit_code": 0, "evidence_excerpt": "ROADMAP.md" },
+        { "command": "PowerShell deliberate collision git-index test", "exit_code": 1, "evidence_excerpt": "ERROR: Case-insensitive path collisions detected!\nCollision group:\n  ROADMAP.md\n  roadmap.md\nFound 1 collision group(s) in 2 git index path(s)." }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    },
+    {
+      "id": "1.2",
+      "finding": "doc-02,doc-03,doc-05,N5",
+      "status": "complete",
+      "commits": ["17574c133e77592657ab2634080ded059d4bb39d"],
+      "files_changed": [
+        { "path": "TODO.md", "lines": "15-21,75-91,251" },
+        { "path": "AUDIT.md", "lines": "47-92" },
+        { "path": "CHANGELOG.md", "lines": "36-38" }
+      ],
+      "verification": [
+        { "command": "PowerShell TODO done/open contradiction scan", "exit_code": 0, "evidence_excerpt": "OK: no REQ ID is both done and an open blocker row in TODO.md." },
+        { "command": "rg -n \"REQ-MOUNT-001|REQ-MOUNT-002|REQ-MENU-001|REQ-MAPPER-001|REQ-SAVE-003|REQ-CAPTURE-003\" TODO.md", "exit_code": 0, "evidence_excerpt": "TODO.md:75:- [x] REQ-MENU-001 ...\nTODO.md:80:- [x] REQ-SAVE-003 ...\nTODO.md:82:- [x] REQ-MAPPER-001 ...\nTODO.md:87:- [x] REQ-CAPTURE-003 ...\nTODO.md:90:- [x] REQ-MOUNT-001 ...\nTODO.md:91:- [x] REQ-MOUNT-002 ..." },
+        { "command": "rg -n \"TLS|AI HTTP|Prior-Finding Resolution|Tally|IPC isolation\" TODO.md CHANGELOG.md AUDIT.md", "exit_code": 0, "evidence_excerpt": "CHANGELOG.md:37: requests (`src/app/update_checker_win.cpp:46`); AI HTTP client transport is\nTODO.md:251:| IPC isolation | **PARTIAL** ...\nAUDIT.md:47:## Prior-Finding Resolution Status (verified 2026-06-10)\nAUDIT.md:52:Sprint 1 base. Tally: **22 resolved / 8 open**." }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    },
+    {
+      "id": "1.3",
+      "finding": "doc-01(docs-spec)",
+      "status": "complete",
+      "commits": ["9cd8d1778d2c03e7a67b46de5036b77fceb3b577"],
+      "files_changed": [
+        { "path": "README.md", "lines": "28,325-327" },
+        { "path": "ARCHITECTURE.md", "lines": "19,611-722" },
+        { "path": "CMakeLists.txt", "lines": "451-453" }
+      ],
+      "verification": [
+        { "command": "git log --all -- wasm.md \"wit/legends-emulator.wit\"", "exit_code": 0, "evidence_excerpt": "" },
+        { "command": "rg -n \"Planned Wasm|wasm.md|wit/legends-emulator|LEGENDS_BUILD_WASM\" README.md ARCHITECTURE.md CMakeLists.txt", "exit_code": 0, "evidence_excerpt": "README.md:325:Planned Wasm artifacts are not present at HEAD...\nARCHITECTURE.md:611:## Planned Wasm Sandbox Architecture\nCMakeLists.txt:451:# This block is a planned scaffold..." }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    },
+    {
+      "id": "1.4",
+      "finding": "doc-02(docs-spec)",
+      "status": "complete",
+      "commits": ["0b07b5d1abf7bf424bbac2e1f80db722fd724ea5"],
+      "files_changed": [
+        { "path": "REQUIREMENTS.md", "lines": "1-566" },
+        { "path": "TLA_CONFORMANCE.md", "lines": "1-338" }
+      ],
+      "verification": [
+        { "command": "rg -n \"REQ-EX-001|REQ-EX-002|verified-at|42 OK|6 PARTIAL|2 GAP\" REQUIREMENTS.md", "exit_code": 0, "evidence_excerpt": "REQUIREMENTS.md:5:verified-at: 9cd8d1778d2c03e7a67b46de5036b77fceb3b577\nREQUIREMENTS.md:92:### REQ-EX-001 PIC Event Processing [Complex]\nREQUIREMENTS.md:102:### REQ-EX-002 NMI Check [Complex]" }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    },
+    {
+      "id": "1.5",
+      "finding": "L1,doc-04,test-readme-14",
+      "status": "complete",
+      "commits": ["2175563e2e4bb71d75f02315627bbab592950f34"],
+      "files_changed": [
+        { "path": "scripts/gen_readme_api_table.py", "lines": "1-131" },
+        { "path": "README.md", "lines": "8,191-267" },
+        { "path": "ARCHITECTURE.md", "lines": "195-197,410" }
+      ],
+      "verification": [
+        { "command": "cmd.exe /c \"python scripts\\gen_readme_api_table.py --path . > C:\\tmp\\sprint1-api-table-1.md\"", "exit_code": 0, "evidence_excerpt": "" },
+        { "command": "cmd.exe /c \"python scripts\\gen_readme_api_table.py --path . > C:\\tmp\\sprint1-api-table-2.md\"", "exit_code": 0, "evidence_excerpt": "" },
+        { "command": "git diff --no-index -- C:\\tmp\\sprint1-api-table-1.md C:\\tmp\\sprint1-api-table-2.md", "exit_code": 0, "evidence_excerpt": "" },
+        { "command": "rg -n \"Generated from|SaveStateHeader \\(64 bytes\\)|0x53584244|version: 3|cpu_bridge.cpp\" README.md ARCHITECTURE.md", "exit_code": 0, "evidence_excerpt": "README.md:192:Generated from `include/legends/legends_embed.h` (50 `LEGENDS_API` functions).\nREADME.md:251:Generated from `include/legends/legends_embed.h` (15 public status codes).\nARCHITECTURE.md:195:SaveStateHeader (64 bytes)\nARCHITECTURE.md:196:magic: 0x53584244 (\"DBXS\")\nARCHITECTURE.md:197:version: 3" }
+      ],
+      "deviations_from_spec": "The sprint prompt said 51 LEGENDS_API functions, but include/legends/legends_embed.h at HEAD contains 50 exported LEGENDS_API declarations. The generated table uses the verified source count.",
+      "blocked_reason": null
+    },
+    {
+      "id": "1.6",
+      "finding": "spec-02",
+      "status": "complete",
+      "commits": ["d1879dbfa73aeb5f62560b6bbbd0a3135dc98452"],
+      "files_changed": [
+        { "path": "scripts/check_openspec_staleness.py", "lines": "1-98" },
+        { "path": ".github/workflows/sprint2-checks.yml", "lines": "62-63" },
+        { "path": "openspec/changes/archive/", "lines": "moved completed change directories" },
+        { "path": "openspec/specs/", "lines": "new baseline spec files" }
+      ],
+      "verification": [
+        { "command": "python scripts\\check_openspec_staleness.py --path .", "exit_code": 0, "evidence_excerpt": "OK: no completed non-protected OpenSpec changes remain active.\nINFO: protected active June 2026 change(s) left unarchived by directive:\n  - runtimehost-adoption-next-slice: 28 checked task(s), 0 unchecked\n  - runtimehost-app-service-adoption: 12 checked task(s), 0 unchecked\n  - runtimehost-savemanager-adoption: 14 checked task(s), 0 unchecked" },
+        { "command": "rg -n \"^- \\[[ xX]\\]\" openspec\\changes\\archive\\phase-0-quick-wins\\tasks.md openspec\\changes\\archive\\phase-a-cpu-bridge\\tasks.md openspec\\changes\\archive\\phase-c-context-unification\\tasks.md openspec\\changes\\archive\\ci-stabilization-and-coverage-control\\tasks.md", "exit_code": 0, "evidence_excerpt": "Archived task files contain only checked task rows for the four archived changes; active incomplete phase/runtimehost families remain under openspec/changes/." }
+      ],
+      "deviations_from_spec": "openspec/project.md is referenced by the sprint directive but is absent at HEAD. Baseline specs were populated directly from archived changes' specs.",
+      "blocked_reason": null
+    },
+    {
+      "id": "1.7",
+      "finding": "lic-02",
+      "status": "decision-prepared",
+      "commits": ["48e976fa1cd9d617a7568ce9cebbbb533e7e0c97"],
+      "files_changed": [
+        { "path": "docs/superpowers/handoffs/decision-gpl-license.md", "lines": "1-273" }
+      ],
+      "verification": [
+        { "command": "PowerShell SPDX header diff scan", "exit_code": 0, "evidence_excerpt": "OK: no SPDX header changes in source/build/script paths." },
+        { "command": "rg -n \"GPL-2\\.0-only|GPL--2\\.0|GPL-2.0-or-later|SPDX expression\" README.md CONTRIBUTING.md LICENSE DEPENDENCIES.md", "exit_code": 0, "evidence_excerpt": "README.md and CONTRIBUTING.md contain GPL-only wording; DEPENDENCIES.md and 201 SPDX markers support GPL-2.0-or-later; LICENSE reserves the owner decision." }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    },
+    {
+      "id": "1.8",
+      "finding": "roadmap §15",
+      "status": "decision-prepared",
+      "commits": ["d9e81da905c2234b69a53340b1c2ea2ad9002617"],
+      "files_changed": [
+        { "path": "docs/superpowers/handoffs/decision-wasm.md", "lines": "1-81" }
+      ],
+      "verification": [
+        { "command": "git log --all -- wasm.md \"wit/legends-emulator.wit\"", "exit_code": 0, "evidence_excerpt": "" },
+        { "command": "rg -n \"Wasm Sandbox|NOT STARTED|0 of 50|LEGENDS_BUILD_WASM|wit/legends-emulator|wasm.md\" TODO.md ROADMAP.md README.md ARCHITECTURE.md CMakeLists.txt", "exit_code": 0, "evidence_excerpt": "TODO.md:20:| Wasm Sandbox | **NOT STARTED** | 0 of 50 | - | 50 missing |\nROADMAP.md:2541:## 15. Wasm Sandbox - NOT STARTED\nCMakeLists.txt:451:# This block is a planned scaffold..." }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    }
+  ],
+  "claims_verified": [
+    { "doc": "ROADMAP.md:4-15", "claim": "ROADMAP.md is canonical, dated 2026-06-10, and keeps the 4061-line roadmap while flagging the 427-line choice as owner-reserved.", "source_evidence": "git ls-files | findstr /I roadmap -> ROADMAP.md only", "verified_at_commit": "d9e81da905c2234b69a53340b1c2ea2ad9002617" },
+    { "doc": "CHANGELOG.md:36-38", "claim": "TLS statement narrowed: update checker HTTPS is real; AI HTTP client transport is deferred.", "source_evidence": "src/app/update_checker_win.cpp:46 and src/app/ai_http_client.cpp:212", "verified_at_commit": "d9e81da905c2234b69a53340b1c2ea2ad9002617" },
+    { "doc": "REQUIREMENTS.md:49", "claim": "REQ-LC-003 = OK", "source_evidence": "src/legends/legends_embed_api.cpp:87-90", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:68", "claim": "REQ-LC-005 = GAP", "source_evidence": "engine/src/misc/dosbox_context.cpp:973-976", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:92", "claim": "REQ-EX-001 = PARTIAL", "source_evidence": "engine/src/misc/cpu_bridge.cpp:113; engine/src/cpu/cpu_library_stubs.cpp:56-60", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:102", "claim": "REQ-EX-002 = PARTIAL", "source_evidence": "engine/src/misc/cpu_bridge.cpp:119; engine/src/cpu/cpu_library_stubs.cpp:56-60", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:122", "claim": "REQ-EX-004 = OK", "source_evidence": "src/legends/legends_embed_api.cpp:1017,1516,1534,1551,1606,1861,2294", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:142", "claim": "REQ-EX-006 = OK", "source_evidence": "src/legends/legends_embed_api.cpp:1095", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:166", "claim": "REQ-SR-002 = OK", "source_evidence": "engine/include/dosbox/engine_state.h:393-403; engine/src/misc/dosbox_library.cpp:964-971,1451-1458", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:186", "claim": "REQ-SR-004 = OK", "source_evidence": "engine/src/misc/dosbox_library.cpp:1001-1038,1490-1527", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:266", "claim": "REQ-DT-004 = PARTIAL", "source_evidence": "engine/src/misc/state_hash.cpp:300-304", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:308", "claim": "REQ-IN-004 = OK", "source_evidence": "src/legends/legends_embed_api.cpp:1544-1565", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "REQUIREMENTS.md:349", "claim": "REQ-CP-003 = OK", "source_evidence": "src/legends/legends_embed_api.cpp:1633-1717", "verified_at_commit": "9cd8d1778d2c03e7a67b46de5036b77fceb3b577" },
+    { "doc": "ARCHITECTURE.md:195-197", "claim": "SaveStateHeader constants are 64 bytes, DBXS, version 3.", "source_evidence": "src/legends/legends_embed_api.cpp:100-101,225", "verified_at_commit": "d9e81da905c2234b69a53340b1c2ea2ad9002617" },
+    { "doc": "README.md:192", "claim": "README generated API table lists 50 LEGENDS_API functions.", "source_evidence": "include/legends/legends_embed.h:231-1063 contains 50 LEGENDS_API declarations", "verified_at_commit": "d9e81da905c2234b69a53340b1c2ea2ad9002617" }
+  ],
+  "decision_gates": [
+    {
+      "id": "1.7",
+      "brief_path": "docs/superpowers/handoffs/decision-gpl-license.md",
+      "recommendation": "Choose GPL-2.0-or-later, subject to owner/legal decision.",
+      "decision_made_by_implementer": false
+    },
+    {
+      "id": "1.8",
+      "brief_path": "docs/superpowers/handoffs/decision-wasm.md",
+      "recommendation": "Formally defer roadmap section 15 unless an immediate REQ-WASM-001..010 spike is funded.",
+      "decision_made_by_implementer": false
+    }
+  ],
+  "corrections_honored": {
+    "roadmap_dedup_not_restore": true,
+    "changelog_tls_reworded_not_deleted": true,
+    "req_ex_partial_not_ok": true
+  },
+  "scope_checks": {
+    "src_engine_diff_empty": true,
+    "audit_wiki_diff_empty": true,
+    "no_case_collisions": true,
+    "spdx_headers_unchanged": true,
+    "no_req_id_both_done_and_open": true
+  },
+  "attestations": {
+    "no_production_source_changed": true,
+    "audit_wiki_untouched": true,
+    "gpl_decision_not_made": true,
+    "wasm_decision_not_made": true,
+    "no_history_rewrite_or_force_push": true,
+    "all_deliverables_committed": true
+  },
+  "known_limitations": [
+    "repo.head_commit and repo.diffstat record the last implementation commit before the final handoff commit. A committed JSON file cannot contain the SHA/diffstat of the commit that contains itself without changing that commit; rerun git rev-parse HEAD and git diff --stat master...HEAD after checkout for final values.",
+    "actionlint was not on PATH in this shell; verification used C:\\Users\\charl\\AppData\\Local\\Microsoft\\WinGet\\Packages\\rhysd.actionlint_Microsoft.Winget.Source_8wekyb3d8bbwe\\actionlint.exe.",
+    "include/legends/legends_embed.h currently has 50 LEGENDS_API functions, not the 51 estimated in the sprint directive.",
+    "openspec/project.md is absent at HEAD, so OpenSpec baseline population was based directly on archived changes' specs."
+  ],
+  "auditor_repro_commands": [
+    "git switch sprint-1/truthful-record",
+    "python scripts\\check_case_collisions.py --path .",
+    "PowerShell deliberate collision test: $tmp = Join-Path 'C:\\tmp' ('sprint1-case-collision-' + [guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Path $tmp | Out-Null; git -C $tmp init -q; $blob = ('x' | git -C $tmp hash-object -w --stdin).Trim(); git -C $tmp update-index --add --cacheinfo \"100644,$blob,ROADMAP.md\"; git -C $tmp update-index --add --cacheinfo \"100644,$blob,roadmap.md\"; python C:\\projectLegends\\scripts\\check_case_collisions.py --path $tmp",
+    "cmd.exe /c \"python scripts\\gen_readme_api_table.py --path . > C:\\tmp\\sprint1-api-table-1.md\"",
+    "cmd.exe /c \"python scripts\\gen_readme_api_table.py --path . > C:\\tmp\\sprint1-api-table-2.md\"",
+    "git diff --no-index -- C:\\tmp\\sprint1-api-table-1.md C:\\tmp\\sprint1-api-table-2.md",
+    "python scripts\\check_openspec_staleness.py --path .",
+    "C:\\Users\\charl\\AppData\\Local\\Microsoft\\WinGet\\Packages\\rhysd.actionlint_Microsoft.Winget.Source_8wekyb3d8bbwe\\actionlint.exe .github/workflows/sprint2-checks.yml",
+    "git log --all -- wasm.md \"wit/legends-emulator.wit\"",
+    "git diff --stat master...HEAD",
+    "git diff master...HEAD -- src/ engine/",
+    "git diff master...HEAD -- audit-wiki/",
+    "cmd.exe /c \"git ls-files | findstr /I roadmap\"",
+    "PowerShell TODO contradiction scan from this handoff: parse TODO.md checked REQ IDs and open blocker rows; expect OK",
+    "PowerShell SPDX scan from this handoff: git diff master...HEAD -- src/ engine/ include/ tests/ benchmarks/ cmake/ external/ scripts/ CMakeLists.txt | Select-String '^[+-].*SPDX-License-Identifier'; expect no matches",
+    "python -m json.tool docs\\superpowers\\handoffs\\sprint-1-handoff.json"
+  ],
+  "report_path": "docs/superpowers/handoffs/sprint-1-implementation-report.md"
+}

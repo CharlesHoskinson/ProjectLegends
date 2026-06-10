@@ -448,9 +448,11 @@ endif()
 #
 # When LEGENDS_BUILD_WASM is ON, configure the build for a wasm32-wasi target.
 # This requires a WASI SDK or compatible toolchain (e.g., wasi-sdk, Rust wasm32-wasi).
-# The Wasm build produces a .wasm component artifact for execution under Wasmtime.
+# This block is a planned scaffold: the referenced wasm.md and
+# wit/legends-emulator.wit artifacts are not present at HEAD, and no checked-in
+# toolchain file currently makes LEGENDS_BUILD_WASM a complete build path.
 #
-# See wasm.md for full requirements and wit/ for the WIT interface definition.
+# See ARCHITECTURE.md for the planned Wasm sandbox design.
 
 if(LEGENDS_BUILD_WASM)
     message(STATUS "Wasm/WASI build enabled")

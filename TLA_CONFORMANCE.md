@@ -1,6 +1,7 @@
 # TLA+ Specification Conformance Analysis
 
-Date: 2026-02-24
+Date: 2026-06-10
+verified-at: 9cd8d1778d2c03e7a67b46de5036b77fceb3b577
 Scope: All 11 CI-checked TLA+ specs vs. implementation source code
 
 ---
@@ -16,6 +17,10 @@ Each CI-checked TLA+ specification was read in full. Every named invariant was e
 | NON-CONFORMANT | Implementation violates the invariant |
 | DEFERRED | Invariant models planned functionality not yet implemented |
 
+Rebaseline note: the February record listed five non-conformant invariants. At
+the verification commit above, four are conformant and the remaining config
+field-completeness invariant is partial rather than non-conformant.
+
 ---
 
 ## 1. LifecycleMinimal.tla
@@ -27,14 +32,14 @@ Each CI-checked TLA+ specification was read in full. Every named invariant was e
 |-----------|--------|----------|
 | `AtMostOneInstance` | CONFORMANT | Atomic CAS at `legends_embed_api.cpp:807` enforces single instance |
 | `MisuseSafe` | CONFORMANT | All misuse paths return error codes, never crash |
-| `HandleConsistency` | **NON-CONFORMANT** | H5: `get_instance()` fallback to `g_active_instance` means `instance="CREATED"` but passing invalid handle still destroys it — spec requires `(instance="NONE") <=> (handle="NULL")` |
+| `HandleConsistency` | CONFORMANT | `get_instance()` strict-matches the active instance pointer and returns null for invalid non-null handles |
 | `NoReentrantSuccess` | CONFORMANT | `in_step` flag at line 1053 blocks nested steps |
 | `WrongThreadBlocked` | CONFORMANT | `LEGENDS_CHECK_THREAD()` macro returns `WRONG_THREAD` |
 | `ConfigGated` | CONFORMANT | Invalid config checked before instance creation (lines 828-838) |
 
 ### Required Work
 
-1. **Fix `HandleConsistency`**: Remove `g_active_instance` fallback in `get_instance()` (`legends_embed_api.cpp:949-957`). If the handle doesn't match, return `LEGENDS_ERR_NULL_HANDLE`. Effort: **Small**.
+None for this invariant set.
 
 ---
 
@@ -46,14 +51,14 @@ Each CI-checked TLA+ specification was read in full. Every named invariant was e
 | Invariant | Rating | Evidence |
 |-----------|--------|----------|
 | `AudioPushModel` | CONFORMANT | Audio flows core→PAL only; headless stub is push model |
-| `ThreadSafety` | **NON-CONFORMANT** | M3: `MixerState` has thread safety comments but no actual mutex/atomic synchronization |
+| `ThreadSafety` | CONFORMANT | Mixer callback exchange uses atomic producer/consumer positions in `MixerState` |
 | `AudioQueueBounded` | CONFORMANT | Queue has fixed capacity with drop-on-overflow semantics |
 | `ComponentDependency` | CONFORMANT | PAL components initialize after context |
 | `BackpressureNonNegative` | CONFORMANT | Dropped frame counter is unsigned |
 
 ### Required Work
 
-1. **Fix `ThreadSafety`**: Add `std::mutex` or `std::atomic` guards to `MixerState` fields accessed from the audio callback thread. Effort: **Small**.
+None for this invariant set.
 
 ---
 
@@ -64,17 +69,16 @@ Each CI-checked TLA+ specification was read in full. Every named invariant was e
 
 | Invariant | Rating | Evidence |
 |-----------|--------|----------|
-| `CoreSingleThreaded` | **PARTIAL** | Legends layer enforces via `LEGENDS_CHECK_THREAD()`. Engine layer: `dosbox_lib_get_context_ptr()` bypasses `LIB_CHECK_THREAD()` (M7) |
+| `CoreSingleThreaded` | CONFORMANT | Legends layer enforces owner-thread checks; `dosbox_lib_get_context_ptr()` now uses `LIB_CHECK_THREAD()` |
 | `PALIsolation` | CONFORMANT | PAL threads use push-only model, never call core |
-| `NoDataRaces` | **PARTIAL** | M3: `MixerState` has no synchronization; M7: context pointer accessible without thread check |
+| `NoDataRaces` | CONFORMANT | Prior MixerState and context-pointer exceptions were fixed for the modeled paths |
 | `CallStackValid` | CONFORMANT | Guard clauses enforce valid call order |
-| `WrongThreadBlocked` | **PARTIAL** | Enforced at legends layer; `dosbox_lib_get_context_ptr()` is the exception |
+| `WrongThreadBlocked` | CONFORMANT | Engine context pointer access now checks thread affinity |
 | `NoReentrantStep` | CONFORMANT | `in_step` flag blocks nested step calls |
 
 ### Required Work
 
-1. **Fix `CoreSingleThreaded` / `WrongThreadBlocked`**: Add `LIB_CHECK_THREAD()` to `dosbox_lib_get_context_ptr()` (`dosbox_library.cpp:466`). Effort: **Trivial** — one line.
-2. **Fix `NoDataRaces`**: Add synchronization to `MixerState` (same as PALMinimal ThreadSafety fix).
+None for this invariant set.
 
 ---
 
@@ -85,7 +89,7 @@ Each CI-checked TLA+ specification was read in full. Every named invariant was e
 
 | Invariant | Rating | Evidence |
 |-----------|--------|----------|
-| `ObservationPreserved` | **PARTIAL** | Round-trip works for serialized fields. CPU GPRs, VGA hardware state, and RAM are NOT serialized (H1). Obs(S) is incomplete. |
+| `ObservationPreserved` | **PARTIAL** | V5 serializes CPU GPRs, RAM, VGA registers, and VRAM; engine event scheduler state is still outside the saved observation. |
 | `EventCountPreserved` | **PARTIAL** | Legends-layer event queue serialized. Engine-layer `PIC_RunQueue` event queue is NOT serialized. |
 | `EventDigestPreserved` | **PARTIAL** | Same gap — engine event scheduler state not captured |
 | `TimePreserved` | CONFORMANT | `total_cycles`, `emu_time_us`, `cycles_per_ms` all serialized |
@@ -95,8 +99,7 @@ Each CI-checked TLA+ specification was read in full. Every named invariant was e
 
 ### Required Work
 
-1. **Fix `ObservationPreserved`**: Serialize CPU GPRs (EAX-EDI, segment registers, EIP), VGA hardware state, and RAM contents. This is the Phase B serialization completion. Effort: **Medium-Large**.
-2. **Fix `EventCountPreserved` / `EventDigestPreserved`**: Serialize the engine-layer event scheduler queue (PIC events, timer callbacks). Requires engine cooperation. Effort: **Medium**.
+1. **Fix `EventCountPreserved` / `EventDigestPreserved`**: Serialize the engine-layer event scheduler queue (PIC events, timer callbacks). Requires engine cooperation. Effort: **Medium**.
 
 ---
 
@@ -126,12 +129,12 @@ None — all invariants satisfied. Note: the TLA+ spec uses a polynomial rolling
 |-----------|--------|----------|
 | `DimensionsConsistent` | CONFORMANT | Dimensions read from `frame_state` which tracks video mode |
 | `FormatFixed` | CONFORMANT | RGB24 format, pitch = width * 3, no padding |
-| `BackendIndependent` | **PARTIAL** | Capture reads from `frame_state`, not backend — but `frame_state` is initialized with a synthetic test pattern (`legends_embed_api.cpp:919-920`) and `sync_state_from_engine()` does not sync framebuffer (H8). So captures are backend-independent but also engine-independent (wrong content). |
+| `BackendIndependent` | CONFORMANT | Capture reads from `frame_state`, and `sync_state_from_engine()` now syncs display mode, palette, text/font data, and graphics pixels from the engine when available. |
 | `FramebufferSizeConsistent` | CONFORMANT | Size = width * height * 3 |
 
 ### Required Work
 
-1. **Fix `BackendIndependent` (real content)**: Wire `sync_state_from_engine()` to copy the actual framebuffer from the DOSBox-X engine into `frame_state`. Currently it only syncs timing and PIC. Effort: **Medium** — requires reading VGA render output through the engine bridge.
+None for this invariant set.
 
 ---
 
@@ -143,14 +146,14 @@ None — all invariants satisfied. Note: the TLA+ spec uses a polynomial rolling
 | Invariant | Rating | Evidence |
 |-----------|--------|----------|
 | `ScancodeValid` | CONFORMANT | AT Scancode Set 1 used throughout |
-| `BufferNotCorrupted` | **NON-CONFORMANT** | M2: `legends_text_input()` can partially commit a multi-event character (shift-down queued, then queue full on key-down). Shift key stuck. |
+| `BufferNotCorrupted` | CONFORMANT | `legends_text_input()` verifies all slots needed for a character before enqueueing any of that character's events. |
 | `E0PrefixCorrect` | CONFORMANT | Extended keys push 0xE0 then scancode |
 | `InputDeterminism` | CONFORMANT | Monotonic `sequence` counter, FIFO drain order |
 | `BufferBounded` | CONFORMANT | 320-event ring buffer, returns error on full |
 
 ### Required Work
 
-1. **Fix `BufferNotCorrupted`**: Add transactional semantics to `legends_text_input()`. Before processing each character, check if enough queue slots exist for all its events (shift-down + key-down + key-up + shift-up = up to 4 events). If not, stop before that character and return `LEGENDS_ERR_BUFFER_TOO_SMALL`. Effort: **Small**.
+None for this invariant set.
 
 ---
 
@@ -162,12 +165,12 @@ None — all invariants satisfied. Note: the TLA+ spec uses a polynomial rolling
 | Invariant | Rating | Evidence |
 |-----------|--------|----------|
 | `NoNestedStep` | CONFORMANT | `in_step` flag at line 1053, returns `REENTRANT_CALL` |
-| `PhaseConsistent` | **PARTIAL** | Step functions transition phases correctly. But non-step API functions called from callbacks don't check `in_step`, so phase consistency isn't enforced for all API paths (M1). |
-| `CallbackSafe` | **PARTIAL** | Callbacks during step can re-enter non-step API functions without detection |
+| `PhaseConsistent` | CONFORMANT | Mutating API paths now check `in_step`, including reset, input, save, and load. |
+| `CallbackSafe` | CONFORMANT | Reentrant mutating calls during step return `LEGENDS_ERR_REENTRANT_CALL`. |
 
 ### Required Work
 
-1. **Fix `PhaseConsistent` / `CallbackSafe`**: Either (a) extend the `in_step` check to all API functions that mutate state (key_event, mouse_event, save_state, load_state, reset), or (b) add a broader `in_api_call` guard. Option (a) is more targeted. Effort: **Small**.
+None for this invariant set.
 
 ---
 
@@ -178,16 +181,16 @@ None — all invariants satisfied. Note: the TLA+ spec uses a polynomial rolling
 
 | Invariant | Rating | Evidence |
 |-----------|--------|----------|
-| `ErrorCodeDeterministic` | **PARTIAL** | Guard clause order in implementation matches spec priority chain. BUT H5 (destroy fallback) makes destroy non-deterministic for invalid handles — spec says DESTROY + NONE → OK (null handle no-op), but implementation destroys active instance on any non-null handle. |
+| `ErrorCodeDeterministic` | CONFORMANT | Guard order remains deterministic and invalid non-null destroy handles no longer fall back to the active instance. |
 | `SuccessRequiresValidState` | CONFORMANT | All core ops check instance via `get_instance()` |
 | `ErrorCodesComplete` | CONFORMANT | All returned codes are in the defined 14+1 set |
-| `NullHandleConsistent` | **NON-CONFORMANT** | H5 again: NULL_HANDLE should be returned when no instance exists, but invalid non-null handles bypass this check and destroy the real instance |
+| `NullHandleConsistent` | CONFORMANT | Invalid non-null handles return the null-handle error path instead of destroying the active instance. |
 | `ReentrantCodeCorrect` | CONFORMANT | `REENTRANT_CALL` returned iff `in_step && op == STEP` |
 | `WrongThreadCodeCorrect` | CONFORMANT | `WRONG_THREAD` returned iff caller is not owner thread |
 
 ### Required Work
 
-1. **Fix `ErrorCodeDeterministic` / `NullHandleConsistent`**: Same fix as LifecycleMinimal HandleConsistency — remove `g_active_instance` fallback in `get_instance()`. Effort: **Small** (same fix as REQ-LC-003).
+None for this invariant set.
 
 ---
 
@@ -198,15 +201,14 @@ None — all invariants satisfied. Note: the TLA+ spec uses a polynomial rolling
 
 | Invariant | Rating | Evidence |
 |-----------|--------|----------|
-| `InvalidConfigBlocked` | **PARTIAL** | `struct_size` and `api_version` validated. But `cpu_cycles` accepts any value (including 0), and there is no `audio_rate` field in the config struct. Spec requires `cycles_per_ms ∈ {50,100,200}` and `audio_rate ∈ {11025,22050,44100}`. |
+| `InvalidConfigBlocked` | CONFORMANT | `struct_size`, `api_version`, and non-zero `cpu_cycles` range are validated; zero cycles remains the documented auto/default value. |
 | `ValidConfigAccepted` | CONFORMANT | Valid struct_size + api_version → instance created |
 | `VersionChecked` | CONFORMANT | Wrong version → `VERSION_MISMATCH` at line 834 |
-| `AllFieldsValidated` | **NON-CONFORMANT** | `cpu_cycles` not range-checked; no `audio_rate` field exists; `memory_kb` not validated |
+| `AllFieldsValidated` | **PARTIAL** | `cpu_cycles` is range-checked when non-zero, but the config struct still has no `audio_rate` field and memory validation remains limited. |
 
 ### Required Work
 
-1. **Fix `InvalidConfigBlocked` / `AllFieldsValidated`**: Add validation for `cpu_cycles` (reject 0 or unreasonable values) in `legends_create()`. The TLA+ values `{50,100,200}` are abstract model constants — implementation should validate `cpu_cycles > 0` at minimum, and optionally enforce a reasonable range. Effort: **Trivial**.
-2. **Consider audio_rate field**: The TLA+ spec models audio rate validation, but the config struct lacks this field. Either add the field and validate it, or update the TLA+ spec to reflect reality. Effort: **Small** (either direction).
+1. **Resolve `AllFieldsValidated`**: Decide whether to add `audio_rate`/stronger memory validation to the config struct or update the TLA+ abstraction to match the shipped config surface. Effort: **Small**.
 
 ---
 
@@ -219,12 +221,12 @@ This is the composite specification that combines all 23 contract gates. Conform
 
 | Gate Group | Rating | Blocking Issues |
 |------------|--------|-----------------|
-| Gates 2a-2c (Lifecycle/Config) | **PARTIAL** | HandleConsistency (H5), AllFieldsValidated (cpu_cycles) |
-| Gates 4a-4c (Determinism/SaveState) | **PARTIAL** | ObservationPreserved (CPU GPRs, VGA, RAM not serialized) |
-| Gates 5a-5c (Capture) | **PARTIAL** | BackendIndependent (framebuffer not synced from engine) |
-| Gates 6a-6b (Input) | **PARTIAL** | BufferNotCorrupted (text_input partial commit) |
-| Gates 7a-7d (PAL/Threading) | **PARTIAL** | ThreadSafety (MixerState), CoreSingleThreaded (get_context_ptr) |
-| Gates 8a-8c (Threading/Reentrancy) | **PARTIAL** | PhaseConsistent, CallbackSafe (non-step reentrancy) |
+| Gates 2a-2c (Lifecycle/Config) | **PARTIAL** | Lifecycle fixed; config field completeness remains partial |
+| Gates 4a-4c (Determinism/SaveState) | **PARTIAL** | Engine event scheduler state is not serialized |
+| Gates 5a-5c (Capture) | CONFORMANT | Framebuffer/text sync now reads engine state when available |
+| Gates 6a-6b (Input) | CONFORMANT | Text input queueing is character-atomic |
+| Gates 7a-7d (PAL/Threading) | CONFORMANT | Mixer and engine context pointer exceptions fixed for modeled paths |
+| Gates 8a-8c (Threading/Reentrancy) | CONFORMANT | Mutating non-step APIs reject reentry during step |
 | Gate: NoExitAbort | CONFORMANT | No `exit()` or `abort()` calls in API |
 | Gate: NoStdout | CONFORMANT | All output via log callback |
 | Gate: NoEnvironmentChange | CONFORMANT | No environment variable modification |
@@ -238,17 +240,17 @@ This is the composite specification that combines all 23 contract gates. Conform
 
 | Spec | Invariants | Conformant | Partial | Non-Conformant |
 |------|-----------|------------|---------|----------------|
-| LifecycleMinimal | 6 | 5 | 0 | 1 |
-| PALMinimal | 5 | 4 | 0 | 1 |
-| ThreadingMinimal | 6 | 3 | 3 | 0 |
+| LifecycleMinimal | 6 | 6 | 0 | 0 |
+| PALMinimal | 5 | 5 | 0 | 0 |
+| ThreadingMinimal | 6 | 6 | 0 | 0 |
 | SaveStateTest | 7 | 4 | 3 | 0 |
 | DeterminismMinimal | 3 | 3 | 0 | 0 |
-| CaptureMinimal | 4 | 3 | 1 | 0 |
-| InputMinimal | 5 | 4 | 0 | 1 |
-| ReentrancyMinimal | 3 | 1 | 2 | 0 |
-| ErrorModel | 6 | 4 | 1 | 1 |
-| ConfigValidation | 4 | 2 | 1 | 1 |
-| **Total** | **49** | **33 (67%)** | **11 (22%)** | **5 (10%)** |
+| CaptureMinimal | 4 | 4 | 0 | 0 |
+| InputMinimal | 5 | 5 | 0 | 0 |
+| ReentrancyMinimal | 3 | 3 | 0 | 0 |
+| ErrorModel | 6 | 6 | 0 | 0 |
+| ConfigValidation | 4 | 3 | 1 | 0 |
+| **Total** | **49** | **45 (92%)** | **4 (8%)** | **0 (0%)** |
 
 ### By Effort to Fix
 
@@ -256,30 +258,23 @@ This is the composite specification that combines all 23 contract gates. Conform
 
 | Fix | Specs Unblocked | Invariants Fixed |
 |-----|----------------|------------------|
-| Add `LIB_CHECK_THREAD()` to `dosbox_lib_get_context_ptr()` | ThreadingMinimal | CoreSingleThreaded, WrongThreadBlocked |
-| Add `cpu_cycles > 0` validation in `legends_create()` | ConfigValidation | InvalidConfigBlocked, AllFieldsValidated |
+| Decide whether `audio_rate` belongs in the public config struct or should be removed from the TLA abstraction | ConfigValidation | AllFieldsValidated |
 
 #### Small (< 1 day each)
 
-| Fix | Specs Unblocked | Invariants Fixed |
-|-----|----------------|------------------|
-| Remove `g_active_instance` fallback in `get_instance()` | LifecycleMinimal, ErrorModel | HandleConsistency, NullHandleConsistent, ErrorCodeDeterministic |
-| Add `std::mutex` to `MixerState` | PALMinimal, ThreadingMinimal | ThreadSafety, NoDataRaces |
-| Add transactional semantics to `legends_text_input()` | InputMinimal | BufferNotCorrupted |
-| Extend `in_step` guard to mutating API functions | ReentrancyMinimal | PhaseConsistent, CallbackSafe |
+No small TLA-conformance fixes remain from the CI-checked invariant set.
 
 #### Medium (1-3 days each)
 
 | Fix | Specs Unblocked | Invariants Fixed |
 |-----|----------------|------------------|
-| Wire framebuffer sync in `sync_state_from_engine()` | CaptureMinimal | BackendIndependent (real content) |
 | Serialize engine event scheduler queue | SaveStateTest | EventCountPreserved, EventDigestPreserved |
 
-#### Large (Phase B completion, 1-2 weeks)
+#### Large (post-Phase B device completeness)
 
 | Fix | Specs Unblocked | Invariants Fixed |
 |-----|----------------|------------------|
-| Serialize CPU GPRs, VGA state, RAM | SaveStateTest | ObservationPreserved |
+| Integrate functional library-mode PIC/event delivery beyond the current stub queue | PIC/Scheduler non-CI specs | Priority/timer delivery invariants |
 
 ---
 
@@ -294,12 +289,12 @@ The 22 non-CI specs define requirements that the implementation should eventuall
 
 ### PIC (PIC.tla)
 
-- **MaskedIRQNotDelivered**: Spec requires masked IRQs never fire. Implementation relies on DOSBox-X PIC model, which is correct when `PIC_RunQueue()` runs — but C2 (bridge skips PIC_RunQueue) means this invariant is **not testable** in the current execution model.
-- **PriorityRespected**: Same issue — PIC priority only matters when PIC events are processed.
+- **MaskedIRQNotDelivered**: Spec requires masked IRQs never fire. The CPU bridge now calls `PIC_RunQueue()`, but the library-mode build links a stub PIC queue, so functional delivery remains unverified.
+- **PriorityRespected**: Same issue — PIC priority only matters when functional PIC events are processed.
 
 ### Bus (Bus.tla, BusMinimal.tla)
 
-- **MemRangesDisjoint**: Spec requires non-overlapping memory handler ranges. H6 (integer overflow in bounds checks) means the routing invariant can be bypassed with crafted addresses.
+- **MemRangesDisjoint**: Spec requires non-overlapping memory handler ranges. H6's caller memory read/write overflow path is fixed; broader device-range disjointness still needs subsystem-level verification.
 
 ### EmuKernel (EmuKernel.tla)
 
@@ -309,35 +304,35 @@ The 22 non-CI specs define requirements that the implementation should eventuall
 
 ## Prioritized Implementation Roadmap
 
-### Phase 1: Quick Wins (unblock 5 specs, ~2 days)
+### Phase 1: Completed Quick Wins
 
 1. `LIB_CHECK_THREAD()` in `dosbox_lib_get_context_ptr()` — fixes ThreadingMinimal
 2. Remove `g_active_instance` fallback — fixes LifecycleMinimal + ErrorModel
 3. `cpu_cycles` validation — fixes ConfigValidation
-4. `MixerState` mutex — fixes PALMinimal
+4. `MixerState` atomic producer/consumer synchronization — fixes PALMinimal
 5. `text_input` transaction — fixes InputMinimal
 
-**Result**: 5 specs fully CONFORMANT, 11 invariants fixed
+**Result**: completed before this rebaseline.
 
-### Phase 2: Bridge & Capture (~1 week)
+### Phase 2: Completed Bridge & Capture Work
 
 6. `in_step` guard on mutating APIs — fixes ReentrancyMinimal
 7. Framebuffer sync from engine — fixes CaptureMinimal
-8. Engine event queue serialization — partially fixes SaveStateTest
 
-**Result**: 3 more specs to full/near-full conformance
+**Result**: completed except engine event queue serialization.
 
-### Phase 3: Phase B Serialization (~2 weeks)
+### Phase 3: Completed Phase B/V5 Serialization Work
 
 9. CPU GPR serialization
 10. VGA hardware state serialization
 11. RAM content serialization
 
-**Result**: SaveStateTest fully CONFORMANT, Phase E unblocked
+**Result**: observation coverage improved; engine event scheduler serialization remains partial.
 
-### Phase 4: PIC/Scheduler Integration (with C2 fix)
+### Phase 4: Remaining PIC/Scheduler Integration
 
-12. Add `PIC_RunQueue()` and `CPU_Check_NMI()` to CPU bridge
-13. Deterministic event scheduler tie-breaking
+12. Replace or integrate the library-mode PIC queue stub so `PIC_RunQueue()` has functional delivery.
+13. Serialize engine event queue state.
+14. Deterministic event scheduler tie-breaking.
 
 **Result**: Device model specs (PIC, Scheduler, EmuKernel) become testable and verifiable

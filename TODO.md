@@ -1,7 +1,7 @@
 # Project Legends — Implementation Status Audit
 
-**Last updated:** 2026-02-27
-**Audited against:** `roadmap.md` v4.1.0 (206 tracked requirements)
+**Last updated:** 2026-06-10
+**Audited against:** `ROADMAP.md` v4.2.1-record (206 tracked requirements)
 
 ---
 
@@ -16,7 +16,7 @@
 | Phase 3: Enhanced Features | **PARTIAL** | 7 of 14 REQs | 4 stubs | 3 missing |
 | Phase 4: Polish & Release | **COMPLETE** | All 16 core REQs | — | — |
 | Security Hardening | **PARTIAL** | 6 of 22 | — | 16 missing |
-| GPL v2 Process Isolation | **STUB** | 2 of 16 (license files) | — | 14 missing |
+| GPL v2 Process Isolation | **PARTIAL** | IPC wire/messages/SHM/audio/control pieces exist | `protocol.cpp` stub + proxy parity gaps | Remaining parity/verification |
 | Wasm Sandbox | **NOT STARTED** | 0 of 50 | — | 50 missing |
 | UX & Accessibility | **PARTIAL** | 2 of 11 | — | 9 missing |
 
@@ -164,9 +164,6 @@ All core testing and packaging requirements implemented:
 
 | Req ID | Description | Category | Effort |
 |--------|-------------|----------|--------|
-| REQ-MOUNT-001 | Host directory mounting API | Phase 2 | Large |
-| REQ-MOUNT-002 | Block device image mounting | Phase 2 | Large |
-| REQ-MENU-001 | Native SDL3 menu bar | Phase 2 | Medium |
 | REQ-SEC-031 | Formal threat model document | Security | Medium |
 | REQ-SEC-010 | Save state header + CRC validation | Security | Medium |
 | REQ-SEC-011 | Save state file size limit (256 MB) | Security | Small |
@@ -180,9 +177,6 @@ All core testing and packaging requirements implemented:
 
 | Req ID | Description | Category | Effort |
 |--------|-------------|----------|--------|
-| REQ-MAPPER-001 | Interactive key mapper visual UI | Phase 2 | Medium |
-| REQ-SAVE-003 | Save slot visual browser with thumbnails | Phase 2 | Medium |
-| REQ-CAPTURE-003 | Video capture (AVI/ZMBV) | Phase 2 | Large |
 | REQ-UX-001 | First-run wizard | UX | Medium |
 | REQ-UX-002 | Drag-and-drop program launch | UX | Small |
 | REQ-UX-005 | Performance overlay (FPS counter) | UX | Small |
@@ -254,5 +248,5 @@ These items from the original sprint tracking remain open:
 | AI integration | Async HTTP client + overlay panel (`ai_panel.cpp`, `ai_http_client.cpp`) |
 | Logging | Structured JSON Lines to file with rotation (`file_logger.cpp`) |
 | Crash handling | Signal/exception handler + breadcrumb ring buffer (`crash_reporter.cpp`) |
-| IPC isolation | **STUB ONLY** — `src/legends_ipc/protocol.cpp` is placeholder |
+| IPC isolation | **PARTIAL** — `src/legends_ipc/` contains real wire/message, framebuffer SHM, audio ring, shared-memory, control-channel, and engine-spawner code; `src/legends_ipc/protocol.cpp` is still a one-line stub and proxy parity gaps remain |
 | Wasm sandbox | **NOT STARTED** — documentation only |

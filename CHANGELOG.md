@@ -33,8 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PC-98 config
 - **Phase 4 polish**: file logger, error reporter, crash breadcrumb/reporter,
   SSIM image comparison, portable mode, update checker
-- **Security hardening**: TLS verification, API key protection, config field
-  limits, save state CRC validation, path confinement, read-only mounts,
+- **Security hardening**: update-checker HTTPS transport uses WinHTTP secure
+  requests (`src/app/update_checker_win.cpp:46`); AI HTTP client transport is
+  still deferred (`src/app/ai_http_client.cpp:212`); API key protection, config
+  field limits, save state CRC validation, path confinement, read-only mounts,
   sensitive directory warnings, stack protector, FORTIFY_SOURCE, CFG (MSVC)
 - **CI pipeline** with Linux (GCC/Clang), Windows (MSVC), macOS (AppleClang),
   SDL3 builds, sanitizers (ASan, UBSan, TSan, MSan), C ABI verification,
