@@ -10,11 +10,14 @@ file-level license marker. Where third-party code carries its own license text
 or notice, that text controls that component. See `COPYING` for the GNU General
 Public License version 2 text and `NOTICE` for third-party attribution.
 
-The GPL-2.0-only versus GPL-2.0-or-later question is not resolved here. Some
-project documentation currently uses GPL-2.0-only language, while many current
-Project Legends source files use `SPDX-License-Identifier: GPL-2.0-or-later`.
-This overview records those facts only; the owner decision is reserved for the
-separate licensing cleanup work.
+License policy clarification (2026-06-10): project documentation has been
+aligned with the source SPDX markers, which already state
+`SPDX-License-Identifier: GPL-2.0-or-later` for project-owned GPL code
+(consistent with upstream DOSBox-X). This is a documentation clarification to
+remove a prior docs-vs-source contradiction; it is not a relicensing — no
+source SPDX marker was changed. A formal license declaration remains the
+maintainer's to confirm. Third-party components retain their own notices
+(see `NOTICE`).
 
 Component license table
 -----------------------

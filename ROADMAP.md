@@ -2538,9 +2538,17 @@ first-run experience, discoverability, accessibility, and error recovery.
 
 ---
 
-## 15. Wasm Sandbox — NOT STARTED
+## 15. Wasm Sandbox — DEFERRED (2026-06-10)
 
-> **Implementation status:** 0 of 50 requirements implemented. Documentation only exists; no code written.
+> **Implementation status:** 0 of 50 requirements implemented. Documentation only; no code written.
+>
+> **Deferral (2026-06-10):** This section is formally deferred — a future
+> roadmap area, not an active delivery promise. The referenced `wasm.md` and
+> `wit/legends-emulator.wit` artifacts have never existed in git history. Restart
+> entry criteria: a funded, staffed `REQ-WASM-001..010` spike that produces a real
+> Wasm component artifact, a reproducible build command, and a host-runner
+> create/step/capture/destroy smoke test. Until restarted, Wasm is excluded from
+> completion metrics. See `docs/superpowers/handoffs/decision-wasm.md`.
 
 > **Requirements document:** `wasm.md`
 >

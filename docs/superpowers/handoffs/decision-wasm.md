@@ -2,7 +2,7 @@
 
 Prepared: 2026-06-10  
 Prepared by: GPT 5.5 Codex  
-Decision status: not made by implementer
+Resolution status (2026-06-10): the recommended Option B (defer roadmap §15) was applied in the working session — `ROADMAP.md` §15 and `TODO.md` now mark Wasm as deferred with restart entry criteria; `README.md`/`ARCHITECTURE.md` already state "planned". No engineering work was committed; this is a roadmap-status clarification.
 
 ## Facts Verified at HEAD
 

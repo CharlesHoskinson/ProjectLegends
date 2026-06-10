@@ -223,13 +223,13 @@ Merge-to-main additionally runs sanitizer builds (ASan, UBSan, TSan, MSan).
 Project Legends is a multi-component project. **Every source file must
 include the correct SPDX license header.**
 
-### GPL-2.0-only (engine and core code)
+### GPL-2.0-or-later (engine and core code)
 
 Applies to: `engine/`, `src/legends/`, `src/engine_host/`, `src/pal/`,
 `include/legends/`, `include/pal/`
 
 ```cpp
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (c) 2024-2025 Charles Hoskinson and Contributors
 ```
 
@@ -249,14 +249,14 @@ When in doubt, check the `NOTICE` file for per-directory license assignments.
 ## Project Layout
 
 ```
-engine/            DOSBox-X core engine (GPL-2.0-only)
-include/legends/   Public C API headers (GPL-2.0-only)
-include/pal/       Platform abstraction interfaces (GPL-2.0-only)
+engine/            DOSBox-X core engine (GPL-2.0-or-later)
+include/legends/   Public C API headers (GPL-2.0-or-later)
+include/pal/       Platform abstraction interfaces (GPL-2.0-or-later)
 include/legends_ipc/  IPC protocol headers (MIT)
-src/legends/       Legends embedding layer (GPL-2.0-only)
-src/pal/           PAL backend implementations (GPL-2.0-only)
-src/app/           Application shell code (GPL-2.0-only)
-src/engine_host/   Engine host process (GPL-2.0-only)
+src/legends/       Legends embedding layer (GPL-2.0-or-later)
+src/pal/           PAL backend implementations (GPL-2.0-or-later)
+src/app/           Application shell code (GPL-2.0-or-later)
+src/engine_host/   Engine host process (GPL-2.0-or-later)
 src/legends_ipc/   IPC serialization library (MIT)
 src/legends_proxy/  IPC proxy for legends_embed.h (MIT)
 tests/             All test code

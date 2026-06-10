@@ -17,7 +17,7 @@
 | Phase 4: Polish & Release | **COMPLETE** | All 16 core REQs | — | — |
 | Security Hardening | **PARTIAL** | 6 of 22 | — | 16 missing |
 | GPL v2 Process Isolation | **PARTIAL** | IPC wire/messages/SHM/audio/control pieces exist | `protocol.cpp` stub + proxy parity gaps | Remaining parity/verification |
-| Wasm Sandbox | **NOT STARTED** | 0 of 50 | — | 50 missing |
+| Wasm Sandbox | **DEFERRED** | 0 of 50 (deferred 2026-06-10) | — | deferred — see ROADMAP §15 |
 | UX & Accessibility | **PARTIAL** | 2 of 11 | — | 9 missing |
 
 ---

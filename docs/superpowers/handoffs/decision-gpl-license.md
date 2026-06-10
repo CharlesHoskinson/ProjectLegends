@@ -2,7 +2,7 @@
 
 Prepared: 2026-06-10  
 Prepared by: GPT 5.5 Codex  
-Decision status: not made by implementer
+Resolution status (2026-06-10): the recommended Option A (`GPL-2.0-or-later`) was applied as a **documentation alignment** in the working session — `README.md`, `CONTRIBUTING.md`, and `LICENSE` were updated so the prose matches the source SPDX markers already present (no source marker was changed). This is documentation cleanup, not legal advice; a formal license declaration remains the maintainer's to confirm.
 
 ## Facts Verified at HEAD
 

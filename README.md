@@ -275,7 +275,7 @@ Generated from `include/legends/legends_embed.h` (15 public status codes).
 
 ```
 ProjectLegends/
-├── engine/                     # DOSBox-X core (GPL-2.0-only)
+├── engine/                     # DOSBox-X core (GPL-2.0-or-later)
 │   ├── include/dosbox/         # Engine headers
 │   │   ├── dosbox_context.h    # Context structure
 │   │   ├── dosbox_library.h    # Library mode API
@@ -285,21 +285,21 @@ ProjectLegends/
 │   │   └── misc/cpu_bridge.cpp      # CPU execution bridge
 │   └── tests/
 │
-├── include/legends/            # Public API (GPL-2.0-only)
+├── include/legends/            # Public API (GPL-2.0-or-later)
 │   └── legends_embed.h
 │
 ├── include/legends_ipc/        # IPC protocol headers (MIT)
 │
-├── src/legends/                # Legends layer (GPL-2.0-only)
+├── src/legends/                # Legends layer (GPL-2.0-or-later)
 │   └── legends_embed_api.cpp
 │
 ├── src/legends_ipc/            # IPC serialization library (MIT)
 │
 ├── src/legends_proxy/          # IPC proxy for legends_embed.h (MIT)
 │
-├── src/engine_host/            # Engine host process (GPL-2.0-only)
+├── src/engine_host/            # Engine host process (GPL-2.0-or-later)
 │
-├── src/pal/                    # Platform backends (GPL-2.0-only)
+├── src/pal/                    # Platform backends (GPL-2.0-or-later)
 │   ├── headless/
 │   ├── sdl2/
 │   └── sdl3/
@@ -363,7 +363,7 @@ cmake --build build
 
 Project Legends is a multi-component project with two license scopes:
 
-- **Engine & core** (`engine/`, `src/legends/`, `src/engine_host/`) — **GPL-2.0-only**, consistent with DOSBox-X
+- **Engine & core** (`engine/`, `src/legends/`, `src/engine_host/`) — **GPL-2.0-or-later**, consistent with DOSBox-X
 - **IPC protocol** (`include/legends_ipc/`, `src/legends_ipc/`) — **MIT**, enabling non-GPL applications to communicate with the engine host
 
 Under the process isolation architecture, the GPL-licensed engine runs in a
@@ -372,7 +372,7 @@ shell via the MIT-licensed IPC protocol. See
 [`docs/design/GPL2_PROCESS_ISOLATION_DESIGN.md`](docs/design/GPL2_PROCESS_ISOLATION_DESIGN.md)
 for the full technical design.
 
-SPDX expression: `GPL-2.0-only AND MIT`
+SPDX expression: `GPL-2.0-or-later AND MIT`
 
 - [`COPYING`](COPYING) — Full GNU GPL v2 license text
 - [`LICENSE`](LICENSE) — Multi-component license overview
