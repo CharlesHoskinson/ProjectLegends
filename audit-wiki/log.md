@@ -47,3 +47,4 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - 2026-06-10 — ingest: Verification Lanes (Sanitizers, Fuzz, Coverage, Determinism) entity.
 - 2026-06-10 — ingest: Quality Gate Scripts & Hooks entity.
 - 2026-06-10 — ingest: Local Dev Loop entity.
+- 2026-06-10 — ingest: CI Design for C++-CMake Monorepos (2026-06) research (raw/research/cpp-cmake-monorepo-ci.md).
