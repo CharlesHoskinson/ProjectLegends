@@ -52,3 +52,5 @@ Root map for the 2026-06 end-to-end audit (8-role agent fleet, HEAD `ef11f20`). 
 - [[Build & CI System (Project Legends)]] — broad machinery, unwired enforcement
 - [[Project Legends Test Suite]] — wide but under-enforced, weak oracles
 - [[Project Legends Documentation Corpus]] — two eras: verified-fresh vs drifted-stale
+
+See: `CI-THESIS.md` (repo root) — the 2026-06 CI/CD quality-gate thesis synthesizing this wiki's CI evidence; recommendations R1-R15 ranked, majors mapped to openspec proposals.
