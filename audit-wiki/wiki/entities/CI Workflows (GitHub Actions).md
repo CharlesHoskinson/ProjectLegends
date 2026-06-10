@@ -102,7 +102,7 @@ File: `.github/workflows/sprint2-checks.yml` (114 lines).
 
 | Job ID | Display name | Runner | Content |
 |---|---|---|---|
-| `globals-registry` | Globals Registry Validation | ubuntu-latest | Eleven Python check steps: `check_current_context.py`, `check_migration_status.py`, `check_globals.py` (baseline enforcement), `check_gsl_lite_usage.py`, `check_conflict_markers.py`, `check_case_collisions.py`, `check_openspec_staleness.py`, `check_capability_matrix.py`, plus Graphify enrichment build + strict check (`sprint2-checks.yml:44-85`) |
+| `globals-registry` | Globals Registry Validation | ubuntu-latest | Ten Python steps (nine checks plus the graphify enrichment build): `check_current_context.py`, `check_migration_status.py`, `check_globals.py` (baseline enforcement), `check_gsl_lite_usage.py`, `check_conflict_markers.py`, `check_case_collisions.py`, `check_openspec_staleness.py`, `check_capability_matrix.py`, plus Graphify enrichment build + strict check (`sprint2-checks.yml:44-85`) |
 | `multi-instance-tests` | Multi-Instance Smoke Tests | ubuntu-latest | gcc-13 Release headless build with `LEGENDS_LIBRARY_MODE=ON` of target `legends_unit_tests`; runs the filtered `MultiInstance*:Sprint2*:GslContract*:ContractGates*` set, then the **full** unfiltered `legends_unit_tests` suite (`sprint2-checks.yml:98-114`) |
 
 **Caching**: none. **Artifacts**: none.

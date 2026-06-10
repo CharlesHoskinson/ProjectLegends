@@ -57,3 +57,8 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - 2026-06-10 — ingest: Local Preflight Design (2026-06) research (raw/research/local-preflight-design.md).
 - 2026-06-10 — ingest: Merge Queues & Required Checks (2026-06) research (raw/research/merge-queues-required-checks.md).
 - 2026-06-10 — ingest: Sanitizer Lane Strategy (2026-06) research (raw/research/sanitizer-lane-strategy.md); attribution fixes applied after citation review.
+- 2026-06-10 — ingest: Gap Analysis — Modularity (2026-06) (M-1..M-8).
+- 2026-06-10 — ingest: Gap Analysis — Maintainability (2026-06) (A-1..A-8).
+- 2026-06-10 — ingest: Gap Analysis — Test Coverage Intelligence (2026-06) (T-1..T-8).
+- 2026-06-10 — ingest: Gap Analysis — Always Green (2026-06) (G-1..G-12).
+- 2026-06-10 — fix: globals-registry step count reconciled to ten across CI Workflows entity and gap analyses.
