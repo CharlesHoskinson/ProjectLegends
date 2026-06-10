@@ -238,4 +238,4 @@ OK: no SPDX header changes in source/build/script paths.
 
 ## Known Limitation
 
-The committed machine handoff cannot contain the SHA of the commit that contains itself without changing that SHA. The `repo.head_commit` field records the last implementation commit before the final handoff commit, and the JSON `known_limitations` field states this explicitly. All handoff deliverables are still committed, and the final tree is expected to be clean after the handoff commit.
+The committed machine handoff cannot contain the SHA or diffstat of the commit that contains itself without changing that commit. The `repo.head_commit` and `repo.diffstat` fields record the last implementation commit before the final handoff commit, and the JSON `known_limitations` field states this explicitly. All handoff deliverables are still committed, and the final tree is expected to be clean after the handoff commit.

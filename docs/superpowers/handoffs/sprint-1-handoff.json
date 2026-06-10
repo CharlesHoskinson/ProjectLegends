@@ -209,7 +209,7 @@
     "all_deliverables_committed": true
   },
   "known_limitations": [
-    "repo.head_commit records the last implementation commit before the final handoff commit. A committed JSON file cannot contain the SHA of the commit that contains itself without changing that SHA; rerun git rev-parse HEAD after checkout for the final handoff commit.",
+    "repo.head_commit and repo.diffstat record the last implementation commit before the final handoff commit. A committed JSON file cannot contain the SHA/diffstat of the commit that contains itself without changing that commit; rerun git rev-parse HEAD and git diff --stat master...HEAD after checkout for final values.",
     "actionlint was not on PATH in this shell; verification used C:\\Users\\charl\\AppData\\Local\\Microsoft\\WinGet\\Packages\\rhysd.actionlint_Microsoft.Winget.Source_8wekyb3d8bbwe\\actionlint.exe.",
     "include/legends/legends_embed.h currently has 50 LEGENDS_API functions, not the 51 estimated in the sprint directive.",
     "openspec/project.md is absent at HEAD, so OpenSpec baseline population was based directly on archived changes' specs."
