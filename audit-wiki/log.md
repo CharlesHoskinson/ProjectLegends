@@ -41,3 +41,9 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - [[Documentation Drift]] marked substantially resolved. Full report: `raw/sprint-1-audit-2026-06-10.md`, synthesis [[Sprint 1 Implementation Audit (2026-06-10)]].
 - 2026-06-10 — ingest: CI Gate Coverage Map (graphify + ModuleDAG + workflow triggers).
 - 2026-06-10 — ingest: CI Run History (2026-06) from gh api run/job records (raw/ci-run-history-2026-06.json).
+- 2026-06-10 — ingest: CI Workflows (GitHub Actions) entity (four workflow files inventoried).
+- 2026-06-10 — update: Build & CI System (Project Legends) — build system inventory section appended.
+- 2026-06-10 — update: Project Legends Test Suite — test infrastructure inventory section appended.
+- 2026-06-10 — ingest: Verification Lanes (Sanitizers, Fuzz, Coverage, Determinism) entity.
+- 2026-06-10 — ingest: Quality Gate Scripts & Hooks entity.
+- 2026-06-10 — ingest: Local Dev Loop entity.
