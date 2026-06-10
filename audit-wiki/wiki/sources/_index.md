@@ -17,3 +17,4 @@ Each entry: `[[Page]] — one-line summary`.
 - [[Compiler Caching on GitHub Actions (2026-06)]] — ccache for the six Ninja Linux jobs, sccache+Ninja for MSVC, 10GB/7-day cache-pool key design; launcher propagates into FetchContent sub-builds.
 - [[Test Impact Analysis & Selection (2026-06)]] — module-grained CTest labels, ModuleManifest-driven reverse-closure selection, safe fallbacks; monolithic unit binary is the degenerate case and red CI makes history-based selection unlearnable.
 - [[Coverage Policy Ratcheting (2026-06)]] — diff-cover on the existing lcov artifact, exclude the vendored engine from the denominator, per-module floors on the DAG; enforcement must not ride on the Codecov token.
+- [[Continuous Fuzzing in CI (2026-06)]] — persist corpus + capture crash artifacts (currently discarded), PR replay vs scheduled real fuzzing (30-60s below every documented floor), ClusterFuzzLite as the managed fit.
