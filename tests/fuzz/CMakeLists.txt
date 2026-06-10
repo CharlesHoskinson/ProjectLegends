@@ -124,13 +124,23 @@ if(CMAKE_CXX_FLAGS MATCHES "-stdlib=libc\\+\\+")
         OUTPUT_VARIABLE LIBFUZZER_RT
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    if(EXISTS "${LIBFUZZER_RT}")
+    # Absolute path: under -stdlib=libc++ a plain -lstdc++ is not honored at
+    # its command-line position, so pass the shared object verbatim.
+    find_library(LIBSTDCXX_SHARED NAMES stdc++ libstdc++.so.6
+        PATHS /usr/lib/x86_64-linux-gnu /usr/lib64 /usr/lib)
+    if(NOT LIBSTDCXX_SHARED)
+        file(GLOB _libstdcxx_candidates /usr/lib/x86_64-linux-gnu/libstdc++.so.6*)
+        if(_libstdcxx_candidates)
+            list(GET _libstdcxx_candidates 0 LIBSTDCXX_SHARED)
+        endif()
+    endif()
+    if(EXISTS "${LIBFUZZER_RT}" AND LIBSTDCXX_SHARED)
         list(REMOVE_ITEM FUZZ_LINK_OPTIONS -fsanitize=fuzzer)
         list(PREPEND FUZZ_LINK_OPTIONS -fsanitize=fuzzer-no-link)
-        set(FUZZER_RUNTIME_LIBS "${LIBFUZZER_RT}" stdc++)
-        message(STATUS "  libc++ build: linking libFuzzer runtime explicitly + libstdc++")
+        set(FUZZER_RUNTIME_LIBS "${LIBFUZZER_RT}" "${LIBSTDCXX_SHARED}")
+        message(STATUS "  libc++ build: linking libFuzzer runtime explicitly + ${LIBSTDCXX_SHARED}")
     else()
-        message(WARNING "  libc++ build but libFuzzer runtime archive not found (${LIBFUZZER_RT}); relying on driver link")
+        message(WARNING "  libc++ build but libFuzzer runtime/libstdc++ not found (${LIBFUZZER_RT} / ${LIBSTDCXX_SHARED}); relying on driver link")
     endif()
 endif()
 
