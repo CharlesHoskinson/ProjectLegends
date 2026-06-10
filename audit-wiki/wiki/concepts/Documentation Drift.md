@@ -42,8 +42,12 @@ The project's documents of record (roadmap, TODO, CHANGELOG, README, REQUIREMENT
 - The README test badge is hardcoded markup, not CI output.^[from [[Test Coverage Audit (2026-06)]] — "a hardcoded static badge linking to nothing"]
 - On IPC, the paper trail understates the code while overstating the guarantees.^[from [[Security Audit (2026-06)]] — "understates the code while overstating the guarantees"]
 
+> [!check] SUBSTANTIALLY RESOLVED 2026-06-10 (Sprint 1)
+> Fixed on branch `sprint-1/truthful-record` (audited PASS 8/8): roadmap case collision eliminated and stamp corrected; TODO/AUDIT/CHANGELOG reconciled (6 contradictions, IPC label, 22/8 tally, accurate TLS scope); Wasm demoted to planned with git-history proof; REQUIREMENTS + TLA conformance re-baselined with `verified-at` stamps; README API/error tables generated; ARCHITECTURE constants fixed; three new CI guard scripts added. Residual drift will be caught mechanically by the new checks. Provenance: [[Sprint 1 Implementation Audit (2026-06-10)]].
+
 ## Related
 
 - [[Project Legends Documentation Corpus]] — the entity this concept describes the failure mode of
 - [[Prior-Audit Remediation Status]] — drift hides 22 real resolutions
+- [[Sprint 1 Implementation Audit (2026-06-10)]] — the remediation and its audit
 - [[Sprint Plan Derivation (2026-06)]] — Sprint 1 ("truthful record")

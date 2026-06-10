@@ -32,3 +32,10 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - All 6 handoff attestations verified true against the diff. Full report: `raw/sprint-0-audit-2026-06-10.md`, synthesis [[Sprint 0 Implementation Audit (2026-06-10)]].
 - Minor process findings folded into the Sprint 1 directive (commit handoff, start-stamp, surface build-flag overrides).
 - Full ctest independently re-run after the fact: 4512/4512 passed (219.65s), corroborating the handoff headline exactly.
+
+## [2026-06-10] audit | Sprint 1 (GPT 5.5 Codex) — PASS 8/8
+- Audited branch `sprint-1/truthful-record` (HEAD 56f9dfa, 11 commits). Verdict PASS, no defects.
+- Method: three-dot diff scope checks (src/engine/audit-wiki diffs empty), independent re-run of all 3 new scripts (case-collision pass/fail, gen_readme byte-identical, openspec staleness), random-subset claim re-verification vs source.
+- All three pre-flagged corrections honored and verified: roadmap de-dup (not restore); CHANGELOG TLS reworded (not deleted); REQ-EX-001/002 PARTIAL (confirmed cpu_library_stubs.cpp:56-60 is a real no-op PIC stub — C2 nuance preserved).
+- 6 TODO contradictions resolved; AUDIT.md 22/8 tally; ARCHITECTURE constants fixed 64/DBXS/v3; Wasm demoted to planned. Two owner decisions queued (GPL -or-later; Wasm defer).
+- [[Documentation Drift]] marked substantially resolved. Full report: `raw/sprint-1-audit-2026-06-10.md`, synthesis [[Sprint 1 Implementation Audit (2026-06-10)]].
