@@ -1,0 +1,254 @@
+{
+  "handoff_version": 1,
+  "sprint": {
+    "id": 0,
+    "name": "Stop the bleeding",
+    "plan_file": "docs/superpowers/plans/2026-06-09-audit-implementation-sprints.md",
+    "items_in_scope": [
+      "0.1",
+      "0.2",
+      "0.3",
+      "0.4",
+      "0.5"
+    ]
+  },
+  "session": {
+    "agent": "gpt-5.5-codex",
+    "started_at_utc": null,
+    "finished_at_utc": "2026-06-10T06:10:21.0609279Z",
+    "os": "Microsoft Windows NT 10.0.26200.0",
+    "toolchain": {
+      "compiler": "MSVC 19.51.36244 for dev build; Clang 22.1.7 for fuzz build",
+      "cmake_preset": "dev",
+      "generator": "Ninja 1.13.2"
+    }
+  },
+  "repo": {
+    "path": "C:\\projectLegends",
+    "branch": "sprint-0/stop-the-bleeding",
+    "base_commit": "ce6a847daf5ced4e72892511a96d28af9795fd0e",
+    "head_commit": "3ff9754f3d4fbc41cf943d54c9f675bc65c250af",
+    "working_tree_clean": false,
+    "diffstat": " .github/workflows/ci.yml                    |  57 ++++-\n .github/workflows/pal-ci.yml                |   2 +-\n CMakeLists.txt                              |   2 +\n LICENSE                                     |  73 ++++--\n engine/src/misc/dosbox_library.cpp          |  77 +++++-\n engine/tests/unit/test_dosbox_library.cpp   |  94 +++++++\n src/legends/legends_embed_api.cpp           |  75 +++---\n tests/fuzz/CMakeLists.txt                   |  48 +++-\n tests/fuzz/fuzz_engine_memory_blob.cpp      | 378 ++++++++++++++++++++++++++++\n tests/fuzz/generate_corpus.cpp              |  66 +++++\n tests/unit/test_legends_embed_lifecycle.cpp |  24 ++\n 11 files changed, 815 insertions(+), 81 deletions(-)"
+  },
+  "items": [
+    {
+      "id": "0.1",
+      "finding": "mem-01",
+      "status": "complete",
+      "commits": [
+        "c4f5916a6c134ad5d8594761be5add5f2a5a2964"
+      ],
+      "files_changed": [
+        {
+          "path": "engine/src/misc/dosbox_library.cpp",
+          "lines": "1178-1220, 1358-1368, 1493-1527"
+        },
+        {
+          "path": "engine/tests/unit/test_dosbox_library.cpp",
+          "lines": "726-762, 1055-1096"
+        }
+      ],
+      "tests_added": [
+        "DOSBoxLibraryEngineStateTest.LoadRejectsOversizedSerializedMemorySizeBeforeRamDecode"
+      ],
+      "pre_fix_failure_captured": true,
+      "verification": [
+        {
+          "command": "build\\dev\\engine\\tests\\aibox_unit_tests.exe --gtest_filter=DOSBoxLibraryEngineStateTest.LoadRejectsOversizedSerializedMemorySizeBeforeRamDecode --gtest_color=no",
+          "exit_code": 0,
+          "evidence_excerpt": "[ RUN      ] DOSBoxLibraryEngineStateTest.LoadRejectsOversizedSerializedMemorySizeBeforeRamDecode\n[       OK ] DOSBoxLibraryEngineStateTest.LoadRejectsOversizedSerializedMemorySizeBeforeRamDecode (1 ms)\n[  PASSED  ] 1 test."
+        }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    },
+    {
+      "id": "0.2",
+      "finding": "mem-02",
+      "status": "complete",
+      "commits": [
+        "b7cc4f8017e60ee73f7856fc19c8ae10bd813f10"
+      ],
+      "files_changed": [
+        {
+          "path": "CMakeLists.txt",
+          "lines": "214, 803"
+        },
+        {
+          "path": "src/legends/legends_embed_api.cpp",
+          "lines": "70-75, 835-963"
+        },
+        {
+          "path": "tests/unit/test_legends_embed_lifecycle.cpp",
+          "lines": "13-15, 132-154"
+        }
+      ],
+      "tests_added": [
+        "DosboxxEmbedLifecycleTest.CreateLateFailureReleasesEngineHandle"
+      ],
+      "pre_fix_failure_captured": true,
+      "verification": [
+        {
+          "command": "build\\dev\\legends_unit_tests.exe --gtest_filter=DosboxxEmbedLifecycleTest.CreateLateFailureReleasesEngineHandle --gtest_color=no",
+          "exit_code": 0,
+          "evidence_excerpt": "[ RUN      ] DosboxxEmbedLifecycleTest.CreateLateFailureReleasesEngineHandle\n[       OK ] DosboxxEmbedLifecycleTest.CreateLateFailureReleasesEngineHandle (1 ms)\n[  PASSED  ] 1 test."
+        }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    },
+    {
+      "id": "0.3",
+      "finding": "ci-01,test-ci-01,ci-04",
+      "status": "complete",
+      "commits": [
+        "7aabd5285c983e17eebce543d67270dcf1a9d1d7"
+      ],
+      "files_changed": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "lines": "20-23, 328-373, 478-555"
+        },
+        {
+          "path": ".github/workflows/pal-ci.yml",
+          "lines": "5, 13-14"
+        }
+      ],
+      "tests_added": [],
+      "pre_fix_failure_captured": false,
+      "verification": [
+        {
+          "command": "C:\\Users\\charl\\AppData\\Local\\Microsoft\\WinGet\\Packages\\rhysd.actionlint_Microsoft.Winget.Source_8wekyb3d8bbwe\\actionlint.exe .github/workflows/ci.yml .github/workflows/pal-ci.yml",
+          "exit_code": 0,
+          "evidence_excerpt": "No output; actionlint returned exit code 0."
+        },
+        {
+          "command": "manual final YAML trigger trace",
+          "exit_code": 0,
+          "evidence_excerpt": "push master: sanitizer/fuzz jobs run; PR master: sanitizer/fuzz jobs run; PR develop: branch filters include develop and PR job conditions run. ASan/UBSan required; TSan/MSan allow_failure with 2026-06-10 Sprint 7 exit-plan comments."
+        }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    },
+    {
+      "id": "0.4",
+      "finding": "lic-01",
+      "status": "complete",
+      "commits": [
+        "40ca8fddeeb3c64b6ffda64f6b0e43ad8c382055"
+      ],
+      "files_changed": [
+        {
+          "path": "LICENSE",
+          "lines": "1-50"
+        }
+      ],
+      "tests_added": [],
+      "pre_fix_failure_captured": false,
+      "verification": [
+        {
+          "command": "git diff -- COPYING NOTICE",
+          "exit_code": 0,
+          "evidence_excerpt": "No output; COPYING and NOTICE unchanged."
+        }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    },
+    {
+      "id": "0.5",
+      "finding": "test-fuzz-05 (partial)",
+      "status": "complete",
+      "commits": [
+        "3ff9754f3d4fbc41cf943d54c9f675bc65c250af"
+      ],
+      "files_changed": [
+        {
+          "path": "tests/fuzz/fuzz_engine_memory_blob.cpp",
+          "lines": "1-378"
+        },
+        {
+          "path": "tests/fuzz/generate_corpus.cpp",
+          "lines": "68-93, 241"
+        },
+        {
+          "path": "tests/fuzz/CMakeLists.txt",
+          "lines": "24-55, 169-189, 255-269"
+        },
+        {
+          "path": ".github/workflows/ci.yml",
+          "lines": "509-555"
+        }
+      ],
+      "tests_added": [
+        "fuzz_engine_memory_blob"
+      ],
+      "pre_fix_failure_captured": false,
+      "verification": [
+        {
+          "command": "$asan = 'C:\\Program Files\\LLVM\\lib\\clang\\22\\lib\\windows'; $env:Path = $asan + ';C:\\Program Files\\LLVM\\bin;' + [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User'); build\\fuzz\\tests\\fuzz\\fuzz_engine_memory_blob.exe build\\fuzz\\tests\\fuzz\\corpus\\engine_memory_blob -max_len=1048576 -max_total_time=600 -print_final_stats=1",
+          "exit_code": 0,
+          "evidence_excerpt": "#2223899 DONE cov: 17 ft: 17 corp: 4/4044b lim: 1048576 exec/s: 3700 rss: 332Mb\nDone 2223899 runs in 601 second(s)\nstat::number_of_executed_units: 2223899\nfuzz_engine_memory_blob: crc_valid_ram_inputs=2223898 rle_decode_reached=1061747 oversized_ram_rejections=52388"
+        }
+      ],
+      "deviations_from_spec": null,
+      "blocked_reason": null
+    }
+  ],
+  "verification_summary": {
+    "build": {
+      "command": "cmd.exe /c \"call \"\"C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\"\" -arch=x64 -host_arch=x64 && \"\"C:\\Program Files\\CMake\\bin\\cmake.exe\"\" --build --preset dev\"",
+      "exit_code": 0,
+      "new_warnings": 0
+    },
+    "ctest": {
+      "command": "cmd.exe /c \"call \"\"C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\"\" -arch=x64 -host_arch=x64 && \"\"C:\\Program Files\\CMake\\bin\\ctest.exe\"\" --test-dir build/dev --output-on-failure\"",
+      "total": 4512,
+      "passed": 4512,
+      "failed": 0,
+      "skipped": 48,
+      "skipped_delta_vs_master": 0
+    },
+    "fuzz": {
+      "target": "fuzz_engine_memory_blob",
+      "duration_seconds": 600,
+      "execs": 2223899,
+      "crashes": 0,
+      "oom": 0,
+      "reached_rle_decode_evidence": "Final fuzzer stats printed rle_decode_reached=1061747 with crc_valid_ram_inputs=2223898, so inputs passed CRC validation and exercised the RAM RLE decode path.",
+      "corpus_path": "build/fuzz/tests/fuzz/corpus/engine_memory_blob"
+    }
+  },
+  "attestations": {
+    "no_existing_assertions_weakened": true,
+    "no_out_of_scope_files_touched": true,
+    "out_of_scope_exceptions": [],
+    "no_history_rewrite_or_force_push": true,
+    "gpl_only_vs_or_later_decision_not_made": true,
+    "audit_wiki_untouched": true
+  },
+  "known_limitations": [
+    "Exact session start timestamp was unavailable after context compaction; started_at_utc is null.",
+    "Full dev build exits 0 but emits pre-existing warning classes from existing engine/test sources and a command-line /std override; zero new warnings means no source diagnostics were attributed to Sprint 0 changes, not that the repository is warning-free.",
+    "working_tree_clean is false because .claude/commands/, .claude/skills/, and the handoff files are untracked; the tracked branch diff is the 11-file committed Sprint 0 diffstat.",
+    "Local ASan fuzz execution requires C:\\Program Files\\LLVM\\lib\\clang\\22\\lib\\windows on PATH so clang_rt.asan_dynamic-x86_64.dll is found."
+  ],
+  "auditor_repro_commands": [
+    "git switch sprint-0/stop-the-bleeding",
+    "cmd.exe /c \"call \"\"C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\"\" -arch=x64 -host_arch=x64 && \"\"C:\\Program Files\\CMake\\bin\\cmake.exe\"\" --fresh --preset dev -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_MAKE_PROGRAM=\"\"C:\\Users\\charl\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe\\ninja.exe\"\" -DCMAKE_CXX_FLAGS=\"\"/EHsc /wd4875\"\"\"",
+    "cmd.exe /c \"call \"\"C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\"\" -arch=x64 -host_arch=x64 && \"\"C:\\Program Files\\CMake\\bin\\cmake.exe\"\" --build --preset dev\"",
+    "cmd.exe /c \"call \"\"C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\"\" -arch=x64 -host_arch=x64 && \"\"C:\\Program Files\\CMake\\bin\\ctest.exe\"\" --test-dir build/dev --output-on-failure\"",
+    "build\\dev\\engine\\tests\\aibox_unit_tests.exe --gtest_filter=DOSBoxLibraryEngineStateTest.LoadRejectsOversizedSerializedMemorySizeBeforeRamDecode --gtest_color=no",
+    "build\\dev\\legends_unit_tests.exe --gtest_filter=DosboxxEmbedLifecycleTest.CreateLateFailureReleasesEngineHandle --gtest_color=no",
+    "C:\\Users\\charl\\AppData\\Local\\Microsoft\\WinGet\\Packages\\rhysd.actionlint_Microsoft.Winget.Source_8wekyb3d8bbwe\\actionlint.exe .github/workflows/ci.yml .github/workflows/pal-ci.yml",
+    "cmd.exe /c \"call \"\"C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\"\" -arch=x64 -host_arch=x64 && set \"\"PATH=C:\\Program Files\\LLVM\\bin;C:\\Users\\charl\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe;C:\\Program Files\\CMake\\bin;%PATH%\"\" && cmake --fresh -B build/fuzz -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=\"\"C:/Program Files/LLVM/bin/clang.exe\"\" -DCMAKE_CXX_COMPILER=\"\"C:/Program Files/LLVM/bin/clang++.exe\"\" -DCMAKE_MAKE_PROGRAM=\"\"C:/Users/charl/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe/ninja.exe\"\" -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DENABLE_FUZZING=ON -DENABLE_ASAN=ON -DLEGENDS_BUILD_TESTS=ON -DLEGENDS_HEADLESS=ON\"",
+    "cmd.exe /c \"call \"\"C:\\Program Files (x86)\\Microsoft Visual Studio\\18\\BuildTools\\Common7\\Tools\\VsDevCmd.bat\"\" -arch=x64 -host_arch=x64 && set \"\"PATH=C:\\Program Files\\LLVM\\bin;C:\\Users\\charl\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe;C:\\Program Files\\CMake\\bin;%PATH%\"\" && cmake --build build/fuzz --target fuzz_engine_memory_blob generate_fuzz_corpus\"",
+    "build\\fuzz\\tests\\fuzz\\generate_fuzz_corpus.exe build\\fuzz\\tests\\fuzz\\corpus",
+    "$asan = 'C:\\Program Files\\LLVM\\lib\\clang\\22\\lib\\windows'; $env:Path = $asan + ';C:\\Program Files\\LLVM\\bin;' + [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User'); build\\fuzz\\tests\\fuzz\\fuzz_engine_memory_blob.exe build\\fuzz\\tests\\fuzz\\corpus\\engine_memory_blob -max_len=1048576 -max_total_time=600 -print_final_stats=1",
+    "git diff --check master...HEAD",
+    "git diff --stat master...HEAD"
+  ],
+  "report_path": "docs/superpowers/handoffs/sprint-0-implementation-report.md"
+}
