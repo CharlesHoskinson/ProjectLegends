@@ -54,3 +54,4 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - 2026-06-10 — ingest: Continuous Fuzzing in CI (2026-06) research (raw/research/continuous-fuzzing-ci.md).
 - 2026-06-10 — ingest: Flaky-Test Detection & Quarantine (2026-06) research (raw/research/flaky-test-quarantine.md).
 - 2026-06-10 — ingest: Vendored & License-Isolated Dependency CI (2026-06) research (raw/research/vendored-license-isolation-ci.md).
+- 2026-06-10 — ingest: Local Preflight Design (2026-06) research (raw/research/local-preflight-design.md).
