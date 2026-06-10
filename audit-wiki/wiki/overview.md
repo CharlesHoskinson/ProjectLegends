@@ -17,6 +17,10 @@ Root map for the 2026-06 end-to-end audit (8-role agent fleet, HEAD `ef11f20`). 
 - [[Audit Verdict (2026-06)]] — overall thesis, grades, and what was refuted
 - [[Sprint Plan Derivation (2026-06)]] — the eight-sprint program and its rationale
 
+## Remediation audits
+
+- [[Sprint 0 Implementation Audit (2026-06-10)]] — GPT 5.5 Codex Sprint 0 verdict: PASS 5/5, no code defects (mem-01, lic-01, mem-02, CI gates, fuzzer)
+
 ## Sources
 
 - [[Backlog Verification Audit (2026-06)]] — 22 of 30 prior findings verified resolved; record-keeping defects

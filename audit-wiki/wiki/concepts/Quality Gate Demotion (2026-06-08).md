@@ -33,8 +33,12 @@ One day before this audit, commit 6900e7a restructured CI to get a red pipeline 
 - The demotion effectively re-opens prior fixes H7/H8/M12 for PRs and merges.^[from [[Build & CI Audit (2026-06)]] — "now effectively re-opened for the code paths that matter"]
 - The restructure split workflows into gating and non-gating lanes.^[from [[Backlog Verification Audit (2026-06)]] — "workflows split into primary vs optional lanes"]
 
+> [!check] RESOLVED 2026-06-10 (Sprint 0)
+> Reversed on branch `sprint-0/stop-the-bleeding` (audited PASS): ASan/UBSan and a fuzz smoke now run on pull_request and push-to-master, the dead PR-fuzz step is fixed, and `develop` is added to PR filters. TSan/MSan stay allow_failure but now carry dated Sprint-7 exit-plan comments. Independent actionlint exit 0. Provenance: [[Sprint 0 Implementation Audit (2026-06-10)]].
+
 ## Related
 
 - [[Build & CI System (Project Legends)]] — the machinery exists; it is the gating that regressed
 - [[Prior-Audit Remediation Status]] — three resolved findings functionally re-opened
+- [[Sprint 0 Implementation Audit (2026-06-10)]] — the remediation and its audit
 - [[Sprint Plan Derivation (2026-06)]] — Sprint 0 item 3 (re-arm the gates)

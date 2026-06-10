@@ -4,7 +4,7 @@ aliases: ["mem-01", "Save-state heap overflow"]
 tags: [concept, type/concept, topic/audit, topic/memory-safety]
 created: 2026-06-09
 updated: 2026-06-09
-status: draft
+status: resolved
 parent: [[overview]]
 related:
   - "[[Prior-Audit Remediation Status]]"
@@ -14,7 +14,8 @@ sources:
   - "[[Memory Safety Audit (2026-06)]]"
   - "[[Security Audit (2026-06)]]"
   - "[[Test Coverage Audit (2026-06)]]"
-claims_status: contested
+  - "[[Sprint 0 Implementation Audit (2026-06-10)]]"
+claims_status: superseded
 ---
 
 # Save-State Load Path Overflow
@@ -37,6 +38,9 @@ The save-state load path is the project's primary untrusted-input surface in the
 > - Bounded with clamps and per-entry checks — [[Security Audit (2026-06)]] (2026-06-09)
 > - Critical overflow: decode capacity taken from attacker-controlled `memory.size` — [[Memory Safety Audit (2026-06)]] (2026-06-09)
 > Status: contested — adversarial verification confirmed the overflow (isReal=true, high confidence); the validation the security auditor saw guards other fields but not the allocation descriptor. Sprint plan treats mem-01 as OPEN and CRITICAL.
+
+> [!check] RESOLVED 2026-06-10 (Sprint 0)
+> Fixed on branch `sprint-0/stop-the-bleeding` and audited PASS. The descriptor-overwrite root cause was removed, RAM/VRAM decode into live-allocation-sized buffers, and an early pass rejects oversized `mem.size`. The contradiction is settled in favor of the overflow read (the memory-safety auditor was right); it is now closed. An exploit-shaped regression test plus a CRC-aware fuzzer (228k execs, 0 crashes) verify the fix. Provenance: [[Sprint 0 Implementation Audit (2026-06-10)]].
 
 ## Related
 
