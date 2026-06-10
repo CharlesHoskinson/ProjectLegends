@@ -96,7 +96,9 @@ handoff on every dimension checked.
   to do`, exit 0 (binaries are current with committed source; build is clean).
 - mem-01 regression + group: 25/25 PASS. mem-02 regression + group: 15/15 PASS.
 - fuzz_engine_memory_blob 60s: 0 crashes. actionlint: exit 0.
-- Full ctest (4512-test headline): launched separately to corroborate.
+- Full ctest (4512-test headline): independently re-run — 100% passed, 0 failed
+  out of 4512 (219.65s). Corroborates the handoff exactly. (Test names containing
+  "Failed" — e.g. PanicSetsFailedState — are expected-behavior tests, all Passed.)
 
 ## Minor / process findings (NOT code defects; fold into next directive)
 1. Handoff artifacts (`docs/superpowers/handoffs/*.md,*.json`) were left UNTRACKED,

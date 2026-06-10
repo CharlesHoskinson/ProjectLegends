@@ -31,3 +31,4 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - lic-01, mem-02, CI gate re-arm all PASS; [[Quality Gate Demotion (2026-06-08)]] resolved, [[Licensing Inconsistency]] partially resolved.
 - All 6 handoff attestations verified true against the diff. Full report: `raw/sprint-0-audit-2026-06-10.md`, synthesis [[Sprint 0 Implementation Audit (2026-06-10)]].
 - Minor process findings folded into the Sprint 1 directive (commit handoff, start-stamp, surface build-flag overrides).
+- Full ctest independently re-run after the fact: 4512/4512 passed (219.65s), corroborating the handoff headline exactly.
