@@ -48,7 +48,12 @@ typedef enum dosbox_log_level {
     DOSBOX_LOG_WARN  = 1,   /**< Warnings about potential issues */
     DOSBOX_LOG_INFO  = 2,   /**< Informational messages */
     DOSBOX_LOG_DEBUG = 3,   /**< Debug information */
-    DOSBOX_LOG_TRACE = 4    /**< Detailed trace for debugging */
+    DOSBOX_LOG_TRACE = 4,   /**< Detailed trace for debugging */
+
+    /* Forces the enum's value range to full int so that arbitrary values
+     * arriving over the FFI boundary are representable without undefined
+     * behavior. Never a valid level; handled by default: arms. */
+    DOSBOX_LOG_LEVEL_FORCE_INT = 0x7FFFFFFF
 } dosbox_log_level;
 
 /**

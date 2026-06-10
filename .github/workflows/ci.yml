@@ -336,14 +336,21 @@ jobs:
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch'
     strategy:
+      # Legs report independently; one leg's failure must not cancel the
+      # others' evidence (the TSan suppression bring-up depends on it).
+      fail-fast: false
       matrix:
         sanitizer: [address, undefined, thread]
         include:
           # Note: -stdlib=libc++ is CXX-only; c_flags omit it to avoid -Wunused-command-line-argument
+          # alloc_dealloc_mismatch=0: the runners' libc++/libc++abi DSO pair is
+          # uninstrumented, so exception what()-strings allocate via operator new
+          # in libc++.so and free in libc++abi.so — a documented ASan false
+          # positive, not a project bug (ASan's own hint recommends this flag).
           - sanitizer: address
             flags: "-stdlib=libc++ -fsanitize=address -fno-omit-frame-pointer"
             c_flags: "-fsanitize=address -fno-omit-frame-pointer"
-            env: "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1"
+            env: "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:alloc_dealloc_mismatch=0"
           - sanitizer: undefined
             flags: "-stdlib=libc++ -fsanitize=undefined -fno-omit-frame-pointer"
             c_flags: "-fsanitize=undefined -fno-omit-frame-pointer"
@@ -483,14 +490,19 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build clang-18
+          sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev
 
+      # clang-18 against the runner's libstdc++ lacks <expected> (libstdc++
+      # gates it on __cpp_concepts >= 202002L, which clang-18 doesn't
+      # advertise), so this lane builds with libc++ like every other clang
+      # lane. The flag is CXX-only.
       - name: Configure
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_C_COMPILER=clang-18 \
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
             -DENABLE_FUZZING=ON \
             -DENABLE_ASAN=ON \
             -DLEGENDS_BUILD_TESTS=ON \
@@ -758,7 +770,7 @@ jobs:
   # REQ-SEC-028: Dependency Vulnerability Scanning
   # ─────────────────────────────────────────────────────────────────────────────
   dependency-scan:
-    name: Optional Dependency Scan
+    name: Dependency Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -772,13 +784,21 @@ jobs:
 
       - name: Scan dependencies
         # The former `--lockfile cmake/dependencies.cmake` invocation was
-        # unparseable by osv-scanner and never produced a result; the scan
-        # now covers the vendored trees recursively and emits JSON for the
-        # artifact step. Mutes below are removed once a dispatch run is
-        # triaged green (openspec change ci-stabilize-mandatory-lanes, D5).
+        # unparseable by osv-scanner and never produced a result. The scan
+        # covers the vendored trees recursively and emits JSON for the
+        # artifact step. Found vulnerabilities (exit 1) fail the job. Exit
+        # 128 means "no supported package sources" — the C++ trees carry no
+        # manifests osv-scanner reads, so that is the current clean baseline
+        # (dispatch run 27302003890, 2026-06-10); an SBOM that gives this
+        # gate real input is tracked in issue #42.
         run: |
-          ./osv-scanner scan --recursive --format json --output osv-results.json ./engine ./src ./tests || true
-        continue-on-error: true
+          rc=0
+          ./osv-scanner scan --recursive --format json --output osv-results.json ./engine ./src ./tests || rc=$?
+          if [ "$rc" -eq 128 ]; then
+            echo "osv-scanner: no supported package sources in scanned trees (known C++-tree baseline, issue #42)"
+            exit 0
+          fi
+          exit "$rc"
 
       - name: Upload scan results
         if: always()

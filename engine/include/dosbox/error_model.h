@@ -91,7 +91,13 @@ typedef enum dosbox_error_code {
     /* Fatal errors (900-999) */
     DOSBOX_ERR_PANIC = 900,
     DOSBOX_ERR_TRAP = 901,
-    DOSBOX_ERR_FATAL = 999
+    DOSBOX_ERR_FATAL = 999,
+
+    /* Forces the enum's value range to full int so that arbitrary values
+     * arriving over the FFI boundary are representable without undefined
+     * behavior (an unfixed-underlying-type enum only spans its enumerators'
+     * bit range). Never a valid code; handled by default: arms. */
+    DOSBOX_ERROR_CODE_FORCE_INT = 0x7FFFFFFF
 } dosbox_error_code;
 
 /**

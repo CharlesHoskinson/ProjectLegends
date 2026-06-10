@@ -1119,7 +1119,18 @@ DOSBoxContext::DOSBoxContext(DOSBoxContext&& other) noexcept
     , pic(std::move(other.pic))
     , keyboard(std::move(other.keyboard))
     , input(std::move(other.input))
+    , memory(other.memory)
+    , dma(other.dma)
+    , dos(other.dos)
+    , dos_filesystem(other.dos_filesystem)
 {
+    // The owning-raw-pointer aggregates (memory.base, dma.controllers,
+    // dos_filesystem.files/drives/devices) were copied above; reset the
+    // source so its destructor/shutdown cannot free what we now own.
+    other.memory = MemoryState{};
+    other.dma = DmaState{};
+    other.dos = DosState{};
+    other.dos_filesystem = DosFilesystemState{};
     other.initialized_ = false;
 }
 
@@ -1140,7 +1151,15 @@ DOSBoxContext& DOSBoxContext::operator=(DOSBoxContext&& other) noexcept {
         pic = std::move(other.pic);
         keyboard = std::move(other.keyboard);
         input = std::move(other.input);
+        memory = other.memory;
+        dma = other.dma;
+        dos = other.dos;
+        dos_filesystem = other.dos_filesystem;
 
+        other.memory = MemoryState{};
+        other.dma = DmaState{};
+        other.dos = DosState{};
+        other.dos_filesystem = DosFilesystemState{};
         other.initialized_ = false;
     }
     return *this;
