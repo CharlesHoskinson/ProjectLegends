@@ -1,0 +1,283 @@
+{
+  "window": {
+    "runs": 397,
+    "oldest": "2026-01-16T10:07:58Z",
+    "newest": "2026-06-10T08:31:29Z"
+  },
+  "conclusions_by_workflow": {
+    "CI::cancelled": 15,
+    "CI::failure": 143,
+    "CI::success": 6,
+    "Module DAG::cancelled": 6,
+    "Module DAG::failure": 32,
+    "Module DAG::success": 11,
+    "Optional PAL CI::failure": 4,
+    "Optional PAL CI::success": 6,
+    "PAL CI::cancelled": 5,
+    "PAL CI::failure": 43,
+    "Sprint 2 Checks::cancelled": 13,
+    "Sprint 2 Checks::failure": 86,
+    "Sprint 2 Checks::success": 27
+  },
+  "rerun_runs": [],
+  "job_seconds": {
+    "C ABI Verification": {
+      "n": 11,
+      "median": 6.0,
+      "max": 7.0,
+      "fail": 0
+    },
+    "CMake DAG": {
+      "n": 6,
+      "median": 25.0,
+      "max": 38.0,
+      "fail": 0
+    },
+    "Code Coverage": {
+      "n": 11,
+      "median": 502.0,
+      "max": 526.0,
+      "fail": 0
+    },
+    "Fuzz Testing": {
+      "n": 6,
+      "median": 38.0,
+      "max": 62.0,
+      "fail": 6
+    },
+    "Globals Registry Validation": {
+      "n": 6,
+      "median": 16.0,
+      "max": 20.0,
+      "fail": 0
+    },
+    "Include Rules": {
+      "n": 6,
+      "median": 7.0,
+      "max": 8.0,
+      "fail": 0
+    },
+    "Linux (clang)": {
+      "n": 11,
+      "median": 433.0,
+      "max": 459.0,
+      "fail": 0
+    },
+    "Linux (gcc)": {
+      "n": 11,
+      "median": 331.0,
+      "max": 357.0,
+      "fail": 0
+    },
+    "Linux IPC (gcc)": {
+      "n": 11,
+      "median": 304.0,
+      "max": 320.0,
+      "fail": 0
+    },
+    "Multi-Instance Smoke Tests": {
+      "n": 6,
+      "median": 211.0,
+      "max": 216.0,
+      "fail": 0
+    },
+    "Optional ${{ matrix.sanitizer }} Sanitizer": {
+      "n": 4,
+      "median": 0.0,
+      "max": 0.0,
+      "fail": 0
+    },
+    "Optional ASan Lifecycle Tests": {
+      "n": 7,
+      "median": 232.0,
+      "max": 236.0,
+      "fail": 0
+    },
+    "Optional Build (Linux)": {
+      "n": 6,
+      "median": 0.0,
+      "max": 331.0,
+      "fail": 0
+    },
+    "Optional Build (Windows)": {
+      "n": 6,
+      "median": 0.0,
+      "max": 814.0,
+      "fail": 0
+    },
+    "Optional Contract Gates": {
+      "n": 7,
+      "median": 202.0,
+      "max": 212.0,
+      "fail": 0
+    },
+    "Optional Dependency Scan": {
+      "n": 11,
+      "median": 0.0,
+      "max": 13.0,
+      "fail": 0
+    },
+    "Optional Fuzz Testing": {
+      "n": 5,
+      "median": 0.0,
+      "max": 29.0,
+      "fail": 1
+    },
+    "Optional Headless Backend": {
+      "n": 7,
+      "median": 306.0,
+      "max": 320.0,
+      "fail": 0
+    },
+    "Optional Linux SDL3 (${{ matrix.compiler }})": {
+      "n": 9,
+      "median": 0.0,
+      "max": 0.0,
+      "fail": 0
+    },
+    "Optional Linux SDL3 (clang)": {
+      "n": 2,
+      "median": 500.0,
+      "max": 500.0,
+      "fail": 0
+    },
+    "Optional Linux SDL3 (gcc)": {
+      "n": 2,
+      "median": 353.0,
+      "max": 353.0,
+      "fail": 0
+    },
+    "Optional Pure C ABI Verification": {
+      "n": 7,
+      "median": 223.0,
+      "max": 238.0,
+      "fail": 0
+    },
+    "Optional SDL Header Firewall": {
+      "n": 7,
+      "median": 6.0,
+      "max": 8.0,
+      "fail": 0
+    },
+    "Optional SDL2 Backend": {
+      "n": 7,
+      "median": 338.0,
+      "max": 351.0,
+      "fail": 0
+    },
+    "Optional SDL3 Backend": {
+      "n": 7,
+      "median": 409.0,
+      "max": 429.0,
+      "fail": 1
+    },
+    "Optional Static Analysis (clang-tidy)": {
+      "n": 11,
+      "median": 0.0,
+      "max": 34.0,
+      "fail": 2
+    },
+    "Optional TLA+ Model Checking": {
+      "n": 11,
+      "median": 0.0,
+      "max": 305.0,
+      "fail": 0
+    },
+    "Optional Windows Build": {
+      "n": 7,
+      "median": 1037.0,
+      "max": 1084.0,
+      "fail": 0
+    },
+    "Optional Windows SDL3 (MSVC)": {
+      "n": 11,
+      "median": 0.0,
+      "max": 1120.0,
+      "fail": 2
+    },
+    "Optional address Sanitizer": {
+      "n": 1,
+      "median": 680.0,
+      "max": 680.0,
+      "fail": 1
+    },
+    "Optional macOS (AppleClang)": {
+      "n": 11,
+      "median": 0.0,
+      "max": 413.0,
+      "fail": 0
+    },
+    "Optional macOS SDL3 (AppleClang)": {
+      "n": 11,
+      "median": 0.0,
+      "max": 548.0,
+      "fail": 0
+    },
+    "Optional memory Sanitizer": {
+      "n": 1,
+      "median": 368.0,
+      "max": 368.0,
+      "fail": 1
+    },
+    "Optional thread Sanitizer": {
+      "n": 1,
+      "median": 679.0,
+      "max": 679.0,
+      "fail": 1
+    },
+    "Optional undefined Sanitizer": {
+      "n": 1,
+      "median": 663.0,
+      "max": 663.0,
+      "fail": 1
+    },
+    "Package (${{ matrix.os }})": {
+      "n": 11,
+      "median": 0.0,
+      "max": 0.0,
+      "fail": 0
+    },
+    "Release Validation": {
+      "n": 11,
+      "median": 0.0,
+      "max": 0.0,
+      "fail": 0
+    },
+    "Summary": {
+      "n": 6,
+      "median": 3.0,
+      "max": 4.0,
+      "fail": 0
+    },
+    "Windows (MSVC)": {
+      "n": 11,
+      "median": 960.0,
+      "max": 1063.0,
+      "fail": 1
+    },
+    "address Sanitizer": {
+      "n": 6,
+      "median": 628.0,
+      "max": 653.0,
+      "fail": 6
+    },
+    "memory Sanitizer": {
+      "n": 6,
+      "median": 367.0,
+      "max": 373.0,
+      "fail": 6
+    },
+    "thread Sanitizer": {
+      "n": 6,
+      "median": 643.0,
+      "max": 662.0,
+      "fail": 6
+    },
+    "undefined Sanitizer": {
+      "n": 6,
+      "median": 639.0,
+      "max": 647.0,
+      "fail": 6
+    }
+  }
+}

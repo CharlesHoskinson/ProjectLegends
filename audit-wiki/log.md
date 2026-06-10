@@ -40,3 +40,4 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - 6 TODO contradictions resolved; AUDIT.md 22/8 tally; ARCHITECTURE constants fixed 64/DBXS/v3; Wasm demoted to planned. Two owner decisions queued (GPL -or-later; Wasm defer).
 - [[Documentation Drift]] marked substantially resolved. Full report: `raw/sprint-1-audit-2026-06-10.md`, synthesis [[Sprint 1 Implementation Audit (2026-06-10)]].
 - 2026-06-10 — ingest: CI Gate Coverage Map (graphify + ModuleDAG + workflow triggers).
+- 2026-06-10 — ingest: CI Run History (2026-06) from gh api run/job records (raw/ci-run-history-2026-06.json).
