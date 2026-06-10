@@ -3,8 +3,8 @@ type: concept
 aliases: ["Doc drift", "Stale records"]
 tags: [concept, type/concept, topic/audit, topic/docs]
 created: 2026-06-09
-updated: 2026-06-09
-status: draft
+updated: 2026-06-10
+status: resolved
 parent: [[overview]]
 related:
   - "[[Project Legends Documentation Corpus]]"

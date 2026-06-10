@@ -39,3 +39,30 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - All three pre-flagged corrections honored and verified: roadmap de-dup (not restore); CHANGELOG TLS reworded (not deleted); REQ-EX-001/002 PARTIAL (confirmed cpu_library_stubs.cpp:56-60 is a real no-op PIC stub — C2 nuance preserved).
 - 6 TODO contradictions resolved; AUDIT.md 22/8 tally; ARCHITECTURE constants fixed 64/DBXS/v3; Wasm demoted to planned. Two owner decisions queued (GPL -or-later; Wasm defer).
 - [[Documentation Drift]] marked substantially resolved. Full report: `raw/sprint-1-audit-2026-06-10.md`, synthesis [[Sprint 1 Implementation Audit (2026-06-10)]].
+## [2026-06-10] audit | CI/CD quality-gate audit (gate map, run history, inventory, research, gaps, thesis)
+- 2026-06-10 — ingest: CI Gate Coverage Map (graphify + ModuleDAG + workflow triggers).
+- 2026-06-10 — ingest: CI Run History (2026-06) from gh api run/job records (raw/ci-run-history-2026-06.json).
+- 2026-06-10 — ingest: CI Workflows (GitHub Actions) entity (four workflow files inventoried).
+- 2026-06-10 — update: Build & CI System (Project Legends) — build system inventory section appended.
+- 2026-06-10 — update: Project Legends Test Suite — test infrastructure inventory section appended.
+- 2026-06-10 — ingest: Verification Lanes (Sanitizers, Fuzz, Coverage, Determinism) entity.
+- 2026-06-10 — ingest: Quality Gate Scripts & Hooks entity.
+- 2026-06-10 — ingest: Local Dev Loop entity.
+- 2026-06-10 — ingest: CI Design for C++-CMake Monorepos (2026-06) research (raw/research/cpp-cmake-monorepo-ci.md).
+- 2026-06-10 — ingest: Compiler Caching on GitHub Actions (2026-06) research (raw/research/compiler-caching-actions.md).
+- 2026-06-10 — ingest: Test Impact Analysis & Selection (2026-06) research (raw/research/test-impact-analysis.md).
+- 2026-06-10 — ingest: Coverage Policy Ratcheting (2026-06) research (raw/research/coverage-ratcheting.md).
+- 2026-06-10 — ingest: Continuous Fuzzing in CI (2026-06) research (raw/research/continuous-fuzzing-ci.md).
+- 2026-06-10 — ingest: Flaky-Test Detection & Quarantine (2026-06) research (raw/research/flaky-test-quarantine.md).
+- 2026-06-10 — ingest: Vendored & License-Isolated Dependency CI (2026-06) research (raw/research/vendored-license-isolation-ci.md).
+- 2026-06-10 — ingest: Local Preflight Design (2026-06) research (raw/research/local-preflight-design.md).
+- 2026-06-10 — ingest: Merge Queues & Required Checks (2026-06) research (raw/research/merge-queues-required-checks.md).
+- 2026-06-10 — ingest: Sanitizer Lane Strategy (2026-06) research (raw/research/sanitizer-lane-strategy.md); attribution fixes applied after citation review.
+- 2026-06-10 — ingest: Gap Analysis — Modularity (2026-06) (M-1..M-8).
+- 2026-06-10 — ingest: Gap Analysis — Maintainability (2026-06) (A-1..A-8).
+- 2026-06-10 — ingest: Gap Analysis — Test Coverage Intelligence (2026-06) (T-1..T-8).
+- 2026-06-10 — ingest: Gap Analysis — Always Green (2026-06) (G-1..G-12).
+- 2026-06-10 — fix: globals-registry step count reconciled to ten across CI Workflows entity and gap analyses.
+- 2026-06-10 — ingest: Recommendation Review (2026-06) — adversarial pass over M/A/T/G candidates.
+- 2026-06-10 — synthesis: CI-THESIS.md written at repo root; overview updated.
+- 2026-06-10 — lint: frontmatter added to 5 pages, CI-audit log heading, overview MOC gains CI-audit section, concept statuses reconciled, Maintainability citation style normalized.

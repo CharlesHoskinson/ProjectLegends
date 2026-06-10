@@ -3,8 +3,8 @@ type: concept
 aliases: ["CI gate demotion", "commit 6900e7a"]
 tags: [concept, type/concept, topic/audit, topic/ci]
 created: 2026-06-09
-updated: 2026-06-09
-status: draft
+updated: 2026-06-10
+status: resolved
 parent: [[overview]]
 related:
   - "[[Build & CI System (Project Legends)]]"

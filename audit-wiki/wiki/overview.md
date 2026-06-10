@@ -3,7 +3,7 @@ type: map
 aliases: ["Audit Overview MOC"]
 tags: [moc, type/map, topic/audit]
 created: 2026-06-09
-updated: 2026-06-09
+updated: 2026-06-10
 status: draft
 scope: End-to-end audit of Project Legends — findings, subsystem assessments, sprint planning
 ---
@@ -52,3 +52,14 @@ Root map for the 2026-06 end-to-end audit (8-role agent fleet, HEAD `ef11f20`). 
 - [[Build & CI System (Project Legends)]] — broad machinery, unwired enforcement
 - [[Project Legends Test Suite]] — wide but under-enforced, weak oracles
 - [[Project Legends Documentation Corpus]] — two eras: verified-fresh vs drifted-stale
+
+## CI/CD quality-gate audit (2026-06-10)
+
+- [[CI Gate Coverage Map]] — which gates guard which modules/paths, and what nothing guards
+- Inventory entities: [[CI Workflows (GitHub Actions)]], [[Verification Lanes (Sanitizers, Fuzz, Coverage, Determinism)]], [[Quality Gate Scripts & Hooks]], [[Local Dev Loop]]
+- Empirics: [[CI Run History (2026-06)]] — 397 runs, master 82.3% red, green only via the gate demotion
+- Research sources: ten practice pages (monorepo CI, merge queues, caching, test selection, coverage ratcheting, sanitizers, fuzzing, flake quarantine, license isolation, preflight) — see [[wiki/sources/_index|Sources]]
+- Gap analyses: [[Gap Analysis — Modularity (2026-06)]], [[Gap Analysis — Maintainability (2026-06)]], [[Gap Analysis — Test Coverage Intelligence (2026-06)]], [[Gap Analysis — Always Green (2026-06)]]
+- [[Recommendation Review (2026-06)]] — adversarial verdicts on all 36 candidates
+
+See: `CI-THESIS.md` (repo root) — the 2026-06 CI/CD quality-gate thesis synthesizing this wiki's CI evidence; recommendations R1-R15 ranked, majors mapped to openspec proposals.
