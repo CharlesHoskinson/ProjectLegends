@@ -329,7 +329,6 @@ jobs:
     name: ${{ matrix.sanitizer }} Sanitizer
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: ${{ matrix.allow_failure == true }}
     if: >
       github.event_name == 'pull_request' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
@@ -357,14 +356,15 @@ jobs:
             env: "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"
           # Known races are suppressed via the issue-linked tsan-suppressions.txt
           # at repo root (one entry per root cause; see issues #38, #39).
-          # Intentional wrong-thread tests skip under TSan in code.
-          # allow_failure is temporary for the suppression bring-up and is
-          # removed once the first suppressed run is green (issue #38).
+          # Intentional wrong-thread tests skip under TSan in code. The leg is
+          # enforced: bring-up run 27304193585 passed 4511/4511 under
+          # suppressions. New races get a suppression entry + issue in a
+          # small PR — never a revert to allow_failure (CONTRIBUTING.md,
+          # gate demotion rule).
           - sanitizer: thread
             flags: "-stdlib=libc++ -fsanitize=thread -fno-omit-frame-pointer"
             c_flags: "-fsanitize=thread -fno-omit-frame-pointer"
             env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1:suppressions=$GITHUB_WORKSPACE/tsan-suppressions.txt"
-            allow_failure: true
           # The MSan leg is retired: stock libc++ is not MSan-instrumented, so
           # test executables crash on startup and the leg verifies nothing.
           # Re-entry condition (instrumented libc++ + dependency surface,
@@ -785,15 +785,15 @@ jobs:
       - name: Scan dependencies
         # The former `--lockfile cmake/dependencies.cmake` invocation was
         # unparseable by osv-scanner and never produced a result. The scan
-        # covers the vendored trees recursively and emits JSON for the
-        # artifact step. Found vulnerabilities (exit 1) fail the job. Exit
-        # 128 means "no supported package sources" — the C++ trees carry no
-        # manifests osv-scanner reads, so that is the current clean baseline
-        # (dispatch run 27302003890, 2026-06-10); an SBOM that gives this
-        # gate real input is tracked in issue #42.
+        # covers the vendored trees recursively (git-hash detection found
+        # fluidsynth/libchdr/decoders on run 27304208837) and emits JSON for
+        # the artifact step. Found vulnerabilities (exit 1) fail the job
+        # unless baselined in osv-scanner.toml with a tracked issue (#43).
+        # Exit 128 ("no package sources") is tolerated pending the SBOM that
+        # gives this gate manifest-level input (issue #42).
         run: |
           rc=0
-          ./osv-scanner scan --recursive --format json --output osv-results.json ./engine ./src ./tests || rc=$?
+          ./osv-scanner scan --recursive --config osv-scanner.toml --format json --output osv-results.json ./engine ./src ./tests || rc=$?
           if [ "$rc" -eq 128 ]; then
             echo "osv-scanner: no supported package sources in scanned trees (known C++-tree baseline, issue #42)"
             exit 0

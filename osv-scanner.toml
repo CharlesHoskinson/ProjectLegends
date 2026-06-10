@@ -1,0 +1,15 @@
+# osv-scanner baseline for the Dependency Scan CI job.
+#
+# Hygiene policy (same as tsan-suppressions.txt, per CONTRIBUTING.md's gate
+# demotion rule): one entry per vulnerability, each with a reason naming its
+# tracking issue. Deleting an entry is the exit criterion of its issue.
+
+# https://github.com/CharlesHoskinson/ProjectLegends/issues/43
+[[IgnoredVulns]]
+id = "CVE-2021-21417"
+reason = "Vendored fluidsynth (engine/src/libs/fluidsynth), optional feature; upgrade tracked in issue #43"
+
+# https://github.com/CharlesHoskinson/ProjectLegends/issues/43
+[[IgnoredVulns]]
+id = "CVE-2025-56225"
+reason = "Vendored fluidsynth (engine/src/libs/fluidsynth), optional feature; upgrade tracked in issue #43"

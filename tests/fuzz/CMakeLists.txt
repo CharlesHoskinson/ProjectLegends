@@ -228,6 +228,10 @@ add_executable(fuzz_config_parser
 
 target_link_libraries(fuzz_config_parser PRIVATE
     legends_core
+    # config_parser.cpp is recompiled directly into this target, so it needs
+    # gsl-lite itself — the dep is deliberately PRIVATE to legends_core and
+    # does not propagate.
+    gsl::gsl-lite-v1
 )
 
 target_include_directories(fuzz_config_parser PRIVATE
@@ -245,6 +249,18 @@ target_link_options(fuzz_config_parser PRIVATE
 target_compile_definitions(fuzz_config_parser PRIVATE
     AIBOX_LIBRARY_MODE=1
     AIBOX_HEADLESS=1
+    # Match legends_core's gsl-lite v1 contract configuration (CMakeLists.txt
+    # legends_core block) so the recompiled TU behaves identically.
+    gsl_CONFIG_DEFAULTS_VERSION=1
+    gsl_FEATURE_GSL_COMPATIBILITY_MODE=0
+    gsl_FEATURE_STRING_SPAN=0
+    gsl_FEATURE_BYTE=0
+    gsl_CONFIG_NOT_NULL_EXPLICIT_CTOR=1
+    gsl_CONFIG_TRANSPARENT_NOT_NULL=1
+    gsl_CONFIG_CONTRACT_CHECKING_ON
+    gsl_CONFIG_UNENFORCED_CONTRACTS_ELIDE
+    $<$<BOOL:${LEGENDS_LIBRARY_MODE}>:gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1>
+    $<$<NOT:$<BOOL:${LEGENDS_LIBRARY_MODE}>>:gsl_CONFIG_CONTRACT_VIOLATION_TERMINATES=1>
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
