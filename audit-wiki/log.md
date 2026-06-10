@@ -62,3 +62,4 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - 2026-06-10 — ingest: Gap Analysis — Test Coverage Intelligence (2026-06) (T-1..T-8).
 - 2026-06-10 — ingest: Gap Analysis — Always Green (2026-06) (G-1..G-12).
 - 2026-06-10 — fix: globals-registry step count reconciled to ten across CI Workflows entity and gap analyses.
+- 2026-06-10 — ingest: Recommendation Review (2026-06) — adversarial pass over M/A/T/G candidates.
