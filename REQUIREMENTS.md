@@ -1,7 +1,8 @@
 # Project Legends — Implementation Requirements (EARS Notation)
 
 Derived from: AUDIT.md (2026-02-24), 33 TLA+ specifications, source verification
-Date: 2026-02-24
+Date: 2026-06-10
+verified-at: 9cd8d1778d2c03e7a67b46de5036b77fceb3b577
 
 Notation: [EARS (Easy Approach to Requirements Syntax)](https://www.jamasoftware.com/requirements-management-guide/writing-requirements/adopting-the-ears-notation-to-improve-requirements-engineering/)
 
@@ -52,8 +53,8 @@ If `legends_destroy()` receives a non-null handle that does not match the active
 | | |
 |---|---|
 | Source | AUDIT H5, LifecycleMinimal.tla:`HandleConsistency` |
-| Evidence | `legends_embed_api.cpp:949-957` — `get_instance()` falls back to `g_active_instance` |
-| Status | **GAP** — any non-null handle silently destroys the real instance |
+| Evidence | `src/legends/legends_embed_api.cpp:87-90` strict-matches the active instance pointer; invalid non-null handles return null |
+| Status | **OK** |
 
 ### REQ-LC-004 Destroy Null Handle [Event-driven]
 
@@ -71,8 +72,8 @@ The system shall route all step execution through the CPU bridge (`dosbox::execu
 | | |
 |---|---|
 | Source | AUDIT M10 (dual runtime path), H3 (MachineContext.step stub) |
-| Evidence | `dosbox_context.cpp:920` routes through stub; `dosbox_library.cpp:371` routes through bridge |
-| Status | **GAP** — `dosbox_step()` routes through TODO stub, `dosbox_lib_step_cycles()` uses real bridge |
+| Evidence | `engine/src/misc/dosbox_context.cpp:973-976` still exposes deprecated `dosbox_step()` through the counter-stub path; `engine/src/misc/dosbox_library.cpp` routes library stepping through the bridge |
+| Status | **GAP** — the production path uses the bridge, but an alternative deprecated stub path still exists |
 
 ### REQ-LC-006 No Phantom Definitions [Ubiquitous]
 
@@ -95,8 +96,8 @@ While the CPU bridge is executing cycles, when `(*cpudecoder)()` is about to be 
 | | |
 |---|---|
 | Source | AUDIT C2, PIC.tla:`PriorityRespected`, EmuKernel.tla |
-| Evidence | `cpu_bridge.cpp:89` — no `PIC_RunQueue()` call |
-| Status | **GAP** — timer ticks, keyboard IRQs, and PIC-driven events do not fire during bridge execution |
+| Evidence | `engine/src/misc/cpu_bridge.cpp:113` calls `PIC_RunQueue()`, but `engine/src/cpu/cpu_library_stubs.cpp:56-60` links a stub PIC queue in library mode |
+| Status | **PARTIAL** — call present; library-mode PIC functional delivery is still scheduled for Sprint 6 |
 
 ### REQ-EX-002 NMI Check [Complex]
 
@@ -105,8 +106,8 @@ While the CPU bridge is executing cycles, when the decoder returns, the system s
 | | |
 |---|---|
 | Source | AUDIT C2 |
-| Evidence | `cpu_bridge.cpp` — no `CPU_Check_NMI()` call |
-| Status | **GAP** |
+| Evidence | `engine/src/misc/cpu_bridge.cpp:119` calls `CPU_Check_NMI()`; library-mode interrupt delivery still depends on the stub PIC queue noted in REQ-EX-001 |
+| Status | **PARTIAL** — call present; complete functional interrupt delivery is still scheduled for Sprint 6 |
 
 ### REQ-EX-003 Step Reentrancy Guard [Unwanted]
 
@@ -125,8 +126,8 @@ If any legends API function is called from an engine callback during step execut
 | | |
 |---|---|
 | Source | AUDIT M1, ReentrancyMinimal.tla:`CallbackSafe` |
-| Evidence | Only step functions check `in_step`; other API functions lack guards |
-| Status | **PARTIAL** — step reentrancy enforced; non-step API calls from callbacks unguarded |
+| Evidence | Mutating APIs check `inst->in_step`, including reset (`src/legends/legends_embed_api.cpp:1017`), input (`:1516`, `:1534`, `:1551`, `:1606`), save (`:1861`), and load (`:2294`) |
+| Status | **OK** |
 
 ### REQ-EX-005 Input Drain Before Step [Event-driven]
 
@@ -145,8 +146,8 @@ If `dosbox_lib_get_context_ptr()` returns an error, then `legends_step_cycles()`
 | | |
 |---|---|
 | Source | AUDIT M11 |
-| Evidence | `legends_embed_api.cpp:1065` — return value ignored, line 1067 dereferences unconditionally |
-| Status | **GAP** — null dereference if call fails |
+| Evidence | `src/legends/legends_embed_api.cpp:1095-1103` checks `dosbox_lib_get_context_ptr()` result and null context before casting |
+| Status | **OK** |
 
 ---
 
@@ -159,7 +160,8 @@ When state is saved and then loaded, the system shall restore observable state s
 | | |
 |---|---|
 | Source | SaveStateTest.tla:`ObservationPreserved` |
-| Status | **PARTIAL** — round-trip works for serialized fields, but CPU GPRs, VGA, and RAM are not serialized (H1) |
+| Evidence | V5 serializes CPU GPRs, RAM, VGA registers, and VRAM (`engine/include/dosbox/engine_state.h:393-415`, `engine/src/misc/dosbox_library.cpp:1001-1038`); engine event scheduler queues remain outside the state |
+| Status | **PARTIAL** — instruction/register/RAM/VGA round-trip is covered by V5, but engine event scheduler state remains open |
 
 ### REQ-SR-002 CPU Register Serialization [Event-driven]
 
@@ -168,8 +170,8 @@ When `legends_save_state()` is called, the system shall serialize CPU general-pu
 | | |
 |---|---|
 | Source | AUDIT H1 |
-| Evidence | CPU section only has cycle counters and NMI state (96 bytes) |
-| Status | **GAP** |
+| Evidence | `engine/include/dosbox/engine_state.h:393-403` defines `EngineStateCpuGpr`; save/load writes and reads it at `engine/src/misc/dosbox_library.cpp:964` and `:1451` |
+| Status | **OK** |
 
 ### REQ-SR-003 VGA State Serialization [Event-driven]
 
@@ -178,8 +180,8 @@ When `legends_save_state()` is called, the system shall serialize the full VGA h
 | | |
 |---|---|
 | Source | AUDIT H1 |
-| Evidence | VGA section only has width/height/mode/refresh (32 bytes) |
-| Status | **GAP** |
+| Evidence | V5 includes `V5_SUBTAG_VGA_REG` and `V5_SUBTAG_VRAM` (`engine/include/dosbox/engine_state.h:414-415`); save/load handles them at `engine/src/misc/dosbox_library.cpp:1019-1038` and `:1504-1527` |
+| Status | **OK** |
 
 ### REQ-SR-004 RAM Serialization [Event-driven]
 
@@ -188,8 +190,8 @@ When `legends_save_state()` is called, the system shall serialize guest RAM cont
 | | |
 |---|---|
 | Source | AUDIT H1 |
-| Evidence | Memory section only has page config and A20 gate (72 bytes) |
-| Status | **GAP** |
+| Evidence | V5 includes zero-RLE guest RAM (`engine/include/dosbox/engine_state.h:413`); save/load handles RAM blobs at `engine/src/misc/dosbox_library.cpp:1001-1008` and `:1490-1501` |
+| Status | **OK** |
 
 ### REQ-SR-005 Event Queue Serialization [Event-driven]
 
@@ -217,8 +219,8 @@ The system shall use `memcpy` (not `reinterpret_cast`) when reading structured d
 | | |
 |---|---|
 | Source | AUDIT H9 |
-| Evidence | `legends_embed_api.cpp:1657,1668,2058,2122` |
-| Status | **GAP** — uses `reinterpret_cast` |
+| Evidence | Save/load parsing uses little-endian byte helpers in `src/legends/legends_embed_api.cpp:114-166`; the remaining handle cast is not caller-buffer parsing |
+| Status | **OK** |
 
 ### REQ-SR-008 Atomic Load [Ubiquitous]
 
@@ -268,8 +270,8 @@ While `HashMode::Full` is selected, the system shall hash memory contents, VGA s
 | | |
 |---|---|
 | Source | AUDIT H7 |
-| Evidence | `state_hash.cpp:296-301` only appends `"FULL_MODE"` marker string |
-| Status | **GAP** — no actual memory/VGA/device data hashed |
+| Evidence | `engine/src/misc/state_hash.cpp:300-304` hashes memory in full mode and still notes VGA/device state as future work |
+| Status | **PARTIAL** — memory is hashed; VGA/device state remains outside the full-hash contract |
 
 ---
 
@@ -310,8 +312,8 @@ If the input queue fills during `legends_text_input()` processing of a multi-eve
 | | |
 |---|---|
 | Source | AUDIT M2, InputMinimal.tla:`BufferNotCorrupted` |
-| Evidence | No rollback mechanism; shift key can get stuck down |
-| Status | **GAP** |
+| Evidence | `src/legends/legends_embed_api.cpp:1562-1565` reserves all slots needed for a character before enqueueing any events |
+| Status | **OK** |
 
 ### REQ-IN-005 Queue Capacity [Ubiquitous]
 
@@ -351,8 +353,8 @@ When `sync_state_from_engine()` is called after a step, the system shall synchro
 | | |
 |---|---|
 | Source | AUDIT H8, CaptureMinimal.tla:`BackendIndependent` |
-| Evidence | `legends_embed_api.cpp:1498` — syncs timing/PIC only; frame_state initialized with synthetic test pattern (line 919-920) |
-| Status | **GAP** — captures return synthetic test pattern, not engine framebuffer |
+| Evidence | `src/legends/legends_embed_api.cpp:1633-1717` syncs display mode, palette, text/font data, and graphics pixels from the engine, retaining fallback data only when unsupported/uninitialized |
+| Status | **OK** |
 
 ### REQ-CP-004 Backend Independence [Ubiquitous]
 
@@ -374,7 +376,7 @@ The system shall reject API calls from any thread other than the owner thread wi
 | | |
 |---|---|
 | Source | ThreadingMinimal.tla:`CoreSingleThreaded`, `WrongThreadBlocked` |
-| Status | **OK** at legends layer; **PARTIAL** at engine layer (see REQ-TH-002) |
+| Status | **OK** |
 
 ### REQ-TH-002 Engine Thread Check Consistency [Ubiquitous]
 
@@ -383,8 +385,8 @@ The system shall apply `LIB_CHECK_THREAD()` in every engine-layer function that 
 | | |
 |---|---|
 | Source | AUDIT M7, ThreadingMinimal.tla:`CoreSingleThreaded` |
-| Evidence | `dosbox_library.cpp:466-476` — `dosbox_lib_get_context_ptr()` has no `LIB_CHECK_THREAD()` |
-| Status | **GAP** |
+| Evidence | `engine/src/misc/dosbox_library.cpp:656-662` validates handle, thread, and output pointer in `dosbox_lib_get_context_ptr()` |
+| Status | **OK** |
 
 ### REQ-TH-003 Exception Safety at C ABI [Unwanted]
 
@@ -393,8 +395,8 @@ If a user-provided callback (log, event) throws a C++ exception, then the system
 | | |
 |---|---|
 | Source | AUDIT M6 |
-| Evidence | `instance_state.h:51` — `log()` called unguarded from `extern "C"` functions |
-| Status | **GAP** |
+| Evidence | `src/legends/internal/instance_state.h:51-55` wraps log callback invocation in `try`/`catch (...)` |
+| Status | **OK** |
 
 ### REQ-TH-004 Mixer Synchronization [State-driven]
 
@@ -403,7 +405,8 @@ While the audio callback thread accesses `MixerState`, the system shall synchron
 | | |
 |---|---|
 | Source | AUDIT M3, PALMinimal.tla:`ThreadSafety` |
-| Status | **GAP** — no synchronization primitives in MixerState |
+| Evidence | `engine/include/dosbox/dosbox_context.h:458-459` uses atomic producer/consumer positions for mixer callback exchange |
+| Status | **OK** |
 
 ### REQ-TH-005 PAL Thread Isolation [Ubiquitous]
 
@@ -444,8 +447,8 @@ If a non-null handle that does not match the sentinel value `(void*)1` is passed
 | | |
 |---|---|
 | Source | AUDIT M8 |
-| Evidence | `dosbox_library.cpp:240,255,359` — validation only checks `!= nullptr` |
-| Status | **GAP** — any non-null pointer passes |
+| Evidence | `engine/src/misc/dosbox_library.cpp:45` defines `HANDLE_SENTINEL`; `:120-121` validates exact sentinel equality |
+| Status | **OK** |
 
 ---
 
@@ -462,13 +465,13 @@ If the config `api_version` does not match `LEGENDS_API_VERSION`, then `legends_
 
 ### REQ-CF-002 Cycles Validation [Unwanted]
 
-If `cpu_cycles` is zero or outside the valid range, then `legends_create()` shall return `LEGENDS_ERR_INVALID_CONFIG`.
+If `cpu_cycles` is non-zero and outside the valid range, then `legends_create()` shall return `LEGENDS_ERR_INVALID_CONFIG`. A zero value means auto/default cycles.
 
 | | |
 |---|---|
 | Source | ConfigValidation.tla:`ValidCyclesPerMs`, `AllFieldsValidated` |
-| Evidence | No cycles validation in create; accepts any value including 0 |
-| Status | **GAP** |
+| Evidence | `src/legends/legends_embed_api.cpp:858-861` rejects non-zero values outside 100..1000000 and keeps zero as auto |
+| Status | **OK** |
 
 ### REQ-CF-003 Config String Ownership [Event-driven]
 
@@ -477,8 +480,8 @@ When `dosbox_lib_create()` receives a config with non-null `config_path` or `wor
 | | |
 |---|---|
 | Source | AUDIT M9 |
-| Evidence | Legends layer deep-copies via `std::string` (`legends_embed_api.cpp:842-848`). Engine layer shallow-copies (`dosbox_library.cpp:213`). |
-| Status | **PARTIAL** — legends layer OK, engine layer GAP |
+| Evidence | Legends deep-copies paths at `src/legends/legends_embed_api.cpp:866-871`; engine deep-copies paths at `engine/src/misc/dosbox_library.cpp:385-392` |
+| Status | **OK** |
 
 ---
 
@@ -491,7 +494,8 @@ The system shall compile each source definition exactly once, eliminating duplic
 | | |
 |---|---|
 | Source | AUDIT C1 — 27+ duplicated header pairs |
-| Status | **GAP** |
+| Evidence | Duplicated implementation headers were replaced by forwarding headers; remaining public overlaps forward into engine headers |
+| Status | **OK** |
 
 ### REQ-BQ-002 Memory Bounds Check [Unwanted]
 
@@ -500,8 +504,8 @@ If `address + size` would overflow the address space in `dosbox_lib_read_memory`
 | | |
 |---|---|
 | Source | AUDIT H6 |
-| Evidence | `dosbox_library.cpp:1277,1301` — uses addition form |
-| Status | **GAP** |
+| Evidence | `engine/src/misc/dosbox_library.cpp:1778` and `:1802` use subtraction-form bounds checks |
+| Status | **OK** |
 
 ### REQ-BQ-003 Script Exclusion Lists [Ubiquitous]
 
@@ -510,8 +514,8 @@ The `check_gsl_lite_usage.py` script shall exclude all generated directories (`_
 | | |
 |---|---|
 | Source | AUDIT L6 |
-| Evidence | `scripts/check_gsl_lite_usage.py:207` |
-| Status | **GAP** |
+| Evidence | `scripts/check_gsl_lite_usage.py:207` excludes build, build_test, vendor, external, and `_deps` directories |
+| Status | **OK** |
 
 ### REQ-BQ-004 Dev Dependencies Declared [Ubiquitous]
 
@@ -520,7 +524,8 @@ The system shall declare all Python development dependencies (including `pyyaml`
 | | |
 |---|---|
 | Source | AUDIT L7 |
-| Status | **GAP** |
+| Evidence | `requirements-dev.txt` exists and declares `pyyaml>=6.0` |
+| Status | **OK** |
 
 ### REQ-BQ-005 Test Realism [Event-driven]
 
@@ -529,8 +534,8 @@ When a test passes an invalid handle to `legends_destroy()`, the test shall asse
 | | |
 |---|---|
 | Source | AUDIT L8, relates to REQ-LC-003 |
-| Evidence | `tests/unit/test_legends_embed.cpp:23` expects success for `(void*)0xDEAD` |
-| Status | **GAP** |
+| Evidence | Invalid-handle destroy tests now expect errors, e.g. `tests/unit/test_legends_embed_lifecycle.cpp:234` |
+| Status | **OK** |
 
 ### REQ-BQ-006 Global State Tracking [Ubiquitous]
 
@@ -539,7 +544,8 @@ The system shall track all mutable extern globals in the migration registry.
 | | |
 |---|---|
 | Source | AUDIT M4 — 30-40 untracked globals in `engine/include/` |
-| Status | **GAP** |
+| Evidence | `engine/globals_registry.yaml` tracks 70 entries, but legacy mutable externs remain in engine headers |
+| Status | **PARTIAL** |
 
 ---
 
@@ -547,14 +553,14 @@ The system shall track all mutable extern globals in the migration registry.
 
 | Domain | Total | OK | PARTIAL | GAP |
 |--------|-------|----|---------|-----|
-| LC — Lifecycle | 6 | 2 | 0 | 4 |
-| EX — Execution | 6 | 2 | 1 | 3 |
-| SR — Serialization | 8 | 3 | 2 | 3 |
-| DT — Determinism | 4 | 3 | 0 | 1 |
-| IN — Input | 5 | 4 | 0 | 1 |
-| CP — Capture | 4 | 3 | 0 | 1 |
-| TH — Threading | 5 | 2 | 0 | 3 |
-| ER — Error Handling | 3 | 2 | 0 | 1 |
-| CF — Configuration | 3 | 1 | 1 | 1 |
-| BQ — Build/Quality | 6 | 0 | 0 | 6 |
-| **Total** | **50** | **22** | **4** | **24** |
+| LC — Lifecycle | 6 | 4 | 0 | 2 |
+| EX — Execution | 6 | 4 | 2 | 0 |
+| SR — Serialization | 8 | 6 | 2 | 0 |
+| DT — Determinism | 4 | 3 | 1 | 0 |
+| IN — Input | 5 | 5 | 0 | 0 |
+| CP — Capture | 4 | 4 | 0 | 0 |
+| TH — Threading | 5 | 5 | 0 | 0 |
+| ER — Error Handling | 3 | 3 | 0 | 0 |
+| CF — Configuration | 3 | 3 | 0 | 0 |
+| BQ — Build/Quality | 6 | 5 | 1 | 0 |
+| **Total** | **50** | **42** | **6** | **2** |
