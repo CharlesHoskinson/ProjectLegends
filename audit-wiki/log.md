@@ -49,3 +49,4 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - 2026-06-10 — ingest: Local Dev Loop entity.
 - 2026-06-10 — ingest: CI Design for C++-CMake Monorepos (2026-06) research (raw/research/cpp-cmake-monorepo-ci.md).
 - 2026-06-10 — ingest: Compiler Caching on GitHub Actions (2026-06) research (raw/research/compiler-caching-actions.md).
+- 2026-06-10 — ingest: Test Impact Analysis & Selection (2026-06) research (raw/research/test-impact-analysis.md).
