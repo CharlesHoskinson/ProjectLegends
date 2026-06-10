@@ -519,6 +519,11 @@ jobs:
             build/tests/fuzz/corpus \
             -max_len=8192 \
             -max_total_time=30
+          ./build/tests/fuzz/fuzz_engine_memory_blob \
+            build/tests/fuzz/corpus/engine_memory_blob \
+            -max_len=1048576 \
+            -max_total_time=30 \
+            -print_final_stats=1
           ./build/tests/fuzz/fuzz_legends_load_state \
             build/tests/fuzz/corpus \
             -max_len=8192 \
@@ -539,6 +544,15 @@ jobs:
             build/tests/fuzz/corpus \
             -max_len=8192 \
             -max_total_time=60
+
+      - name: "Main: Run engine memory blob fuzzer (60s)"
+        if: github.event_name != 'pull_request'
+        run: |
+          ./build/tests/fuzz/fuzz_engine_memory_blob \
+            build/tests/fuzz/corpus/engine_memory_blob \
+            -max_len=1048576 \
+            -max_total_time=60 \
+            -print_final_stats=1
 
       - name: "Main: Run legends load state fuzzer (60s)"
         if: github.event_name != 'pull_request'
