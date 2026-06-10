@@ -3,7 +3,7 @@ type: concept
 aliases: ["mem-01", "Save-state heap overflow"]
 tags: [concept, type/concept, topic/audit, topic/memory-safety]
 created: 2026-06-09
-updated: 2026-06-09
+updated: 2026-06-10
 status: resolved
 parent: [[overview]]
 related:

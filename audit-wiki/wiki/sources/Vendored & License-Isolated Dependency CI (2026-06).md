@@ -1,3 +1,13 @@
+---
+type: source
+aliases: ["License Isolation CI Research"]
+tags: [source, type/source, topic/ci, topic/research, topic/licensing]
+created: 2026-06-10
+updated: 2026-06-10
+status: draft
+title: Vendored & License-Isolated Dependency CI (2026-06)
+authors: [web research synthesis]
+---
 # Vendored & License-Isolated Dependency CI (2026-06)
 
 External research synthesis: best practice for CI that builds an MIT-intended framework around a vendored GPL-2.0 engine (~1M-line DOSBox-X fork in `engine/`), with GPL isolation implemented as an IPC process split (`src/legends_proxy` MIT ↔ `src/engine_host` GPL). Raw capture: `raw/research/vendored-license-isolation-ci.md`. All sources retrieved 2026-06-10.

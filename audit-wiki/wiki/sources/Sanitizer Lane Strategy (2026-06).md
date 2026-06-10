@@ -1,3 +1,13 @@
+---
+type: source
+aliases: ["Sanitizer Strategy Research"]
+tags: [source, type/source, topic/ci, topic/research, topic/sanitizers]
+created: 2026-06-10
+updated: 2026-06-10
+status: draft
+title: Sanitizer Lane Strategy (2026-06)
+authors: [web research synthesis]
+---
 # Sanitizer Lane Strategy (2026-06)
 
 External research synthesis: sanitizer lane placement (PR-gating vs nightly), allow-failure discipline, and TSan/MSan strategy for the Project Legends CI (C++23, gcc-13/clang-18, vendored DOSBox-X engine with legacy globals; `.github/workflows/ci.yml` `sanitizers` job, lines 328–373). Raw capture: `raw/research/sanitizer-lane-strategy.md`. All sources retrieved 2026-06-10.

@@ -1,4 +1,17 @@
-<!-- llm-wiki: v1 -->
+---
+type: synthesis
+aliases: ["Adversarial Recommendation Review"]
+tags: [synthesis, type/synthesis, topic/audit, topic/ci]
+created: 2026-06-10
+updated: 2026-06-10
+status: draft
+question: Which of the 36 candidate CI recommendations survive adversarial verification against the repo?
+sources:
+  - "[[Gap Analysis — Modularity (2026-06)]]"
+  - "[[Gap Analysis — Maintainability (2026-06)]]"
+  - "[[Gap Analysis — Test Coverage Intelligence (2026-06)]]"
+  - "[[Gap Analysis — Always Green (2026-06)]]"
+---
 # Recommendation Review (2026-06)
 
 Adversarial review of all 36 candidate recommendations from the four CI gap analyses ([[Gap Analysis — Modularity (2026-06)]], [[Gap Analysis — Maintainability (2026-06)]], [[Gap Analysis — Test Coverage Intelligence (2026-06)]], [[Gap Analysis — Always Green (2026-06)]]). Each candidate was checked against the repo at branch `ci-audit`: already implemented? fits the Windows (MSVC, no WSL) + Linux dev loop? respects the GPL engine / MIT proxy split? cost stated? Verdicts: `keep`, `keep-modified`, or `drop`. Dropped candidates stay in the table.

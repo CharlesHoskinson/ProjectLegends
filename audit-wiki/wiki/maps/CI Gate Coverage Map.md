@@ -1,3 +1,12 @@
+---
+type: map
+aliases: ["Gate Coverage Map"]
+tags: [map, type/map, topic/ci, topic/gates]
+created: 2026-06-10
+updated: 2026-06-10
+status: draft
+title: CI Gate Coverage Map
+---
 # CI Gate Coverage Map
 
 Maps every module from `cmake/ModuleManifest.cmake` and every non-module path family to the CI jobs that gate it, the tier those jobs run on, and the local checks that guard it — exposing where no mandatory (PR+push) gate fires. Subsystem context: [[Build & CI System (Project Legends)]]; what the test jobs actually execute: [[Project Legends Test Suite]].

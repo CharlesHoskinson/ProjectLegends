@@ -1,3 +1,13 @@
+---
+type: source
+aliases: ["Compiler Caching Research"]
+tags: [source, type/source, topic/ci, topic/research, topic/caching]
+created: 2026-06-10
+updated: 2026-06-10
+status: draft
+title: Compiler Caching on GitHub Actions (2026-06)
+authors: [web research synthesis]
+---
 # Compiler Caching on GitHub Actions (2026-06)
 
 External research synthesis: ccache/sccache best practice for the Project Legends CI matrix (gcc-13/clang-18 on ubuntu-latest, MSVC on windows-latest, AppleClang on macos-15; CMake + Ninja/MSVC/Xcode generators; vendored ~1M-line DOSBox-X engine rebuilt from scratch in every job). Raw capture: `raw/research/compiler-caching-actions.md`. All sources retrieved 2026-06-10.
