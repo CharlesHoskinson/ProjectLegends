@@ -44,6 +44,50 @@ Project Legends is an embeddable x86 emulation framework built on a refactored D
 
 ---
 
+## Prior-Finding Resolution Status (verified 2026-06-10)
+
+This section annotates the 30 findings below without deleting or rewriting the
+original audit text. Statuses are based on the 2026-06-09 backlog-miner report
+in `audit-wiki/raw/backlog-miner-report.md`, spot-checked against source at the
+Sprint 1 base. Tally: **22 resolved / 8 open**. `C2` is resolved for the
+missing-call finding; execution conformance remains partial because the linked
+PIC implementation still includes stub behavior.
+
+| ID | Resolution status | Current evidence / note |
+|----|-------------------|-------------------------|
+| C1 | RESOLVED | Public overlapping headers are forwarding headers; implementation lives in the engine tree. |
+| C2 | RESOLVED | `engine/src/misc/cpu_bridge.cpp` calls `PIC_RunQueue()` and `CPU_Check_NMI()`; PIC functional delivery remains partial. |
+| H1 | RESOLVED | V5 engine state serializes CPU GPRs and zero-RLE RAM/VRAM; event scheduler serialization remains a separate partial. |
+| H2 | OPEN | Two engine-layer `g_current_context` thread-local pointers remain. |
+| H3 | OPEN | `MachineContext::step()` remains a deprecated counter stub. |
+| H4 | RESOLVED (reclassified) | Seven `init_*` no-ops are documented as intentional DOSBox-X bridge delegation; related phantom types remain tracked under M5. |
+| H5 | RESOLVED | `legends_destroy()` now strict-matches the active handle; invalid non-null handles do not destroy the instance. |
+| H6 | RESOLVED | Memory read/write bounds checks use subtraction form to avoid wraparound. |
+| H7 | OPEN | `HashMode::Full` now hashes memory, but VGA/device hashing remains outside the documented contract. |
+| H8 | RESOLVED | Frame/text capture syncs from engine state with synthetic data only as fallback. |
+| H9 | RESOLVED | Save/load caller-buffer parsing uses byte helpers rather than unaligned struct casts. |
+| M1 | RESOLVED | Mutating APIs now check the in-step reentrancy guard. |
+| M2 | RESOLVED | `legends_text_input()` reserves all queue slots for a character before enqueueing. |
+| M3 | RESOLVED | Mixer ring producer/consumer indices are atomic. |
+| M4 | OPEN | Registry coverage improved, but mutable legacy externs remain outside the registry. |
+| M5 | OPEN | Forward-declared subsystem classes still have no definitions. |
+| M6 | RESOLVED | Log callback invocation is wrapped against exceptions. |
+| M7 | RESOLVED | `dosbox_lib_get_context_ptr()` now validates thread affinity. |
+| M8 | RESOLVED | Engine handles validate against the sentinel value, not just non-null. |
+| M9 | RESOLVED | Config string fields are deep-copied in the engine and legends layers. |
+| M10 | OPEN | Deprecated `dosbox_step()` still routes through the counter-stub path. |
+| M11 | RESOLVED | `legends_step_cycles()` checks `dosbox_lib_get_context_ptr()` before using the context pointer. |
+| L1 | OPEN | README API coverage is stale relative to the current `legends_embed.h` surface. |
+| L2 | RESOLVED | Previously unused error codes are now returned by real paths. |
+| L3 | OPEN | `HandleRegistry` remains unused by production embed API code. |
+| L4 | RESOLVED | The `LEGENDS_ERROR` macro collision was removed. |
+| L5 | RESOLVED | `project_legends` has a real `src/main.cpp` and executable target. |
+| L6 | RESOLVED | `check_gsl_lite_usage.py` excludes generated/vendor directories. |
+| L7 | RESOLVED | `requirements-dev.txt` declares PyYAML. |
+| L8 | RESOLVED | Invalid-handle destroy sentinel tests no longer expect success. |
+
+---
+
 ## Top Findings by Severity
 
 ### Critical
