@@ -22,3 +22,4 @@ Each entry: `[[Page]] — one-line summary`.
 - [[Vendored & License-Isolated Dependency CI (2026-06)]] — activate the DAG gate on the three license-critical targets, resurrect orphaned VerifyGPLIsolation.cmake fail-closed, REUSE compliance job; FSF shared-memory IPC caveat flagged for counsel.
 - [[Local Preflight Design (2026-06)]] — one committed entry point both CI and devs run (workflow presets + preflight wrapper), managed tiered hooks replacing the one-check opt-in, per-OS honesty about what a dev can mirror.
 - [[Merge Queues & Required Checks (2026-06)]] — green-before-gate sequencing, exact-name ruleset on master, merge queue optional at this PR volume; merge_group triggers absent everywhere and event-whitelist ifs would deadlock a queue.
+- [[Sanitizer Lane Strategy (2026-06)]] — ASan+UBSan as the PR-tier pair (currently red here), allow-failure as suppress-to-green with issue-linked exits, MSan instrumented-libc++-or-retire.

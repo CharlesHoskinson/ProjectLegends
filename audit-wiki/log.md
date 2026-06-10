@@ -56,3 +56,4 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - 2026-06-10 — ingest: Vendored & License-Isolated Dependency CI (2026-06) research (raw/research/vendored-license-isolation-ci.md).
 - 2026-06-10 — ingest: Local Preflight Design (2026-06) research (raw/research/local-preflight-design.md).
 - 2026-06-10 — ingest: Merge Queues & Required Checks (2026-06) research (raw/research/merge-queues-required-checks.md).
+- 2026-06-10 — ingest: Sanitizer Lane Strategy (2026-06) research (raw/research/sanitizer-lane-strategy.md); attribution fixes applied after citation review.
