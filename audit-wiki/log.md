@@ -66,3 +66,4 @@ Append-only. One line per event: `## [YYYY-MM-DD] <op> | <title>`.
 - 2026-06-10 — ingest: Recommendation Review (2026-06) — adversarial pass over M/A/T/G candidates.
 - 2026-06-10 — synthesis: CI-THESIS.md written at repo root; overview updated.
 - 2026-06-10 — lint: frontmatter added to 5 pages, CI-audit log heading, overview MOC gains CI-audit section, concept statuses reconciled, Maintainability citation style normalized.
+- 2026-06-10 — update: Verification Lanes entity gains R1 implementation state (PR #41: all mandatory lanes green, TSan enforced, MSan retired, dependency scan unmuted).

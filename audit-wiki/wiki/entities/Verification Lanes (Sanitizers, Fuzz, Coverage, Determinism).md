@@ -80,3 +80,16 @@ All four sanitizer lanes share one CI job (`sanitizers`, `.github/workflows/ci.y
 - [[CI Run History (2026-06)]] — empirical pass/fail per lane
 - [[Determinism Oracle Weakness]] — why the determinism lane's green is not trustworthy
 - [[Quality Gate Demotion (2026-06-08)]] — the event that reshaped which lanes gate at all
+
+## R1 implementation state (2026-06-10, branch ci/r1-stabilize-lanes, PR #41)
+
+The lane facts above describe master before the R1 change. As of PR #41:
+
+- **ASan/UBSan**: green and enforced. The 191-failure alloc-dealloc-mismatch class was an uninstrumented-system-libc++/libc++abi false positive (`alloc_dealloc_mismatch=0`, ci.yml address leg); two real defects fixed: DOSBoxContext move ctor/assignment dropped memory/dma/dos/dos_filesystem ownership (engine/src/misc/dosbox_context.cpp), and the dosbox_error_code/dosbox_log_level FFI enums had UB value ranges (FORCE_INT sentinels).
+- **TSan**: green and **enforced** — `allow_failure` removed after run 27304193585 passed 4511/4511 under the issue-linked `tsan-suppressions.txt` (#38, #39; both entries currently inert). Intentional wrong-thread tests skip under TSan in code. Matrix runs `fail-fast: false` so legs report independently.
+- **MSan**: retired (matrix is address/undefined/thread); re-entry condition (instrumented libc++, nightly-only) tracked in #40.
+- **Fuzz**: green — first actual execution of all five targets since the lane was made mandatory by `ee8a9e2`. Five successive latent build defects fixed (libc++ packages/flag, gsl-lite link, libFuzzer-runtime/libstdc++ interop, pal/platform_dirs link closures, missing config corpus). Zero crashes in the 30s smokes.
+- **Dependency scan**: unmuted and renamed (no "Optional"); honest invocation found vendored fluidsynth CVEs (CVE-2021-21417, CVE-2025-56225) → #43, baselined in `osv-scanner.toml`; SBOM input tracked in #42; baseline dispatch 27316418663 green.
+- **Demotion rule**: recorded in CONTRIBUTING.md — no allow-failure/mute/retirement/assertion-relaxation without a tracked exit criterion.
+
+Coverage and determinism lanes are unchanged by R1 (see R9/R12 in `CI-THESIS.md`).
