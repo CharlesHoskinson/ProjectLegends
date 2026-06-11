@@ -95,6 +95,27 @@ static void generate_engine_memory_blob_corpus(const char* output_dir) {
     dosbox_lib_destroy(handle);
 }
 
+static void generate_config_corpus(const char* output_dir) {
+    std::string config_dir = std::string(output_dir) + "/config";
+    make_dir(config_dir.c_str());
+
+    struct Seed { const char* name; const char* text; };
+    const Seed seeds[] = {
+        {"minimal.conf", "[sdl]\nfullscreen=false\n"},
+        {"typical.conf",
+         "[cpu]\ncycles=auto\ncore=normal\n\n[mixer]\nrate=44100\n"
+         "\n[autoexec]\nmount c .\nc:\n"},
+        {"malformed.conf", "[unclosed\nkey=\n=value\n[]\njunk junk junk\n"},
+        {"empty.conf", ""},
+    };
+    for (const auto& seed : seeds) {
+        std::string path = config_dir + "/" + seed.name;
+        if (write_file(path.c_str(), seed.text, strlen(seed.text))) {
+            printf("Created: %s (%zu bytes)\n", path.c_str(), strlen(seed.text));
+        }
+    }
+}
+
 static void generate_corpus(const char* output_dir) {
     make_dir(output_dir);
     legends_handle handle = nullptr;
@@ -239,6 +260,7 @@ static void generate_corpus(const char* output_dir) {
     legends_destroy(handle);
 
     generate_engine_memory_blob_corpus(output_dir);
+    generate_config_corpus(output_dir);
     printf("\nCorpus generation complete.\n");
 }
 
