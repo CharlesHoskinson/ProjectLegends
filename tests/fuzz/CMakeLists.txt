@@ -241,6 +241,7 @@ add_executable(fuzz_input_injection
 
 target_link_libraries(fuzz_input_injection PRIVATE
     legends_core
+    legends_pal
     aibox_core
     ${FUZZER_RUNTIME_LIBS}
 )
@@ -265,6 +266,7 @@ target_compile_definitions(fuzz_input_injection PRIVATE
 add_executable(fuzz_config_parser
     fuzz_config_parser.cpp
     ${CMAKE_SOURCE_DIR}/src/app/config_parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/platform_dirs.cpp
 )
 
 target_link_libraries(fuzz_config_parser PRIVATE
