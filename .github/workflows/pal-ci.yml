@@ -246,7 +246,8 @@ jobs:
 
   windows-build:
     name: Optional Windows Build
-    runs-on: windows-latest
+    # windows-2025 pin: see ci.yml windows job
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
 

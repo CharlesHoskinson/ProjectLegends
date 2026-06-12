@@ -155,7 +155,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   build-windows:
     name: Optional Build (Windows)
-    runs-on: windows-latest
+    # windows-2025 pin: see ci.yml windows job
+    runs-on: windows-2025
     needs: [include-rules, cmake-dag]
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
