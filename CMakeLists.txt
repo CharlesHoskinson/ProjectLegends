@@ -95,6 +95,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
 elseif(MSVC)
     target_compile_options(legends_compile_options INTERFACE /W4 /permissive- /utf-8)
+    # MSVC 19.51+ (VS 18 2026) deprecates non-string-literal [[gsl::suppress]]
+    # args (C4875); the pinned gsl-lite still emits them (gsl-lite.hpp:2218),
+    # fatal under /WX. Drop /wd4875 when the gsl-lite pin advances past the fix.
+    target_compile_options(legends_compile_options INTERFACE /wd4875)
     target_compile_definitions(legends_compile_options INTERFACE _CRT_SECURE_NO_WARNINGS)
     # Security hardening (H3)
     target_link_options(legends_compile_options INTERFACE /GUARD:CF)
