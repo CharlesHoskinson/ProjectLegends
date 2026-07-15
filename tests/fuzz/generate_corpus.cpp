@@ -95,6 +95,57 @@ static void generate_engine_memory_blob_corpus(const char* output_dir) {
     dosbox_lib_destroy(handle);
 }
 
+// Seeds for fuzz_config_parser (CI smoke path: corpus/config).
+// libFuzzer requires the directory to exist when a corpus path is passed.
+static void generate_config_parser_corpus(const char* output_dir) {
+    std::string config_dir = std::string(output_dir) + "/config";
+    make_dir(config_dir.c_str());
+
+    struct Seed {
+        const char* name;
+        const char* body;
+    };
+    // Minimal DOSBox-style INI fragments to seed section/key parsers.
+    static const Seed seeds[] = {
+        {"empty.conf", ""},
+        {"minimal.conf",
+         "[dosbox]\n"
+         "machine=svga_s3\n"
+         "memsize=16\n"
+         "\n"
+         "[cpu]\n"
+         "core=normal\n"
+         "cycles=3000\n"
+         "\n"
+         "[render]\n"
+         "fullscreen=false\n"
+         "aspect=true\n"},
+        {"comments_and_ws.conf",
+         "# header comment\n"
+         "\n"
+         "  [dosbox]  \n"
+         "machine = vga\n"
+         "; inline-ish comment line\n"
+         "memsize=4\n"},
+        {"no_sections.conf",
+         "orphan_key=value\n"
+         "another=1\n"},
+        {"malformed.conf",
+         "[unclosed\n"
+         "key=value\n"
+         "[]\n"
+         "=\n"
+         "onlykey\n"},
+    };
+
+    for (const auto& seed : seeds) {
+        std::string path = config_dir + "/" + seed.name;
+        if (write_file(path.c_str(), seed.body, std::strlen(seed.body))) {
+            printf("Created: %s (%zu bytes)\n", path.c_str(), std::strlen(seed.body));
+        }
+    }
+}
+
 static void generate_corpus(const char* output_dir) {
     make_dir(output_dir);
     legends_handle handle = nullptr;
@@ -239,6 +290,7 @@ static void generate_corpus(const char* output_dir) {
     legends_destroy(handle);
 
     generate_engine_memory_blob_corpus(output_dir);
+    generate_config_parser_corpus(output_dir);
     printf("\nCorpus generation complete.\n");
 }
 

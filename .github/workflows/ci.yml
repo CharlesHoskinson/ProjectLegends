@@ -542,7 +542,11 @@ jobs:
         run: cmake --build build --target fuzz-all generate_fuzz_corpus
 
       - name: Generate seed corpus
-        run: ./build/tests/fuzz/generate_fuzz_corpus build/tests/fuzz/corpus
+        run: |
+          ./build/tests/fuzz/generate_fuzz_corpus build/tests/fuzz/corpus
+          # libFuzzer requires corpus dirs to exist when a path is passed.
+          test -d build/tests/fuzz/corpus/config
+          test -d build/tests/fuzz/corpus/engine_memory_blob
 
       # PR and push-to-master runs: quick 30s smoke test
       - name: "Smoke: Quick fuzz (30s per target)"

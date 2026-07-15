@@ -27,6 +27,8 @@ clang-18 + default libstdc++ **fails** `engine/cmake/test_cxx23.cpp`:
 
 1. Missing gsl-lite include — fixed (`gsl::gsl-lite-v1` link).
 2. clang+libc++ vs libFuzzer/libstdc++ — dual-link `-lstdc++` still left `std::__cxx11` unresolved from `libclang_rt.fuzzer`. **Fix:** pure libstdc++ under **clang-19**.
+3. Link deps — `fuzz_input_injection` → `legends_pal`; `fuzz_config_parser` → `platform_dirs.cpp`.
+4. Smoke fail `corpus/config` missing — `generate_fuzz_corpus` now writes config seeds under `corpus/config/`.
 
 ## Method (local WSL after toolchain install)
 
