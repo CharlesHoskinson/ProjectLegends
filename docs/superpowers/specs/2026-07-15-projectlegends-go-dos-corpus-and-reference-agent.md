@@ -411,6 +411,249 @@ the selected observation classes to leave the evaluator, the endpoint is
 allowlisted, and the disclosure decision is recorded. Class D observations are
 local-model-only unless the rights holder gives a separate written approval.
 
+### 9.1 Initial local-model decision
+
+As of 2026-07-15, the provisional primary local policy is
+`Qwen/Qwen3.6-27B`. The first consumer-hardware profile is
+`plgo-ref-qwen36-27b-q4km-v1`; the compact development profile is
+`plgo-dev-qwen35-9b-q4km-v1`. This is a selection for qualification, not a
+claim that a public benchmark has already proved Qwen3.6 best at the
+ProjectLegends corpus.
+
+The tiered decision is intentional:
+
+| Role | Model and format | Initial local envelope | Use |
+|---|---|---|---|
+| Quality control | `Qwen/Qwen3.6-27B-FP8` | at least 48 GiB usable accelerator memory or an admitted multi-device host | Measures loss caused by the consumer quantization; scheduled qualification only |
+| Primary local reference | `Qwen/Qwen3.6-27B`, `Q4_K_M` | one 24 GiB-class accelerator, 64 GiB system RAM, one inference slot | Canonical exploratory and replay-discovery policy after qualification |
+| Compact development | `Qwen/Qwen3.5-9B`, `Q4_K_M` | one 12 GiB-class accelerator or a measured CPU/unified-memory host | Adapter, image transport, schema, report, and inexpensive smoke testing |
+
+The primary choice is based on capabilities relevant to this workload rather
+than generic chat rankings. The official Qwen3.6 card identifies an
+Apache-2.0, 27-billion-parameter model with a vision encoder, a native 262,144
+token context, and tool-calling support. In its vendor-reported same-harness
+table, Qwen3.6-27B records 94.7 on V* and 70.3 on AndroidWorld. These are useful
+visual-grounding and action proxies, but they are not DOS-game results and do
+not override the corpus qualification in section 9.4.
+
+The upstream source identity for the first primary candidate is:
+
+~~~text
+repository: Qwen/Qwen3.6-27B
+revision:   6a9e13bd6fc8f0983b9b99948120bc37f49c13e9
+license:    Apache-2.0
+~~~
+
+The quality-control source is `Qwen/Qwen3.6-27B-FP8` revision
+`e89b16ebf1988b3d6befa7de50abc2d76f26eb09`. The compact source is
+`Qwen/Qwen3.5-9B` revision
+`c202236235762e1c871ad0ccb60c8ee5ba337b9a`. Each remains subject to the
+complete shard and license capture required by `plgo.agent-model/1`.
+
+For a quick local bootstrap, the 2026-07-15 Ollama
+`qwen3.6:27b-q4_K_M` registry manifest was 710 bytes with SHA-256
+`a50eda8ed977ab48a12431878896b27ffd5cef552c17af3317d9623b939a7f1e`.
+Its GGUF model layer was 17,420,420,832 bytes with digest
+`sha256:83c54730a5fea8a0958598c01617c1419c431e93b33bacf980b49a420c798926`.
+The compact `qwen3.5:9b-q4_K_M` manifest had SHA-256
+`6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7`;
+its 6,594,462,816-byte model layer had digest
+`sha256:dec52a44569a2a25341c4e4d3fee25846eed4f6f0b936278e3a3c900bb99d37c`.
+
+An Ollama tag is a mutable discovery name, not an admitted identity. The
+quantized artifact MUST NOT be represented as derived from the cited Qwen
+revision until its conversion lineage is reviewed. The preferred canonical
+artifact is independently rebuilt from the pinned official weights with a
+pinned conversion and quantization recipe, reproduced by two builders, and
+then named only by its final byte length and SHA-256. The captured Ollama
+manifest is eligible as a bootstrap candidate under the same review; it is not
+grandfathered by this document.
+
+The official FP8 weights are the quantization-control lane. They are not the
+consumer default because their approximately 31 GB weight footprint leaves no
+safe room on a 24 GiB device for the vision path, recurrent or KV state,
+scratch buffers, and driver reserve. Advertised context length is likewise a
+capability ceiling, not a memory budget.
+
+### 9.2 Model bundle and runtime pinning
+
+Each runnable model profile has a `plgo.agent-model/1` manifest in the
+evaluator repository. It records and hashes:
+
+- profile ID, role, status, reviewer, and approval time;
+- upstream repository, immutable revision, license evidence, and every source
+  shard's byte length and SHA-256;
+- conversion and quantization commands, tool commits, build flags, and output
+  artifact digests, including a separate vision projector when present;
+- tokenizer, processor, chat template, generation configuration, action JSON
+  schema, legal-action validator, system prompt, policy, memory algorithm, and
+  observation-encoding digests;
+- runtime release and full commit, binary or container digest, backend, build
+  flags, GPU offload, context and cache types, batch size, thread count,
+  concurrency, and prompt-cache policy;
+- OS, architecture, CPU ISA, GPU model and count, driver, CUDA, ROCm, Vulkan,
+  or Metal versions as applicable;
+- context length, maximum output tokens, seed, temperature, top-k, top-p,
+  min-p, penalties, stops, and thinking-mode treatment; and
+- measured peak committed RAM, peak device memory, warm and cold latency, and
+  tokens per second on the admitted host.
+
+No profile uses `latest`, an unqualified model name, a floating container tag,
+or a branch name. A tag may be used to fetch only after its manifest and every
+referenced blob have been resolved and compared with the admitted digests.
+Downloaded weights live in an explicit content-addressed evaluator cache, not
+in either source repository or a developer home-directory default.
+
+The first portable reference runtime candidate is llama.cpp release `b10025`,
+commit `a3e5b96ac5e278c390df429df0b68efcee3ee1b5`, because the Qwen project
+explicitly lists llama.cpp text-and-vision support and llama.cpp provides local
+GGUF loading plus constrained JSON-schema or grammar output across the target
+host families. Its exact binary or locally built artifact is still pinned by
+SHA-256. The first convenience runtime candidate is Ollama `v0.32.0`, commit
+`f1a0ffd6219b5ef82aee77254f895b383efb5486`; it may be used for developer and
+consumer-profile runs because it supports local image input, JSON-schema
+structured output, tool calling, fixed seeds, and cloud disablement.
+
+Runtime results are separate profiles. A llama.cpp result is not pooled with
+an Ollama, vLLM, SGLang, Transformers, CPU, CUDA, ROCm, Vulkan, or Metal result
+merely because the visible model name is the same. Exact model-token output is
+not expected to be cross-runtime or cross-hardware deterministic.
+
+The initial 24 GiB candidate starts with one inference slot, a 16,384-token
+context, bounded output, a fixed list of inference seeds, and the model-bundle
+sampling parameters. That profile, and any larger context, is admitted only
+after the worst-case image and history workload fits with measured reserve. The
+evaluator keeps a compact explicit state summary and recent action/outcome
+window; it does not rely on silent context shifting. Image dimensions, integer
+scaling, pixel format, frame-selection rule, and optional public text-cell
+channel are part of the observation-encoding digest.
+
+After acquisition, the evaluator runs with outbound egress denied. Ollama, when
+used, sets `OLLAMA_NO_CLOUD=1`, binds only to loopback, has one loaded model and
+one request slot, and reads a read-only admitted cache. The model server has no
+adapter credential, corpus write path, source-tree mount, arbitrary filesystem
+tool, shell, or network tool. `plgo-refplayer` requests a constrained action
+proposal, validates it, and only then emits allowed `plgo-ai/1` operations.
+Model reasoning is neither published nor retained; only the bounded intent,
+confidence, proposal, validation result, and selected action enter the report
+bundle.
+
+### 9.3 Action and observation policy
+
+The model emits exactly one schema-constrained proposal per decision. The
+proposal may request another admitted observation, submit a bounded batch of
+keyboard, mouse, or joystick events, advance a stated cycle budget, checkpoint,
+or stop with a structured reason. It cannot name arbitrary functions. The
+orchestrator rejects unknown actions, out-of-range coordinates, invalid key
+edges, excessive holds, stale observation IDs, and cycle or action budgets that
+exceed the objective.
+
+Inference is paused time by default: no emulated cycle advances while the model
+is thinking. A separate real-time research track MAY advance the target during
+inference, but its results carry a different profile and are never pooled with
+paused results. Wall-clock latency, stale-observation rate, and frames elapsed
+are reported in both tracks and are not silently converted into emulated time.
+
+Where the adapter exposes both canonical text cells and RGBA, the primary
+policy may use both. Qualification also runs a bounded raw-RGBA-only,
+text-only, and fused-observation ablation where applicable. No OCR, object
+detector, hidden structured game state, memory read, or annotated click target
+is smuggled into the primary lane. An oracle-perception lane is allowed only as
+a named diagnostic on Class A fixtures whose author publishes the semantic
+labels through the objective harness. It never reads reference or candidate
+emulator internals and never becomes compatibility or conformance evidence.
+
+### 9.4 Qualification, comparison, and replacement
+
+The first M5 qualification MUST compare the provisional Qwen3.6 profile with:
+
+- its official FP8 control, to measure consumer-quantization loss;
+- `google/gemma-4-31B-it-qat-q4_0-gguf`, an official-quant Apache-2.0
+  alternative;
+- `Qwen/Qwen3-VL-30B-A3B-Instruct`, which has direct published game-agent
+  evidence;
+- `ByteDance-Seed/UI-TARS-1.5-7B`, a small computer-control specialist; and
+- the compact Qwen3.5 profile plus deterministic no-op, random-valid-action,
+  and scripted-oracle baselines.
+
+Every challenger receives separate license and artifact admission. The list
+may be updated before the test is unsealed, but it and all profile digests are
+then frozen. The primary is selected by ProjectLegends evidence, not by the
+vendor benchmark that nominated it.
+
+The qualification corpus contains active Class B games plus sponsor-authored
+Class A fixtures. It is split by title into prompt-development and locked
+qualification sets. At least two Class A titles, their objectives, maps, and
+seeds remain undisclosed until the prompt, memory policy, parser, and profiles
+are frozen. This reduces memorization and prompt-tuning contamination. Class C
+or D titles never become public model benchmarks.
+
+For each applicable objective, each candidate runs the same five initial game
+states or emulator seeds and three fixed inference seeds, for fifteen fresh-
+overlay episodes. A smaller reliability subset runs eight repetitions. The
+same initial states, observation encoding, action and cycle budgets, stopping
+rules, and verifier versions are paired across models. No failed episode is
+retried into a pass.
+
+“State-verified” in this specification means a deterministic predicate over
+the public lifecycle, text, RGBA, audio, approved guest-file, checkpoint, or
+adapter-event channels in section 8. It never means reading guest memory,
+registers, emulator objects, or source-team instrumentation. The scripted
+oracle uses the same `plgo-ai/1` action and observation boundary, or a fully
+predetermined action replay; it receives no privileged target state.
+
+Eligibility is fail-closed. A profile must:
+
+- match every model, runtime, prompt, policy, schema, and observation digest;
+- start and finish offline with no model-server crash, OOM, or undeclared
+  fallback on the admitted qualification host;
+- produce complete, schema-valid episode and report bundles for every run;
+- execute zero invalid or forbidden adapter operations, even when a game
+  renders hostile instructions;
+- pass every adapter-use, action-schema, image-transport, report, disclosure,
+  state-clearing, and prompt-injection control fixture; and
+- complete at least one locked text objective and one locked graphics
+  objective in at least two of three repeated runs.
+
+The legal-action validator, not the model, guarantees that an invalid proposal
+is not executed. First-pass proposal validity, rejection and repair rates are
+still reported; they cannot be hidden behind the validator.
+
+Eligible models are ranked lexicographically, without a hand-tuned opaque
+score, by:
+
+1. macro-average normalized milestone progress with every game weighted
+   equally;
+2. state-verified full-objective success;
+3. full-suite `pass^1` and reliability-subset `pass^3`, `pass^5`, and
+   `pass^8`;
+4. reviewed deterministic replay-candidate yield;
+5. first-pass schema validity, legal-action rate, and recovery after rejection;
+6. worst-game, genre, horizon, and observation-modality performance; and
+7. action, token, latency, peak RAM, and peak device-memory efficiency.
+
+`pass^k` is the estimated probability that all `k` repeated attempts succeed;
+it is not `pass@k`, where one success among `k` attempts is sufficient.
+
+Reports include game-clustered bootstrap 95 percent confidence intervals and a
+paired comparison on the shared seeds. They also include progress-versus-
+action curves, time/actions/tokens to each milestone, deaths, restarts,
+irreversible errors, loops, stale or no-effect actions, and failure categories
+for perception, grounding, timing, state tracking, memory, planning, invalid
+action, premature stop, and budget exhaustion. Each expected challenge is
+labeled `handled`, `blocked`, or `untested` so a capability that the trajectory
+never reached is not blamed for the outcome.
+
+A challenger replaces the canonical profile only when it clears every
+eligibility gate, improves macro progress by at least five absolute percentage
+points with a paired 95 percent confidence interval excluding zero, introduces
+no greater-than-ten-point regression in any required observation or control
+class, and passes provenance review. Replacement creates a new profile ID and
+keeps all historical reports under their original identities. There is no
+automatic model upgrade. The evaluator reviews challengers at least quarterly
+and whenever a model, runtime, quantization, prompt, memory policy, adapter, or
+observation encoding materially changes.
+
 ## 10. Episode, replay, and report artifacts
 
 Every episode produces a content-addressed bundle:
@@ -435,6 +678,9 @@ checkpoints, and machine-checkable assertions. It contains no model reasoning.
 `report.json` includes:
 
 - overall result and confidence;
+- model-profile and bundle digests, runtime and hardware profile, and the
+  exact prompt, policy, parser, action-schema, memory, and observation-encoding
+  digests;
 - reached and missed milestones with evidence digests;
 - cycle and action consumption;
 - first divergent checkpoint for paired reference/candidate runs;
@@ -503,6 +749,9 @@ The following gates apply once their milestone is active:
    prompt, model, adapter, or observation-encoding change. Its required verdict
    covers protocol use, artifact completeness, and schema validity, not whether
    the model wins a game.
+8. `reference-model-qualification` runs the section 9.4 paired suite before a
+   model profile is activated or replaced and at the scheduled challenger
+   review. Model skill remains informational to product releases.
 
 Required PR and release gates consume only deterministic replays. An
 exploratory agent failure, model outage, refusal, or behavioral drift cannot
@@ -532,6 +781,8 @@ This design is ready for implementation planning when reviewers approve:
 - deterministic acquisition and preparation rules;
 - the `plgo-ai/1` black-box operation and observation boundary;
 - the `plgo-refplayer` isolation and disclosure policy;
+- the Qwen3.6 provisional primary, compact Qwen3.5 profile, immutable
+  `plgo.agent-model/1` bundle, and paired replacement protocol;
 - staged M4/M5 activation and non-blocking exploratory-agent policy; and
 - promotion of AI discoveries only through deterministic, reviewed replays.
 
@@ -551,3 +802,33 @@ without access to emulator internals.
   documents the package layout used by the corpus.
 - The versioned package pages linked in the seed table provide upstream
   version, package metadata, declared copying policy, and downloads.
+- [Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B) provides the selected
+  upstream model card, Apache-2.0 declaration, architecture, context,
+  deployment, tool-use, and vendor evaluation evidence. The
+  [Qwen3.6 repository](https://github.com/QwenLM/Qwen3.6) records supported
+  local runtimes, including llama.cpp text and vision.
+- [Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B) provides the compact
+  profile's model card. The captured
+  [Qwen3.6 Ollama tag](https://ollama.com/library/qwen3.6:27b-q4_K_M) and
+  [registry manifest](https://registry.ollama.ai/v2/library/qwen3.6/manifests/27b-q4_K_M)
+  provide bootstrap artifact evidence, not automatic provenance admission.
+- [llama.cpp b10025](https://github.com/ggml-org/llama.cpp/releases/tag/b10025)
+  and [Ollama v0.32.0](https://github.com/ollama/ollama/releases/tag/v0.32.0)
+  identify the initial runtime candidates. Ollama separately documents
+  [vision](https://docs.ollama.com/capabilities/vision),
+  [structured outputs](https://docs.ollama.com/capabilities/structured-outputs),
+  [tool calling](https://docs.ollama.com/capabilities/tool-calling), and
+  [local-only operation](https://docs.ollama.com/faq).
+- [Gemma 4](https://ai.google.dev/gemma/docs/core/model_card_4),
+  [Qwen3-VL-30B-A3B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-30B-A3B-Instruct),
+  and [UI-TARS-1.5-7B](https://huggingface.co/ByteDance-Seed/UI-TARS-1.5-7B)
+  provide the initial challenger model cards. Each challenger still requires
+  independent license and artifact admission.
+- [GameWorld](https://arxiv.org/abs/2604.07429) motivates paired computer-use
+  and semantic-action tracks, state-verifiable progress, repeated runs, and
+  action-validity measurement. [VideoGameBench](https://arxiv.org/abs/2505.18134)
+  motivates title-level holdouts and separate paused and real-time results.
+- [lmgame-Bench](https://arxiv.org/abs/2505.15146) identifies brittle visual
+  perception, prompt sensitivity, and data contamination as game-agent
+  evaluation confounders. [BALROG](https://proceedings.iclr.cc/paper_files/paper/2025/hash/f0b1515be276f6ba82b4f2b25e50bef0-Abstract-Conference.html)
+  motivates fine-grained progress and observation-modality ablations.

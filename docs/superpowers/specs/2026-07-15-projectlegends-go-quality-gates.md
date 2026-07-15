@@ -85,7 +85,7 @@ The implementation repository exposes these stable commands:
 | go run ./cmd/determinismcheck | Repeat traces and compare normalized checkpoint manifests |
 | go run ./cmd/corpusctl verify | Validate active corpus manifests, license evidence, objectives, and cached digests without substitution |
 | go run ./cmd/gamecheck | Run deterministic admitted game replays through the neutral AI adapter |
-| go run ./cmd/agentcheck | Validate reference-agent reports, policies, transcripts, and canary episodes |
+| go run ./cmd/agentcheck | Validate reference-agent reports, policies, model-bundle identities, transcripts, and canary episodes |
 
 The commands contain orchestration and validation only. Core behavior remains
 in importable packages with unit tests.
@@ -113,6 +113,7 @@ not-applicable result that still reports a successful check conclusion.
 | Adapter | adaptertest/ | Neutral AI protocol, bounds, forbidden operations, and prompt-injection isolation |
 | Game replay | compatibility/replays/ | Deterministic system-level DOS compatibility evidence |
 | Agent exploration | evaluator-owned nightly lane | Discovers paths and produces reviewed reports; never directly decides conformance |
+| Local model qualification | evaluator-owned pinned-hardware lane | Selects and versions the reference policy; never directly decides product conformance |
 
 Every normative test includes at least one requirement ID in its name or test
 metadata. A requirement index maps each published ID to at least one mandatory
@@ -363,7 +364,8 @@ Nightly adds:
 - exchange schema and provenance revalidation;
 - supported-toolchain and platform rehearsal;
 - deterministic replay of each active game from a fresh writable overlay; and
-- informational reference-agent exploration plus schema, disclosure, and
+- informational reference-agent exploration with the admitted local profile,
+  plus model identity, offline operation, schema, disclosure, resource, and
   replay-candidate validation.
 
 Nightly failures open or update a tracked incident. A red nightly result does
@@ -405,9 +407,10 @@ Beginning with M5 it also adds:
 
 Before activation, the checks report a schema-valid `not-applicable` conclusion
 that names the milestone and missing capability; they do not silently select
-zero tests. Check 18 validates that the agent boundary and report pipeline work.
-An exploratory game outcome remains informational until converted to an
-admitted deterministic replay.
+zero tests. Check 18 validates the admitted model-bundle digest, offline agent
+boundary, hostile-observation controls, and report pipeline. It does not require
+a game win. An exploratory game outcome remains informational until converted
+to an admitted deterministic replay.
 
 ## 12. Flake and quarantine policy
 
@@ -476,6 +479,75 @@ least ten samples. Release blockers require reproduction on a second runner.
 
 Hard correctness resource limits remain independently tested regardless of
 benchmark results.
+
+### 14.1 Local reference-model qualification
+
+The evaluator implements the model-selection and replacement protocol in
+section 9.4 of the DOS corpus and reference-agent specification. The
+provisional quality model is Qwen3.6-27B; Qwen3.5-9B is the compact development
+profile. Neither a model name nor a vendor leaderboard result is a test result.
+
+There are three schedules:
+
+1. **Change canary.** After a model, quantization, runtime, prompt, policy,
+   memory, parser, adapter, action schema, or observation-encoding change, run
+   the fixed hostile-observation and small text/graphics set three times. Its
+   gate covers identity, isolation, legal protocol use, complete artifacts, and
+   schema validity, not game skill.
+2. **Nightly exploration.** Run one fixed seed per active objective using the
+   admitted local profile. Infrastructure, isolation, or artifact failures are
+   red; state-verified game progress remains informational.
+3. **Qualification.** Before first activation or replacement, and at least
+   quarterly, run five paired game states or emulator seeds by three inference
+   seeds per applicable objective. Run eight repetitions on the reliability
+   subset and compare every candidate against no-op, random-valid-action, and
+   scripted-oracle controls.
+
+The test set is frozen before results are inspected and is split by game title,
+not merely by save state. It contains locked sponsor-authored Class A titles in
+addition to active public games. State clearing covers the writable overlay,
+emulator, adapter, model conversation, explicit memory, prompt cache, and
+runtime request state before every episode.
+
+The primary model measures are:
+
+- state-verified binary objective success, normalized milestone progress, and
+  the complete milestone vector;
+- macro-average progress by game, plus genre, horizon, observation-modality,
+  and worst-quartile breakdowns;
+- full-suite `pass^1` and reliability-subset `pass^3`, `pass^5`, and
+  `pass^8`;
+- progress per action and the actions, emulated cycles, wall time, tokens, and
+  model decisions required to reach each milestone;
+- first-pass schema validity, legal and executable action rate, invalid,
+  rejected, repaired, duplicate, stale, no-effect, loop, and stall rates;
+- grounding accuracy for bounded click, drag, key, chord, and hold-duration
+  fixtures;
+- recovery after a rejected action or injected adapter fault;
+- observation-to-action latency p50, p95, and p99, deadline misses, peak RAM,
+  peak device memory, and prompt and generation throughput; and
+- reviewed deterministic replay-candidate yield.
+
+`pass^k` means that all `k` repeated attempts succeed; it is not `pass@k`,
+which credits one success among `k` attempts.
+
+The test report gives game-clustered bootstrap 95 percent confidence intervals
+and paired comparisons on shared seeds. It retains the model, runtime, hardware,
+driver, quantization, prompt, policy, parser, action-schema, observation-
+encoding, and corpus digests. Artifact size is not reported as peak RAM or
+VRAM; memory qualification measures a fully warmed worst-case image, context,
+and output workload at concurrency one and preserves headroom.
+
+Qualification also runs paused-versus-real-time, raw-RGBA-versus-text-versus-
+fused, memory-off-versus-on, context-pressure, prompt-paraphrase, scaler and
+resolution, target-size, missing or delayed frame, rejected action, and bounded
+input-repeat or input-drop diagnostics. These are named profiles or ablations;
+their outcomes are never pooled silently.
+
+Exact model tokens and action trajectories are not cross-platform goldens.
+Safety boundaries, schema validity, state-verified outcomes, and deterministic
+replays are the stable assertions. A stochastic agent report cannot replace a
+product conformance vector or required game replay.
 
 ## 15. Formal specification
 
