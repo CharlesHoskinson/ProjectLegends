@@ -508,6 +508,8 @@ jobs:
           # libc++ required: stock libstdc++ with clang-18 lacks C++23
           # std::expected (engine/cmake/test_cxx23.cpp fails configure).
           # Match Linux (clang) matrix: -stdlib=libc++.
+          # Fuzz CMake also force-links libstdc++ so Ubuntu's libFuzzer
+          # (built against libstdc++) resolves under libc++ (FINDING-004).
           sudo apt-get install -y cmake ninja-build clang-18 \
             libc++-18-dev libc++abi-18-dev
 

@@ -81,6 +81,18 @@ set(FUZZ_LINK_OPTIONS
     -fsanitize=fuzzer
 )
 
+# Ubuntu's packaged libclang_rt.fuzzer is built against libstdc++. The fuzz
+# job (and Linux clang matrix) use -stdlib=libc++ so clang-18 can pass the
+# C++23 try_compile (std::expected). Under pure libc++ the fuzzer runtime's
+# std::__cxx11 symbols stay unresolved. Force-link shared libstdc++ as well;
+# LLVMFuzzerTestOneInput is C ABI only, so dual stdlib runtimes are OK here.
+string(CONCAT _legends_fuzz_stdlib_probe
+    "${CMAKE_CXX_FLAGS} ${CMAKE_EXE_LINKER_FLAGS}")
+if(UNIX AND NOT APPLE AND _legends_fuzz_stdlib_probe MATCHES "stdlib=libc\\+\\+")
+    list(APPEND FUZZ_LINK_OPTIONS -Wl,--no-as-needed -lstdc++ -Wl,--as-needed)
+    message(STATUS "  Also linking libstdc++ (libFuzzer ABI under libc++)")
+endif()
+
 # Add sanitizers if requested
 if(ENABLE_ASAN)
     list(APPEND FUZZ_COMPILE_OPTIONS -fsanitize=address)
