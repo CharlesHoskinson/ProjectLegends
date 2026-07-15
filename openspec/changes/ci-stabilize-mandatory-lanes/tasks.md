@@ -6,9 +6,11 @@
   - #38 global state, #39 CrashBreadcrumb (exit tightened in suppressions comments), #45 intentional wrong-thread exclusion.
 - [x] 1.3 Create `tsan-suppressions.txt` with hygiene policy and issue-linked entries.
 - [x] 1.4 Gate intentional wrong-thread tests out of TSan runs.
-  - Fixed post-audit: `ConcurrentDestroyAttempts` now has `LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD()` (FINDING-003).
+  - Fixed post-audit: `ConcurrentDestroyAttempts` has `LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD()` (FINDING-003).
+  - Full Family C inventory + two missed skips (`DestroyFromAnyThreadAllowed`, `ThreadAffinityConsistentAcrossMultipleCalls`) in `docs/ci/r1-tsan-triage.md`.
+  - thread Sanitizer job (pending at task close): https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29426480438/job/87390083377
 - [ ] 1.5 Wire suppressions + symbolizer; verify zero TSan reports on dispatch.
-  - Wiring done (absolute `$GITHUB_WORKSPACE` path + llvm-symbolizer). Green thread leg still required.
+  - Wiring done (absolute `$GITHUB_WORKSPACE` path + llvm-symbolizer). Green thread leg still required (same job URL as 1.4).
 - [ ] 1.6 Preset parity; prove green with suppressions file / red without.
   - Preset updated; local comparison still blocked (no Linux cmake on audit host).
 - [x] 1.7 Remove `allow_failure` from thread matrix; pointer to suppressions + issues.
