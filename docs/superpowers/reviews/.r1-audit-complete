@@ -1,0 +1,10 @@
+AUDIT_COMPLETE=1
+VERDICT=FAIL
+REPORT=docs/superpowers/reviews/2026-07-15-codex-r1-ci-stabilize-mandatory-lanes-audit.md
+HEAD=ba8cc8afe4302449c0a243c5959d54def43b1c7d
+PR=https://github.com/CharlesHoskinson/ProjectLegends/pull/46
+TIMESTAMP_UTC=2026-07-15T14:55:54Z
+CRITICAL_COUNT=0
+HIGH_COUNT=6
+MEDIUM_COUNT=4
+LOW_COUNT=1
