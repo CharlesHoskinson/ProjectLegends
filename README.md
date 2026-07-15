@@ -188,6 +188,16 @@ int main() {
 
 ## API Reference
 
+Canonical header: [`include/legends/legends_embed.h`](include/legends/legends_embed.h) (stable C11 / C++23 ABI).
+
+### Ownership and threading contract
+
+- **Single instance (V1):** at most one active `legends_handle` per process (`LEGENDS_ERR_ALREADY_CREATED`).
+- **Caller serialization:** all calls for a given handle must be serialized; do not call `legends_step_*` from multiple threads without an external lock.
+- **Wrong thread:** APIs may return `LEGENDS_ERR_WRONG_THREAD` if invoked off the owner thread (contract tests cover intentional violations).
+- **Lifecycle:** `legends_create` → optional `legends_load_*` / `legends_step_*` → `legends_destroy`. Prefer `legends_force_destroy` only in test teardown.
+- **Two-call buffers:** `legends_save_state(handle, NULL, 0, &size)` then allocate and call again with a buffer of that size (`LEGENDS_ERR_BUFFER_TOO_SMALL` if undersized).
+
 <!-- BEGIN GENERATED: legends-api-table -->
 Generated from `include/legends/legends_embed.h` (50 `LEGENDS_API` functions).
 
