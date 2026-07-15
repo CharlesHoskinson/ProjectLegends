@@ -41,9 +41,10 @@
   - Pinned osv-scanner v2.0.1 + SHA-256; scan `docs/ci/vendored-sbom.cdx.json` (expanded pins from `cmake/dependencies.cmake`).
 - [x] 4.2 Triage baseline findings.
   - #43 fluidsynth CVEs in `osv-scanner.toml` (still open until upgrade/remove ignore).
-- [ ] 4.3 Unmute with green dispatch + seeded known-vulnerable proof.
+- [x] 4.3 Unmute with green dispatch + seeded known-vulnerable proof.
   - Mutes removed. Job runs on `schedule` / `workflow_dispatch` / **push to master**.
-  - Residual: seed a known-vulnerable fixture that must fail when ignore is stripped; full automated CMake SBOM (#42).
+  - Seed fixture `docs/ci/seed-known-vuln.cdx.json` (lodash@4.17.20) must exit non-zero without ignores.
+  - Generator `scripts/generate_vendored_sbom.py --check` keeps pins and SBOM aligned (#42 partial).
 
 ## 5. Demotion rule and verification
 

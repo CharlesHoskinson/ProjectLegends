@@ -16,7 +16,10 @@ include(FetchContent)
 # Version Pins
 # ─────────────────────────────────────────────────────────────────────────────
 
-set(LEGENDS_DEP_GSL_LITE_TAG    "v1.0.0"   CACHE STRING "gsl-lite version tag")
+# v1.1.0: prefer for MSVC C4875 / modern suppress form (#44). Fallback path
+# still works if FetchContent fails; remove legends_gsl_msvc_options when
+# confirmed clean under /WX on windows-latest.
+set(LEGENDS_DEP_GSL_LITE_TAG    "v1.1.0"   CACHE STRING "gsl-lite version tag")
 set(LEGENDS_DEP_SDL3_TAG        "release-3.2.8" CACHE STRING "SDL3 version tag")
 set(LEGENDS_DEP_GOOGLETEST_TAG  "v1.14.0"  CACHE STRING "GoogleTest version tag")
 set(LEGENDS_DEP_BENCHMARK_TAG   "v1.8.3"   CACHE STRING "Google Benchmark version tag")

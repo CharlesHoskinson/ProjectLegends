@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2024-2025 Charles Hoskinson and Contributors
 //
-// Lock-free crash breadcrumb ring buffer.
+// Crash breadcrumb ring buffer with per-slot sequence numbers (seqlock)
+// so concurrent add/readInto is race-free under TSan (#39).
 
 #pragma once
 
@@ -56,7 +57,13 @@ public:
     }
 
 private:
-    BreadcrumbEntry          entries_[kCapacity];
+    // Per-slot seqlock: odd = write in progress, even = stable snapshot.
+    struct alignas(64) Slot {
+        std::atomic<uint64_t> seq{0};
+        BreadcrumbEntry       data{};
+    };
+
+    Slot                     slots_[kCapacity];
     std::atomic<uint64_t>    write_index_{0};
 
     [[nodiscard]] static uint32_t currentThreadId();

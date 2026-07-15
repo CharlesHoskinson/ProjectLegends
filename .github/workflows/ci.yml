@@ -835,22 +835,24 @@ jobs:
           chmod +x osv-scanner
           ./osv-scanner --version
 
+      - name: Verify SBOM matches cmake pins generator
+        run: |
+          set -euo pipefail
+          python3 scripts/generate_vendored_sbom.py --check
+
       - name: Scan checked-in vendored SBOM
         run: |
           set -euo pipefail
           mkdir -p scan-out
           test -f docs/ci/vendored-sbom.cdx.json
-          # Scan the hand-curated CycloneDX inventory (non-empty package source).
+          # Production inventory (with baseline ignores for #43 fluidsynth).
           ./osv-scanner --sbom docs/ci/vendored-sbom.cdx.json \
             --config osv-scanner.toml \
             --format json \
             --output scan-out/vendored-sbom.json
-          # Human-readable log (exit non-zero only on new unignored vulns).
           ./osv-scanner --sbom docs/ci/vendored-sbom.cdx.json \
             --config osv-scanner.toml
           test -s scan-out/vendored-sbom.json
-          # Inventory non-empty: require the checked-in SBOM to list multiple
-          # components (F007 / #42 hygiene — empty inventory must not look green).
           python3 - <<'PY'
           import json, pathlib, sys
           sbom = json.loads(pathlib.Path("docs/ci/vendored-sbom.cdx.json").read_text())
@@ -859,10 +861,28 @@ jobs:
           if len(comps) < 4:
               print("ERROR: expected >= 4 components in vendored-sbom.cdx.json", file=sys.stderr)
               sys.exit(1)
-          data = json.loads(pathlib.Path("scan-out/vendored-sbom.json").read_text())
-          print("scan keys:", sorted(data.keys())[:20])
-          print("dependency-scan: SBOM scan completed")
+          print("dependency-scan: production SBOM scan completed")
           PY
+
+      # tasks 4.3 / F007: fail-closed proof — known-vulnerable fixture must
+      # exit non-zero when scanned without osv-scanner.toml ignores.
+      - name: Seed known-vulnerable fixture must fail closed
+        run: |
+          set -euo pipefail
+          test -f docs/ci/seed-known-vuln.cdx.json
+          set +e
+          ./osv-scanner --sbom docs/ci/seed-known-vuln.cdx.json \
+            --format json \
+            --output scan-out/seed-vuln.json
+          rc=$?
+          set -e
+          echo "seed scan exit code: ${rc}"
+          if [ "$rc" -eq 0 ]; then
+            echo "ERROR: expected osv-scanner to report vulns for seed-known-vuln.cdx.json" >&2
+            exit 1
+          fi
+          test -s scan-out/seed-vuln.json
+          echo "dependency-scan: seed known-vuln fixture failed closed as expected"
 
       - name: Upload scan results
         if: always()

@@ -4,7 +4,7 @@ All external dependencies are version-pinned in `cmake/dependencies.cmake`.
 
 | Dependency | Version/Tag | SPDX License | Repository | Purpose | Pinning Method |
 |---|---|---|---|---|---|
-| gsl-lite | v1.0.0 | MIT | https://github.com/gsl-lite/gsl-lite | C++ Contracts (Expects/Ensures) | FetchContent `GIT_TAG` |
+| gsl-lite | v1.1.0 | MIT | https://github.com/gsl-lite/gsl-lite | C++ Contracts (Expects/Ensures) | FetchContent `GIT_TAG` |
 | SDL3 | release-3.2.8 | Zlib | https://github.com/libsdl-org/SDL | Window, input, audio (PAL backend) | FetchContent `GIT_TAG` |
 | GoogleTest | v1.14.0 | BSD-3-Clause | https://github.com/google/googletest | Unit and integration testing | FetchContent `GIT_TAG` |
 | Google Benchmark | v1.8.3 | Apache-2.0 | https://github.com/google/benchmark | Performance benchmarks | FetchContent `GIT_TAG` |

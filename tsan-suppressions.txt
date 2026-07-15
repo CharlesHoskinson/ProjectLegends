@@ -9,21 +9,11 @@
 #   by re-adding allow_failure on the TSan CI leg.
 #
 # Format: https://github.com/google/sanitizers/wiki/ThreadSanitizerSuppressions
+#
+# History:
+# - #38 race:g_active_instance REMOVED 2026-07-15 — symbol is std::atomic;
+#   dead suppression under green TSan (run 29435150647).
+# - #39 CrashBreadcrumb::add REMOVED 2026-07-15 — fixed with per-slot seqlock
+#   in crash_breadcrumb.{h,cpp}. If TSan re-fires, file a new issue.
 
-# https://github.com/CharlesHoskinson/ProjectLegends/issues/38
-# Engine / embed layer global-state race family (REQ-TH-004).
-# Note: g_active_instance is std::atomic today; keep only until an enforced
-# TSan run proves zero matches, then delete this entry in the same PR as #38.
-# Prefer observed stack frames over broad symbol names when refining.
-# Hygiene (F009): green TSan on master-path run 29435150647 / job 87419806235
-# does not yet print per-entry match counts — capture match stats before delete.
-race:g_active_instance
-
-# https://github.com/CharlesHoskinson/ProjectLegends/issues/39
-# CrashBreadcrumb::add: lock-free ring slot field writes vs concurrent readInto.
-# Exit: fix with seqlock/per-slot sequence (or remove if redesign eliminates
-# the race) and delete this entry in the same PR — not permanent document-and-keep.
-# Green TSan with these entries: run 29435150647 / job 87419806235.
-race:CrashBreadcrumb::add
-# Same family as above (namespaced mangling variant); issue #39.
-race:legends::CrashBreadcrumb::add
+# (intentionally empty — known race families fixed or proven atomic)

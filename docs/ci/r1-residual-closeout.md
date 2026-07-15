@@ -14,16 +14,17 @@ Post-merge of PR [#46](https://github.com/CharlesHoskinson/ProjectLegends/pull/4
 
 Closed tracking: **#45**, **#47**, **#48** (lane-level). See issue comments for residual notes.
 
-## Residuals still open
+## Residuals (2026-07-15 follow-up on master)
 
 | ID | Topic | Status |
 |----|--------|--------|
-| #38 | TSan `g_active_instance` suppression | Open — green TSan with suppression; need match-count / removal if dead (atomic) |
-| #39 | TSan `CrashBreadcrumb::add` | Open — fix-and-remove; not permanent document-and-keep |
-| #40 | MSan re-entry | Open / parked — instrumented libc++ required |
-| #42 | Automated CMake/FetchContent SBOM | Open — hand-curated CycloneDX expanded; generator not automated |
-| #43 | fluidsynth CVEs | Open — ignored in `osv-scanner.toml` until upgrade |
-| #44 | `/wd4875` gsl-lite | Mitigated — scoped to gsl-linked targets; remove with pin upgrade |
+| #38 | TSan `g_active_instance` | **Closed** — dead suppression removed (`std::atomic`); empty suppressions file |
+| #39 | TSan `CrashBreadcrumb::add` | **Closed** — per-slot seqlock; suppressions removed |
+| #40 | MSan re-entry | Open / parked — checklist `docs/ci/msan-reentry.md` |
+| #42 | Automated SBOM | **Partial closed** — `scripts/generate_vendored_sbom.py` + CI `--check`; full tree SBOM still future |
+| #43 | fluidsynth CVEs | Open — vendored tree upgrade required before drop ignores |
+| #44 | `/wd4875` | **Partial** — scoped + gsl-lite pin **v1.1.0**; remove `/wd4875` after Windows CI proves clean |
+| 4.3 | Known-vuln seed | **Closed in CI** — `docs/ci/seed-known-vuln.cdx.json` must fail closed |
 
 ## Process
 

@@ -1,0 +1,29 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-07-15T00:00:00Z",
+    "component": {
+      "type": "application",
+      "name": "ProjectLegends-seed-vuln-fixture",
+      "version": "0.0.0-test"
+    },
+    "properties": [
+      {
+        "name": "legends:purpose",
+        "value": "CI-only fixture for dep-scan known-vulnerable proof (tasks 4.3). NOT scanned as production inventory."
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "lodash",
+      "version": "4.17.20",
+      "bom-ref": "pkg:npm/lodash@4.17.20",
+      "purl": "pkg:npm/lodash@4.17.20",
+      "description": "Known-vulnerable pin used only to assert osv-scanner fails closed without ignore config"
+    }
+  ]
+}
