@@ -1,245 +1,232 @@
-# Independent R1 master closeout audit
+# Independent R1 master closeout re-audit
 
 ## 1. Header
 
 | Field | Value |
 |---|---|
-| Date / evidence cutoff | 2026-07-15, 12:14 MDT (18:14 UTC) |
+| Date / evidence cutoff | 2026-07-15, 12:58 MDT (18:58 UTC) |
 | Auditor model | OpenAI Codex (GPT-5; exact serving build not exposed) |
-| Branch | `master` |
-| `AUDITED_SHA` | `42c30c46b88fc30891f7e6a25b629cd0808a5154` |
-| Audited CI | Run `29437942535`, completed **failure**: <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535> |
-| Historical pre-residual CI | Run `29435150647`, SHA `98450e6928ae038b6235a9be8ef2eb65531624c2`, completed success: <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29435150647> |
-| PR #46 | **MERGED** at `f39b3dab1c43a44f17c7d070e89b477bae9e1c91`: <https://github.com/CharlesHoskinson/ProjectLegends/pull/46> |
+| Branch under audit | master |
+| AUDITED_SHA | 621a099944f5c7d82ed1a00c607a57fbc959b4c7 |
+| Audited CI | Run 29440398476, completed **success**: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476 |
+| Prior NO-GO evidence | Run 29437942535, SHA 42c30c46b88fc30891f7e6a25b629cd0808a5154: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535 |
+| PR #46 | **MERGED** at f39b3dab1c43a44f17c7d070e89b477bae9e1c91: https://github.com/CharlesHoskinson/ProjectLegends/pull/46 |
 
 ## 2. Executive summary
 
-**Result: FAIL. Verdict: NO-GO.** R1 is not closed on `master` at the synchronized audited SHA.
+**Result: FAIL. Verdict: NO-GO.** The mandatory runtime gates are green on the synchronized master SHA, but the dependency baseline and documentation-honesty acceptance conditions are not satisfied.
 
-- The exact-SHA CI run completed, so this verdict is no longer merely `UNPROVEN`: required `thread Sanitizer` and `Windows (MSVC)` jobs are both **red**.
-- TSan configured for C++23 and built successfully, then reported a real `CrashBreadcrumb` race between the writer at `crash_breadcrumb.cpp:57` and reader `memcpy` at line 100. Issue #39 was closed before this proof and is not resolved.
-- Windows configured successfully but failed to build. `legends_app` receives gsl-lite C4875 warnings without the scoped `/wd4875` interface, and the new `alignas(64)` breadcrumb slot emits C4324; `/WX` promotes both to C2220. Its tests never ran.
-- ASan, UBSan, Fuzz, Linux gcc/clang, C ABI, and Linux IPC are green on the audited SHA. ASan and UBSan each ran 4,512 tests with zero failures; Fuzz completed the five-target smoke and all five 60-second push targets.
-- The `Dependency Scan` Actions job is mechanically fail-closed: the binary digest matched, generator `--check` reported six components, the production command exited zero, and the seed scan exited one as expected. The audit nevertheless fails the dependency acceptance because the so-called production SBOM reports FluidSynth `2.3.5` while the compiled in-tree copy declares `1.1.6-noglib`.
-- The SBOM generator checks a CMake variable that is never used to fetch or select FluidSynth. Its green `--check` therefore proves agreement with a phantom pin, not agreement with the runtime vendored tree.
-- Open issues #40, #42, #43, and #44 remain open as alleged. Closed issues #38 and #39 are not both proven: #38 is static-atomic but cannot meet the required green-TSan proof; #39 is directly disproved.
-- Current finding counts: **0 Critical, 2 High, 2 Medium, 0 Low, 0 Informational**.
+- origin/master was fetched first and pinned to 621a099944f5c7d82ed1a00c607a57fbc959b4c7. The latest exact-SHA CI run is a completed master push with conclusion success.
+- F013 is resolved at lane scope: CrashBreadcrumb now serializes add, read/readInto, clear, and totalCount with one mutex. Exact TSan configured for C++23, built, passed 4,512/4,512 tests, and emitted no ThreadSanitizer warning or summary with an empty active suppression list.
+- F014 is resolved at lane scope: Windows built and passed 4,500/4,500 tests. There is no C2220, no breadcrumb C4324, and no C4875 attached to legends_app or the application entrypoints.
+- ASan and UBSan each passed 4,512 tests; Fuzz used Clang 19.1.1, created corpus/config, completed all five 31-second smoke invocations and all five 61-second main invocations; Linux gcc/clang and C ABI are green.
+- The Dependency Scan job is mechanically fail-closed: the scanner digest matched, generator check reported five components, five packages were parsed, and the known-vulnerable seed returned rc=1. Its production artifact nevertheless contains zero results and zero packages.
+- F015 is only partially remediated. The SBOM now truthfully labels the vendored header as FluidSynth 1.1.6-noglib, but pkg:generic/fluidsynth@1.1.6 produces no OSV match, so the two #43 ignore rules are not exercised even though both OSV records list v1.1.6 as affected. The rewritten active-pin generator also omits LEGENDS_DEP_MT32EMU_TAG although CMake consumes it in a FetchContent declaration.
+- Issue #39 was correctly reopened, while #40/#42/#43/#44 remain open. Checked OpenSpec tasks 3.1, 4.1, and 4.2 still overclaim evidence; CI-THESIS also describes completed residuals as pending.
+- Current finding counts: **0 Critical, 0 High, 2 Medium, 0 Low, 0 Informational**.
 
 ## 3. Dimension scorecard
 
 | Dimension | Score | Evidence sentence |
 |---|---:|---|
-| Security | **2/5** | The scanner is version-and-digest pinned and ignores are issue-linked, but the production SBOM substitutes FluidSynth `2.3.5` for the runtime `1.1.6-noglib` tree, so the clean verdict is not an honest inventory verdict. |
-| Correctness | **1/5** | Two mandatory gates are red on the audited SHA, and TSan directly confirms the allegedly fixed #39 race. |
-| Maintainability | **2/5** | Suppressions are textually empty and `/wd4875` is scoped, but the scope omits a real gsl consumer and the generator enforces a disconnected pin. |
-| Documentation honesty | **1/5** | #39, the residual tracker, suppression history, and several checked OpenSpec tasks claim completion that exact-SHA CI disproves. |
-| CI/CD integrity | **2/5** | Failures are visible and the seed control is genuine, but TSan/Windows are red and a non-empty count assertion cannot prevent a semantically false SBOM. |
-| Process/governance | **2/5** | The demotion rule remains intact, but #39 was closed before its exit criterion was demonstrated and checked acceptance tasks were not rolled back when master failed. |
+| Security | **3/5** | The scanner binary is version-and-digest pinned and #43 is issue-linked, but the production result is empty for a known-affected FluidSynth version and an active mt32emu pin disappeared from inventory. |
+| Correctness | **5/5** | ASan, UBSan, TSan, Fuzz, Windows, Linux gcc/clang, and C ABI are all green on one audited SHA; the former breadcrumb race is mutex-serialized and exact TSan is clean. |
+| Maintainability | **3/5** | TSan suppressions are empty and the Windows warning policy is scoped, but the generator's claimed active-pin map omits a real FetchContent pin and the dead FluidSynth CMake pin remains declared. |
+| Documentation honesty | **2/5** | #39 was honestly reopened, but checked tasks 3.1/4.1/4.2 are not supported, live-green tasks remain stale, and CI-THESIS does not reflect the exact-SHA result. |
+| CI/CD integrity | **3/5** | Mandatory lanes and the seed control fail closed, but the production dependency job can return success with an empty results set for the component it claims to baseline. |
+| Process/governance | **3/5** | The no-demotion rule remains intact and premature #39 closure was corrected, but dependency and closeout status were asserted before their exit evidence was complete. |
 
 ## 4. Scope and method
 
-- Ran `git fetch origin master` first and pinned `origin/master` to `42c30c46b88fc30891f7e6a25b629cd0808a5154`.
-- Read static evidence from the pinned git object with `git show` / `git grep`, not from narrative claims. The local checkout was one documentation-only commit ahead; no product conclusion depends on that local commit.
-- Queried CI with `gh run list`, `gh run view`, the Actions runs/jobs API, and raw per-job logs. The exact run was initially in progress; the audit waited until it completed at 18:14:20 UTC.
-- Queried PR #46 and issues #38, #39, #40, #42, #43, #44, #45, #47, and #48 with `gh`, including closure comments.
-- Compared the FluidSynth inventory with the committed runtime version header and the OSV records for CVE-2021-21417 and CVE-2025-56225: <https://osv.dev/vulnerability/CVE-2021-21417> and <https://osv.dev/vulnerability/CVE-2025-56225>.
-- Did not modify product code, workflows, tests, issues, or other documentation. No local configure/build was performed because the user's write-only restriction permits only this report; E15 is therefore `BLOCKED` separately from the exact CI evidence.
+- Ran git fetch origin master before scoring; pinned and read static evidence from the origin/master git object with git show and git grep.
+- Queried gh run list, the Actions run/jobs APIs, and raw job logs. Monitored run 29440398476 until GitHub recorded its terminal workflow and job conclusions.
+- Downloaded artifact 8353165188 into memory and parsed dependency-scan/vendored-sbom.json and seed-vuln.json without writing either artifact to disk.
+- Queried the official OSV API and records for CVE-2021-21417 and CVE-2025-56225. References: https://osv.dev/vulnerability/CVE-2021-21417 and https://osv.dev/vulnerability/CVE-2025-56225.
+- Queried PR #46 and issues #38, #39, #40, #42, #43, #44, #45, #47, and #48, including the #39 close/reopen timeline.
+- The local checkout was on docs/r1-parallel-fill, not master; no conclusion relies on local branch contents. All product/static conclusions use the pinned origin/master object.
+- graphify-out/graph.json was absent. No graph was generated because the audit's write-only rule permits only this report.
+- No product code, workflow, test, issue, or other documentation was modified. E15 was not built locally because configure/build output would violate the write-only restriction.
 
 ## 5. Mandatory gate matrix
 
 | Gate | Actions conclusion | Audit status | Primary evidence |
 |---|---|---|---|
-| `address Sanitizer` | success | **PASS** | 4,512/4,512 tests; no `alloc-dealloc-mismatch`, ASan error, or leak summary: <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208597> |
-| `undefined Sanitizer` | success | **PASS** | 4,512/4,512 tests; no UBSan runtime error: <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208746> |
-| `thread Sanitizer` | failure | **FAIL** | `CrashBreadcrumbTest.ConcurrentReadWriteSafe`; TSan write at line 57 races reader `memcpy` at line 100; ctest exit 8: <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208625> |
-| `Fuzz Testing` | success | **PASS** | Clang 19.1.1; corpus/config exists; all five 30-second smoke invocations and five 60-second push invocations completed: <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87433224578> |
-| `Windows (MSVC)` | failure | **FAIL** | Configure passed; build failed on C2220/C4875 in `legends_app` and C2220/C4324 at `crash_breadcrumb.h:64`; test step skipped: <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208725> |
-| MSan absent | no job | **PASS** | Matrix is exactly `[address, undefined, thread]`; `.github/workflows/ci.yml:328-377`; re-entry remains #40. |
-| `Linux (gcc)` | success | **PASS** | <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208653> |
-| `Linux (clang)` | success | **PASS** | <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208728> |
-| `C ABI Verification` | success | **PASS** | <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208667> |
-| `Dependency Scan` | success | **FAIL** | Mechanics and seed proof pass, but `docs/ci/vendored-sbom.cdx.json:58-62` inventories FluidSynth `2.3.5` while `engine/include/fluidsynth/version.h:34-37` declares runtime `1.1.6-noglib`: <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208590> |
+| address Sanitizer | success | **PASS** | C++23 PASS; 4,512/4,512 tests; no alloc-dealloc-mismatch, AddressSanitizer, LeakSanitizer, or ERROR diagnostic: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543407 |
+| undefined Sanitizer | success | **PASS** | C++23 PASS; 4,512/4,512 tests; no runtime error or UndefinedBehaviorSanitizer diagnostic: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543394 |
+| thread Sanitizer | success | **PASS** | C++23 PASS; build success; 4,512/4,512 tests; no WARNING or SUMMARY from TSan: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543361 |
+| Fuzz Testing | success | **PASS** | Clang 19.1.1; all five smoke and all five main targets completed: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87439305297 |
+| Windows (MSVC) | success | **PASS** | Build success and 4,500/4,500 tests; no C2220: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543362 |
+| MSan | absent | **PASS** | Matrix is address, undefined, thread only; issue #40 remains open. |
+| Linux (gcc) | success | **PASS** | https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543505 |
+| Linux (clang) | success | **PASS** | https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543512 |
+| Linux IPC (gcc) | success | **PASS** | https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543399 |
+| C ABI Verification | success | **PASS** | https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543339 |
+| Dependency Scan | success | **FAIL** | Pin/check/seed mechanics pass, but the production artifact has results=[], the FluidSynth ignores are not exercised, and active mt32emu is omitted: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543480 |
 
-Mandatory lane result: **FAIL**. Either TSan or Windows alone forces NO-GO under the hard rules.
+Mandatory runtime lane result: **PASS**. Overall acceptance remains **FAIL** because Dependency Scan is a separate R1 residual requirement.
 
 ## 6. Residual matrix
 
 | Residual | Live state | Audit status | Evidence |
 |---|---|---|---|
-| #38 — `g_active_instance` | CLOSED | **FAIL (unproven closeout)** | `src/legends/legends_embed_api.cpp:68` is `std::atomic`, and the active suppression is gone. The contract also requires TSan green without the line; exact-SHA TSan is red and stops on #39. <https://github.com/CharlesHoskinson/ProjectLegends/issues/38> |
-| #39 — `CrashBreadcrumb` | CLOSED | **FAIL** | Exact-SHA TSan reports the same family in `add`/`readInto`. The close comment's requested confirmation failed. <https://github.com/CharlesHoskinson/ProjectLegends/issues/39> |
-| #40 — MSan re-entry | OPEN | **PASS (parked)** | MSan is absent, issue remains open, and `docs/ci/msan-reentry.md:6-19` has concrete re-entry criteria. <https://github.com/CharlesHoskinson/ProjectLegends/issues/40> |
-| #42 — automated/full SBOM | OPEN | **FAIL (partial implementation unsound)** | The pin generator and CI check exist, but they do not inventory the in-tree FluidSynth version and full vendored coverage remains open. <https://github.com/CharlesHoskinson/ProjectLegends/issues/42> |
-| #43 — FluidSynth CVEs | OPEN | **FAIL (baseline inventory dishonest)** | Both ignores link #43, but the SBOM version does not represent the vulnerable runtime tree. The issue correctly remains open. <https://github.com/CharlesHoskinson/ProjectLegends/issues/43> |
-| #44 — scoped `/wd4875` | OPEN | **FAIL (partial / Windows red)** | The disable is no longer global, but `legends_app` directly links gsl-lite without `legends_gsl_msvc_options`; exact Windows fails on C4875. <https://github.com/CharlesHoskinson/ProjectLegends/issues/44> |
-| 4.3 — known-vuln seed | tracker says closed | **PASS (mechanism)** | Exact log: lodash fixture scan returned `rc=1`; the step would fail if `rc=0`; no `continue-on-error` or verdict `|| true`. |
+| #38 — g_active_instance | CLOSED | **PASS / PROVEN** | src/legends/legends_embed_api.cpp:68 remains std::atomic with acquire/release operations; the suppression is absent and exact TSan is green. https://github.com/CharlesHoskinson/ProjectLegends/issues/38 |
+| #39 — CrashBreadcrumb | OPEN (reopened) | **PASS / PROVEN technically** | One mutex guards every mutable member access in crash_breadcrumb.cpp:33-90; concurrent breadcrumb tests and all 4,512 TSan tests pass without an active suppression. The issue is conservatively still open. https://github.com/CharlesHoskinson/ProjectLegends/issues/39 |
+| #40 — MSan re-entry | OPEN | **PASS (parked)** | MSan remains absent and docs/ci/msan-reentry.md retains concrete re-entry conditions. https://github.com/CharlesHoskinson/ProjectLegends/issues/40 |
+| #42 — automated/full SBOM | OPEN | **FAIL (partial generator unsound)** | Full-tree automation may remain open, but the current pin generator drops LEGENDS_DEP_MT32EMU_TAG even though cmake/dependencies.cmake:118-128 consumes it. https://github.com/CharlesHoskinson/ProjectLegends/issues/42 |
+| #43 — FluidSynth CVEs | OPEN | **FAIL (baseline not exercised)** | The version matches version.h, but the production result is empty and both ignore IDs are absent from output. The generic purl query returns no match although OSV lists v1.1.6 as affected. https://github.com/CharlesHoskinson/ProjectLegends/issues/43 |
+| #44 — scoped /wd4875 | OPEN | **PASS at R1 scope** | The disable is confined to legends_gsl_msvc_options; legends_app and entrypoints consume it; exact Windows builds/tests. aibox_core still emits non-fatal C4875 warnings, so full removal remains correctly open. https://github.com/CharlesHoskinson/ProjectLegends/issues/44 |
+| 4.3 — known-vulnerable seed | tracker checked | **PASS (mechanism)** | Exact log records seed rc=1; the step fails if rc=0, requires a non-empty artifact, and has no continue-on-error or verdict-path || true. |
 
-Open #40/#42/#43/#44 are not R1 failures merely because they remain open. The failures above arise from the red mandatory gate and dishonest production inventory, not from requiring the explicitly non-required future work.
+Open #40/#42/#43/#44 are not failures merely because they remain open. #42/#43 fail here because the implemented production control is semantically incomplete, not because the explicitly deferred source upgrade or full vendored-tree automation is required.
 
 ## 7. OpenSpec honesty
 
-Every checked task in `openspec/changes/ci-stabilize-mandatory-lanes/tasks.md` was reconciled against live evidence.
+Every task in openspec/changes/ci-stabilize-mandatory-lanes/tasks.md was reconciled with live evidence.
 
-| Task | Status | Audit |
+| Task | Checkbox | Audit |
 |---|---|---|
-| 1.1 local TSan build/ctest | **FAIL** | Lines 3-5 check the task while admitting the local run is Windows-blocked; the stated local verification was not done. |
-| 1.2 tracked race-family issues | **PASS** | #38, #39, and #45 exist with exit language, although #39 was later closed incorrectly. |
-| 1.3 suppression file/hygiene | **FAIL** | The file exists and has policy, but a live #39 race has neither an active suppression nor an open issue; the claimed fix-and-remove exit failed. |
-| 1.4 intentional wrong-thread gate | **PASS** | Exact TSan log shows `ThreadSafetyTest.ConcurrentDestroyAttempts` skipped under TSan. |
-| 1.5 suppressions/symbolizer and zero reports | **FAIL** | The cited run is pre-removal; exact current TSan emits a report. |
-| 1.6 preset parity, green with/red without | **FAIL** | Line 17 admits the without-file proof was not performed; exact current run is red with the file. |
-| 1.7 remove TSan allow-failure | **PASS** | No job `continue-on-error` / `allow_failure`; failures are visible. |
-| 2.1 file MSan re-entry issue | **PASS** | #40 remains open. |
-| 2.2 remove memory matrix entry | **PASS** | MSan is absent and workflow points to #40. |
-| 3.1 reproduce and issue each root cause | **FAIL** | #47 exists for ASan; no UBSan enum root-cause issue was found despite the checkbox wording. The code fix itself is green. |
-| 3.2 ASan/UBSan green | **PASS** | Both exact-SHA jobs pass all 4,512 tests. |
-| 3.3 fuzz build/smoke green | **PASS** | Exact-SHA Fuzz job passes build, corpus, smoke, and all push targets. |
-| 4.1 supported package source | **FAIL** | The JSON is parseable and non-empty but is not an honest production inventory for FluidSynth. |
-| 4.2 baseline findings | **FAIL** | Ignores are issue-linked, but the generator does not identify the actual `1.1.6-noglib` runtime component. |
-| 4.3 unmute + seeded failure | **PASS** | Exact master-push job runs and seed fail-closed control works. |
-| 5.1 demotion rule | **PASS** | `CONTRIBUTING.md:227-241` and the OpenSpec SHALL rule remain intact. |
-| 5.2 end-to-end mandatory green | **FAIL** | The checkbox cites `98450e6`; current synchronized master is TSan/Windows red. |
-| 5.3 update docs after green | **FAIL** | `r1-residual-closeout.md:5-27`, `CI-THESIS.md:30`, and suppression history do not reflect the failed post-residual evidence. |
+| 1.1 local TSan build/ctest | [ ] | **PASS (honest incomplete)** — local TSan was not run and the note says CI is source of truth. |
+| 1.2 race-family issues | [x] | **PASS** — #38, #39, and #45 exist; #39 is reopened. |
+| 1.3 suppression file/hygiene | [x] | **PASS** — policy exists and there are no active race/deadlock/mutex/thread entries. |
+| 1.4 intentional wrong-thread gate | [x] | **PASS** — exact TSan skips ThreadSafetyTest.ConcurrentDestroyAttempts and the intentional wrong-thread family. |
+| 1.5 suppressions/symbolizer and zero reports | [ ] | **FAIL (stale underclaim)** — exact run now supplies the requested green, empty-suppression evidence but the task remains unchecked and cites only the prior red run. |
+| 1.6 preset parity / red-without proof | [ ] | **PASS (honest incomplete)** — the without-file proof was not performed; it is not hidden. |
+| 1.7 remove TSan allow-failure | [x] | **PASS** — no job-level mute; the earlier red run failed visibly. |
+| 2.1 MSan re-entry issue | [x] | **PASS** — #40 remains open. |
+| 2.2 remove memory matrix entry | [x] | **PASS** — MSan is absent and workflow links #40. |
+| 3.1 reproduce each root and file one issue | [x] | **FAIL** — #47 tracks ASan, but repository issue searches for UBSan/undefined enum/dosbox name return no issue; FINDING-002 is not a GitHub issue. |
+| 3.2 ASan/UBSan green | [x] | **PASS** — both exact-SHA jobs pass 4,512 tests. |
+| 3.3 fuzz build/smoke green | [x] | **PASS** — exact Fuzz passes build, corpus, five smoke, and five main invocations. |
+| 4.1 supported package source/artifact | [x] | **FAIL** — the artifact is present, but production results are empty and an actually consumed mt32emu pin is omitted. |
+| 4.2 baseline findings | [x] | **FAIL** — the two FluidSynth ignores are issue-linked but never exercised by the production scan. |
+| 4.3 unmute + seeded failure | [x] | **PASS** — exact master-push job runs and the seed fails closed. |
+| 5.1 demotion rule | [x] | **PASS** — CONTRIBUTING.md:227-241 and the OpenSpec SHALL rule remain intact. |
+| 5.2 synchronized mandatory green | [ ] | **FAIL (stale underclaim)** — run 29440398476 now proves the runtime stack green, but the task still records only the earlier NO-GO. |
+| 5.3 update audit-wiki + CI-THESIS | [ ] | **PASS (honest incomplete)** — the checkbox admits the work is not done; CI-THESIS line 30 is consequently stale and fails the separate documentation acceptance check. |
+
+The dangerous checked overclaims are 3.1, 4.1, and 4.2. Tasks 1.5 and 5.2 are conservative but no longer match live evidence. The residual tracker remains historical rather than falsely claiming closure, but CI-THESIS still lists #38/#39 and the seed proof as pending residuals.
 
 ## 8. Findings
 
-### F013 — [HIGH] The #39 seqlock is a real data race and the mandatory TSan lane is red
-
-| Field | Value |
-|---|---|
-| Severity | High |
-| Category | Correctness / CI integrity |
-| Location | `src/app/crash_breadcrumb.cpp:38-67,78-120`; `src/app/crash_breadcrumb.h:60-64`; `tests/unit/test_crash_breadcrumb.cpp:236-266` |
-| Evidence | Exact job <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208625> configured C++23 and built, then TSan reported a write at `add():57` racing `readInto()`'s `memcpy` at line 100; 1/4,512 tests failed, ctest exit 8. |
-| Impact | A mandatory gate is red. The non-atomic payload access is undefined behavior under the C++ memory model; reading and later rejecting a torn snapshot does not retroactively remove the race. The implementation can also return stale data because `write_index_` is incremented before a slot is claimed, and an older reserved writer can overwrite a newer same-slot writer after wrap. `clear()` does not CAS-serialize with writers. |
-| Recommendation | Reopen #39; remove the closed/proven claims; replace the payload protocol with one that creates legal C++ happens-before for every byte (for example, locked slots, atomic payload publication, or immutable snapshots), serialize `clear()`, and add tests that delay an older writer across a capacity wrap. Do not add `allow_failure`; rerun the full exact-SHA TSan job with no race suppression. |
-| Residual risk | A one-writer/one-reader pass would still not prove multi-writer reservation order, wrap behavior, or concurrent clear; retain targeted stress tests in addition to the full TSan suite. |
-| Status | Open; issue #39 is incorrectly closed. |
-
-### F014 — [HIGH] Windows is red after the gsl-lite bump and breadcrumb change
-
-| Field | Value |
-|---|---|
-| Severity | High |
-| Category | Correctness / CI integrity / Maintainability |
-| Location | `CMakeLists.txt:103-109,521-595`; `src/app/crash_breadcrumb.h:60-64`; `cmake/dependencies.cmake:19-22` |
-| Evidence | Exact job <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208725> configured, then failed the build. `legends_app` compiles gsl-lite headers and directly links `gsl::gsl-lite-v1` at lines 589-595 but does not link `legends_gsl_msvc_options`, so C4875 becomes C2220 under `/WX`. The new aligned `Slot` also emits C4324 at `crash_breadcrumb.h:64`, promoted to C2220. The test step was skipped. |
-| Impact | The mandatory Windows baseline cannot build, and current master provides no post-residual Windows test evidence for #48 or the new code. |
-| Recommendation | Keep `/wd4875` scoped but attach the scope to every target that actually compiles gsl headers, including `legends_app`; address the C4324 layout warning explicitly rather than globally muting it; then run the full exact Windows build/test job. Keep #44 open and track the new C4324 regression if it is not handled in the same remediation. |
-| Residual risk | Other transitive gsl consumers may be missing the interface; enumerate consumers from compile sources rather than maintaining a hand-curated four-target claim. |
-| Status | Open; #44 partially tracks C4875, while C4324 is a new regression. |
-
-### F015 — [MEDIUM] The production SBOM enforces a phantom FluidSynth pin
+### F017 — [MEDIUM] The production dependency scan is still semantically false-green
 
 | Field | Value |
 |---|---|
 | Severity | Medium |
-| Category | Security / Supply chain |
-| Location | `docs/ci/vendored-sbom.cdx.json:18-20,58-62`; `scripts/generate_vendored_sbom.py:25-64,136-163`; `cmake/dependencies.cmake:28,96-109`; `engine/include/fluidsynth/version.h:34-37` |
-| Evidence | The exact dependency job <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535/job/87429208590> reports six packages and a green scan. The SBOM says FluidSynth `2.3.5`; the runtime header says `1.1.6-noglib`. `git grep` finds `LEGENDS_DEP_FLUIDSYNTH_TAG` only in its declaration, the generated SBOM description, and generator map; the CMake FluidSynth block uses only `find_package` and never the tag. OSV lists v1.1.6 among affected versions for both tracked CVEs. |
-| Impact | Component-count and generator checks prevent an empty scan but do not prevent version theater. The scan can miss vulnerabilities unique to the actual old vendored snapshot and gives reviewers a false production-clean signal. |
-| Recommendation | Inventory the in-tree `1.1.6-noglib` component directly from the vendored version/source identity, separately inventory any real optional system/FetchContent dependency, and make `--check` compare those identities. Rerun with the issue-linked ignores and prove the intended findings are the ones suppressed. |
-| Residual risk | A version macro alone may not identify downstream patches; record a source hash or commit provenance for the vendored snapshot and keep #42/#43 open until upgraded or removed. |
-| Status | Open under #42/#43. |
+| Category | Security / Supply chain / CI integrity |
+| Location | scripts/generate_vendored_sbom.py:32-53,69-88,111; docs/ci/vendored-sbom.cdx.json:58-62; cmake/dependencies.cmake:28-29,118-128; .github/workflows/ci.yml:843-865 |
+| Evidence | Exact job https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476/job/87437543480 parses five packages and says No issues found. Uploaded artifact 8353165188 has vendored-sbom.json with zero results/packages/vulnerabilities, while its seed artifact has one package and five vulnerabilities. A POST for pkg:generic/fluidsynth@1.1.6 to https://api.osv.dev/v1/query returns an empty object; querying the upstream v1.1.6 tag commit 62e375c71c815ca12f859b8722db5dff12f0c897 returns exactly CVE-2021-21417 and CVE-2025-56225, whose official records list v1.1.6 as affected. Separately, LEGENDS_DEP_MT32EMU_TAG is used by FetchContent but absent from ACTIVE_PIN_MAP and the generated SBOM. |
+| Impact | The job can be green while neither demonstrating the intended #43 ignore baseline nor inventorying every known active FetchContent pin. Component-count and seed controls prove that the scanner runs, not that production identities reach a matching advisory source. |
+| Recommendation | Represent FluidSynth with scanner input that can match its Git advisory range, preferably repository plus exact vendored commit/source provenance; add a production positive control that requires CVE-2021-21417 and CVE-2025-56225 to appear as ignored specifically by #43. Restore mt32emu to the active-pin inventory or mechanically fail when any consumed LEGENDS_DEP_*_TAG lacks a component. Remove the dead FluidSynth CMake pin to eliminate contradictory identity. |
+| Residual risk | A version macro alone cannot establish downstream patch state. Even after matching by version, record the vendored source commit/hash so false positives and silently patched forks can be distinguished. |
+| Status | Open under #42/#43; F015 is only partially resolved. |
 
-### F016 — [MEDIUM] Closeout documents and issue closure overstate live evidence
+### F018 — [MEDIUM] Closeout documentation still does not match the synchronized evidence
 
 | Field | Value |
 |---|---|
 | Severity | Medium |
 | Category | Documentation honesty / Process governance |
-| Location | `openspec/changes/ci-stabilize-mandatory-lanes/tasks.md:3-18,40-61`; `docs/ci/r1-residual-closeout.md:5-27`; `tsan-suppressions.txt:13-17`; `CI-THESIS.md:30`; issues #38/#39 |
-| Evidence | #39 was closed at 17:43 UTC with a request to confirm TSan green; exact CI later failed that family. The residual tracker calls mandatory lanes and #39 closed, suppression history calls the removed entry/fix green using a pre-removal run, and tasks 1.1/1.5/1.6/5.2 remain checked despite contrary or missing proof. CI-THESIS still lists #38/#39 and the seed proof as residuals rather than current states. |
-| Impact | Reviewers can mistake historical pre-residual green for synchronized master acceptance and close the release phase while hard gates are red. |
-| Recommendation | Reopen #39, mark #38 unproven until a full green TSan run, uncheck false tasks, and update the residual tracker/CI-THESIS with the exact failed run and new findings. Re-check only after one synchronized SHA satisfies all exits. |
-| Residual risk | Manually maintained status docs will drift again unless close comments and checkbox transitions require an exact run/job URL from a SHA containing the closing change. |
+| Location | openspec/changes/ci-stabilize-mandatory-lanes/tasks.md:12-17,28-29,40-48,53-59; CI-THESIS.md:30; docs/ci/r1-residual-closeout.md:5-37 |
+| Evidence | Tasks 3.1, 4.1, and 4.2 are checked despite a missing UBSan root-cause issue and F017. Tasks 1.5 and 5.2 remain unchecked after exact-SHA green proof. CI-THESIS still lists #38/#39 suppression burndown and the seed proof as residuals. Positive correction: #39 was reopened at 18:24:08 UTC and the residual tracker does not falsely call it closed. |
+| Impact | Readers cannot tell whether R1 is technically green, administratively incomplete, or accepted with a dependency blind spot. A later closeout can again substitute checked narrative for synchronized evidence. |
+| Recommendation | Keep 4.1/4.2 unchecked until F017 has a scanner-effective positive proof; file/link the promised UBSan issue or uncheck 3.1; record run 29440398476 for 1.5/5.2; update CI-THESIS and the residual tracker only after the dependency acceptance run is green. Close #39 only after recording the exact TSan evidence. |
+| Residual risk | Hand-maintained status documents will drift again unless task transitions require an exact run/job URL whose SHA contains the claimed change. |
 | Status | Open. |
 
 ### Prior finding remap (F001-F012)
 
 | Prior finding | Status | Current SHA evidence |
 |---|---|---|
-| F001 — ASan mass failures/leaks | **Resolved** | Exact ASan passes 4,512 tests; move ownership transfer remains at `dosbox_context.cpp:1114-1200`. |
-| F002 — UBSan invalid enums | **Resolved** | Exact UBSan passes 4,512 tests; name boundaries now accept `int`. |
-| F003 — missed wrong-thread exclusion | **Resolved** | Exact TSan log shows `ThreadSafetyTest.ConcurrentDestroyAttempts` skipped as intended. |
-| F004 — fuzz config dependency/corpus | **Resolved** | Exact Fuzz job builds all targets, creates `corpus/config`, and completes smoke/full targets. |
-| F005 — Windows HandshakeAck red | **Superseded** | Historical `98450e6` Windows passed the original test; current Windows is red for the distinct F014 compile regressions. |
-| F006 — scanner exits 128/no sources | **Resolved** | Exact job scans a six-component CycloneDX input and exercises the seed; semantic inventory defect is F015. |
-| F007 — dependency coverage gap | **Partial** | Six CMake pins are present, but the runtime FluidSynth identity is wrong and full vendored coverage remains #42. |
-| F008 — mutable/unverified latest scanner | **Resolved** | Workflow pins v2.0.1 and SHA-256; exact downloaded digest matches; no `releases/latest`. |
-| F009 — TSan suppression hygiene | **Superseded** | Active race entries are empty, but removal exposed the still-live #39 race in F013; #38 is not fully proven. |
-| F010 — checked tasks overstate completion | **Open** | OpenSpec honesty table above identifies current false checkboxes. |
-| F011 — global `/wd4875` | **Resolved** | The disable moved off `legends_compile_options` to a scoped interface; incomplete consumer coverage is now F014. |
-| F012 — fail-closed controls | **Resolved** | Exact TSan/Windows failures are visible; seed inversion is real; no verdict-path `allow_failure`, `continue-on-error`, or `|| true`. |
+| F001 — ASan mass failures/leaks | **Resolved** | Exact ASan passes 4,512 tests; DOSBoxContext move ownership transfer remains at dosbox_context.cpp:1114-1200. |
+| F002 — UBSan invalid enums | **Resolved technically** | Exact UBSan passes 4,512 tests; documentation issue-tracking gap remains F018. |
+| F003 — missed wrong-thread exclusion | **Resolved** | Exact TSan log shows ConcurrentDestroyAttempts and the intentional wrong-thread family skipped. |
+| F004 — fuzz config dependency/corpus | **Resolved** | Exact Fuzz builds five targets, creates corpus/config, and completes all smoke/main runs. |
+| F005 — Windows HandshakeAck red | **Resolved** | Exact Windows passes 4,500 tests. |
+| F006 — scanner exits 128/no sources | **Resolved mechanically** | Exact job parses five packages and exercises the seed; semantic false-green is F017. |
+| F007 — dependency coverage gap | **Open / partial** | FluidSynth matching is ineffective and an active mt32emu pin was removed from inventory. |
+| F008 — mutable/unverified scanner | **Resolved** | v2.0.1 and SHA-256 are pinned; exact downloaded digest matches; no releases/latest. |
+| F009 — TSan suppression hygiene | **Resolved** | No active entries and exact TSan is green. |
+| F010 — checked tasks overstate completion | **Open** | F018 identifies checked overclaims and stale status. |
+| F011 — global /wd4875 | **Resolved at R1 scope** | Disable is scoped; exact Windows is green. #44 correctly remains open for warning removal. |
+| F012 — fail-closed controls | **Resolved** | Mandatory failures were visible historically; current jobs and seed inversion are not muted. |
+
+### Prior closeout finding follow-up (F013-F016)
+
+| Finding | Status | Current SHA evidence |
+|---|---|---|
+| F013 — breadcrumb race | **Resolved** | Mutex guards all shared state; exact TSan passes 4,512 tests without a race suppression. |
+| F014 — Windows gsl/alignment build failure | **Resolved** | legends_app/entrypoints receive the scoped option, breadcrumb alignment was removed, and Windows passes build plus 4,500 tests. |
+| F015 — phantom FluidSynth 2.3.5 | **Partial** | Runtime version is corrected to 1.1.6-noglib, but effective matching and active-pin completeness fail in F017. |
+| F016 — premature closure/docs | **Partial** | #39 was reopened and several tasks were unchecked; remaining mismatches are F018. |
 
 ## 9. E-suite results
 
 | ID | Status | Result |
 |---|---|---|
-| E1 | **PASS** | `origin/master` pinned to `42c30c46b88fc30891f7e6a25b629cd0808a5154`; last 15 commits listed below. |
-| E2 | **FAIL** | Latest exact-SHA CI is completed **failure**, run 29437942535: <https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535>. |
-| E3 | **FAIL** | ASan/UBSan/Fuzz/Dependency/Linux gcc/Linux clang/C ABI success; TSan and Windows failure. Full job URLs are in the gate matrix. |
-| E4 | **FAIL** | C++23 configure and build passed; ctest failed 1/4,512 with `WARNING` and `SUMMARY: ThreadSanitizer` at `CrashBreadcrumb` lines 57/100. Suppression file has no active race lines. |
-| E5 | **PASS** | Exact ASan log: 100% tests passed, zero failures; no mass dual-stdlib mismatch or remaining leak report. |
-| E6 | **PASS** | Clang 19.1.1, C++23 PASS, all targets link, `corpus/config` exists, five smoke and five 60-second targets complete without missing-directory errors. |
-| E7 | **FAIL** | Pin/digest, generator check, six-component scan, config, and seed `rc=1` all work; production inventory truth fails because runtime FluidSynth is misversioned. |
-| E8 | **PASS** | An anchored search for active `race:`, `deadlock:`, `mutex:`, or `thread:` entries returns no matches; only history comments contain `race:`. |
-| E9 | **PASS** | `g_active_instance` is `static std::atomic<legends_instance*>` at `legends_embed_api.cpp:68` with acquire/release operations. |
-| E10 | **FAIL** | Writer CAS exists, but non-atomic payload `memcpy` remains a real race; exact TSan proves it. Early reservation, wrap ordering, and `clear()` add further correctness defects. |
-| E11 | **PASS (narrow static criterion)** | `/wd4875` is not global and exists only on `legends_gsl_msvc_options`. F014 separately records that a real gsl consumer is missing that interface. |
-| E12 | **PASS (mechanical only)** | Exact CI `python3 scripts/generate_vendored_sbom.py --check` reports `OK ... (6 components)`; F015 explains why this does not establish semantic honesty. |
-| E13 | **FAIL** | States match the alleged table (#38/#39/#45/#47/#48 closed; #40/#42/#43/#44 open), but #39's close claim is contradicted and #38 lacks the required green-TSan proof. |
-| E14 | **FAIL** | Multiple `[x]` items are false or cite pre-residual evidence; see the 18-row honesty table. |
-| E15 | **BLOCKED** | WSL has CMake 4.2.3 and g++-13, but no trusted exact-SHA sanitizer binary; configuring/building would violate the instruction to write only this report. Exact CI provides the decisive reproduction. |
+| E1 | **PASS** | origin/master pinned to 621a099944f5c7d82ed1a00c607a57fbc959b4c7; last 15 commits listed below. |
+| E2 | **PASS** | Latest exact-SHA CI is completed success, run 29440398476: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476 |
+| E3 | **PASS** | ASan, UBSan, TSan, Fuzz, Windows, Dependency Scan, Linux gcc/clang, Linux IPC, and C ABI all have success conclusions. |
+| E4 | **PASS** | TSan C++23 validation and build pass; ctest passes 4,512/4,512; no WARNING/SUMMARY; active suppression count is zero. |
+| E5 | **PASS** | ASan passes 4,512/4,512; no dual-stdlib cascade, alloc-dealloc mismatch, ASan error, or leak diagnostic. |
+| E6 | **PASS** | Clang 19.1.1, C++23 PASS, corpus/config present, five 31-second smoke and five 61-second main runs complete. |
+| E7 | **FAIL** | Pin/digest, generator check, five-package parse, and seed rc=1 work; production artifact is empty for FluidSynth and mt32emu is omitted. |
+| E8 | **PASS** | Anchored search finds zero active race, deadlock, mutex, or thread suppression entries. |
+| E9 | **PASS** | g_active_instance is static std::atomic at legends_embed_api.cpp:68 with acquire/release operations. |
+| E10 | **PASS** | The seqlock was removed. One mutex establishes happens-before across add/readInto/clear/totalCount, eliminating torn reads, ABA, wrap-order, and concurrent-clear races. |
+| E11 | **PASS (narrow criterion)** | /wd4875 is absent from legends_compile_options and exists only on legends_gsl_msvc_options. Exact Windows is green; non-fatal aibox_core C4875 noise remains #44. |
+| E12 | **PASS (mechanical only)** | Exact CI generator --check reports OK with five components; E7/F017 explain the semantic failure. |
+| E13 | **PASS** | #38/#45/#47/#48 closed; #39 reopened; #40/#42/#43/#44 open. State is conservative and matches the current tracker. |
+| E14 | **FAIL** | Checked tasks 3.1/4.1/4.2 are false; 1.5/5.2 and CI-THESIS are stale after the new run. |
+| E15 | **BLOCKED** | WSL has CMake 4.2.3 and g++-13, but no trusted exact-SHA binary; a configure/build would violate the instruction to write only this report. Exact CI supplies decisive sanitizer/Windows evidence. |
 
 ### E1 commit log
 
-```text
-42c30c4 docs(audit): Codex GPT-5.6 R1 master closeout audit brief
-733bb96 fix(r1): clear TSan residuals #38/#39; SBOM generator; seed vuln proof
-f0feebf docs(r1): residual closeout — tasks, SBOM, scoped C4875, master dep-scan
-f39b3da Merge pull request #46 from CharlesHoskinson/ci/r1-stabilize-mandatory-lanes
-c9bf553 docs: specify Go clean-room emulator program
-98450e6 ci(fuzz): drop unverified llvm.sh fallback (FINDING-008 hygiene)
-2fdbab9 fix(fuzz): seed corpus/config for fuzz_config_parser smoke (FINDING-004)
-f5b2804 fix(fuzz): link legends_pal and platform_dirs for input/config targets (004)
-b842734 fix(ci,r1): TSan -Wno-error=tsan; fuzz clang-19; ASan move leak (001/003/004)
-5452aab fix(ci): sanitizers use g++-13; fuzz unlocks libstdc++ expected (001/004)
-d706ff1 fix(fuzz): build with clang-18 + libstdc++ (not g++ / not libc++) (FINDING-004)
-2382b6c docs(ci): ASan cluster table for FINDING-001 (libc++ dual-stdlib)
-26a52ed ci(r1): sanitizers use clang+libstdc++ (g++-13), not libc++ (#47)
-f5837e8 fix(r1): fuzz use g++-13; Windows named-pipe overlapped I/O (004/005)
-1bf170b fix(fuzz): link libstdc++ with libc++ for libFuzzer ABI (FINDING-004)
-```
+    621a099 fix(r1): mutex breadcrumb (F013); Windows gsl scope (F014); honest FluidSynth SBOM (F015)
+    6255f02 docs: qualify local game-playing model
+    42c30c4 docs(audit): Codex GPT-5.6 R1 master closeout audit brief
+    733bb96 fix(r1): clear TSan residuals #38/#39; SBOM generator; seed vuln proof
+    f0feebf docs(r1): residual closeout — tasks, SBOM, scoped C4875, master dep-scan
+    f39b3da Merge pull request #46 from CharlesHoskinson/ci/r1-stabilize-mandatory-lanes
+    c9bf553 docs: specify Go clean-room emulator program
+    98450e6 ci(fuzz): drop unverified llvm.sh fallback (FINDING-008 hygiene)
+    2fdbab9 fix(fuzz): seed corpus/config for fuzz_config_parser smoke (FINDING-004)
+    f5b2804 fix(fuzz): link legends_pal and platform_dirs for input/config targets (004)
+    b842734 fix(ci,r1): TSan -Wno-error=tsan; fuzz clang-19; ASan move leak (001/003/004)
+    5452aab fix(ci): sanitizers use g++-13; fuzz unlocks libstdc++ expected (001/004)
+    d706ff1 fix(fuzz): build with clang-18 + libstdc++ (not g++ / not libc++) (FINDING-004)
+    2382b6c docs(ci): ASan cluster table for FINDING-001 (libc++ dual-stdlib)
+    26a52ed ci(r1): sanitizers use clang+libstdc++ (g++-13), not libc++ (#47)
 
 ### Adversarial probe results
 
 | Probe | Result | Evidence |
 |---|---|---|
-| 1. Empty suppressions + green TSan | **FAIL** | File is empty of active entries, but exact TSan is red on #39. #38/#39 closeout is not proven. |
-| 2. Seed-step false green | **PASS** | Step uses `set +e` only to capture scanner status, restores `set -e`, fails when `rc==0`, requires a non-empty output, and has no step-level continue-on-error. Exact seed `rc=1`. |
-| 3. SBOM theater | **FAIL** | Count and pin checks prevent zero packages but accept a disconnected FluidSynth pin; the controls do not prove production identity. |
-| 4. `llvm.sh` / latest binary | **PASS** | No active `curl | bash`, `llvm.sh`, or `releases/latest`; fuzz installs clang-19 by apt, scanner uses a tagged URL plus digest. |
-| 5. Task honesty | **FAIL** | Tasks 1.1, 1.3, 1.5, 1.6, 3.1, 4.1, 4.2, 5.2, and 5.3 fail current evidence. |
-| 6. #43 version honesty | **FAIL** | SBOM `2.3.5` does not match runtime `1.1.6-noglib`; the CMake tag is unused. |
-| 7. Seqlock soundness | **FAIL** | Exact TSan proves torn concurrent payload access; pre-claim publication, delayed writers across wrap, and unsynchronized clear are not adequate for TSan or the C++ model. |
+| 1. Empty suppressions + green TSan | **PASS** | Active entries are zero and exact TSan succeeds after the mutex change. #38 is proven; #39 is technically proven but remains open. |
+| 2. Seed-step false green | **PASS** | set +e only captures scanner status; set -e is restored; rc=0 forces exit 1; output must be non-empty; exact rc=1. |
+| 3. SBOM theater | **FAIL** | Count checks prevent zero declared components, but the production vulnerability artifact still has zero results and an active mt32emu pin is absent. |
+| 4. llvm.sh / latest binary | **PASS** | No curl-to-bash llvm.sh path and no releases/latest; fuzz installs clang-19 by apt and scanner uses a tagged URL plus digest. |
+| 5. Task honesty | **FAIL** | Checked tasks 3.1, 4.1, and 4.2 are unsupported; 1.5/5.2 and CI-THESIS are stale. |
+| 6. #43 version honesty | **FAIL (partial fix)** | SBOM version now matches version.h, but its generic purl returns no advisory match and #43 ignores are not exercised. |
+| 7. Seqlock soundness | **PASS after redesign** | The seqlock no longer exists; one mutex serializes writers, readers, wrap, totalCount, and clear, and exact TSan is clean. |
 
 ## 10. Verdict
 
-```text
+~~~text
 R1 MASTER CLOSEOUT: NO-GO
-Mandatory lanes: FAIL
-Residual TSan empty suppressions: FAIL
+Mandatory lanes: PASS
+Residual TSan empty suppressions: PROVEN
 Dependency scan + seed proof: FAIL
-Overall: The exact audited SHA is TSan/Windows red. The seed control passes,
-but the production SBOM misidentifies the runtime FluidSynth component.
-R1 is not closed on master.
-```
+Overall: The synchronized master SHA is green across every mandatory runtime
+lane and resolves F013/F014. R1 still fails because the production dependency
+artifact does not exercise the FluidSynth baseline, omits an active mt32emu pin,
+and closeout documentation does not match live evidence.
+~~~
 
 ## 11. What would flip NO-GO → GO
 
-1. Reopen #39 and replace the `CrashBreadcrumb` payload protocol with a C++/TSan-race-free design; cover read/write, delayed multi-writer wrap, and concurrent clear; obtain a full green `thread Sanitizer` job with no race suppression.
-2. Fix both exact Windows build failures: give every gsl-compiling target (including `legends_app`) the scoped C4875 policy and resolve C4324 without a global mute; obtain green build and tests.
-3. Make the production SBOM identify `engine/src/libs/fluidsynth` as `1.1.6-noglib` (plus source provenance), keep #43 ignores issue-linked, and prove the scanner is evaluating the actual component while the seed still fails closed.
-4. Reconcile #38/#39 states, `tsan-suppressions.txt`, the residual tracker, CI-THESIS, and every checked OpenSpec task with the new evidence.
-5. Push the remediation and require one **completed** CI run where ASan, UBSan, TSan, Fuzz, Windows, Linux gcc/clang, C ABI, and the honest Dependency Scan all pass on the same new master SHA.
+1. Make FluidSynth scanner-effective: supply repository plus exact vendored commit/source provenance (or another OSV-supported identity), require CVE-2021-21417 and CVE-2025-56225 to be observed and ignored only through the issue-linked #43 rules, and fail if the production artifact has no FluidSynth result.
+2. Restore LEGENDS_DEP_MT32EMU_TAG to the generated inventory or add a mechanical coverage assertion that every LEGENDS_DEP_*_TAG consumed by a FetchContent GIT_TAG has a component.
+3. Reconcile OpenSpec: file/link the promised UBSan root-cause issue or uncheck 3.1; keep 4.1/4.2 unchecked until the production proof is real; record the exact TSan and synchronized green run for 1.5/5.2.
+4. Update CI-THESIS and the residual tracker with the current states; close #39 only after attaching the exact TSan job evidence.
+5. Push those corrections and require one completed master CI run where the same SHA has ASan, UBSan, TSan, Fuzz, Windows, Linux gcc/clang, C ABI, and the scanner-effective Dependency Scan all passing.

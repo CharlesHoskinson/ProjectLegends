@@ -1,37 +1,41 @@
 # R1 residual closeout tracker
 
-Post-merge of PR [#46](https://github.com/CharlesHoskinson/ProjectLegends/pull/46) onto `master`.
+## Synchronized green (runtime) — `621a099` / run 29440398476
 
-## Codex re-audit (NO-GO at `42c30c4`)
+https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29440398476
 
-Full report: `docs/superpowers/reviews/2026-07-15-codex-r1-master-closeout-audit.md`  
-CI: https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29437942535
+| Gate | Result |
+|------|--------|
+| ASan / UBSan / TSan | success (4512/4512); empty race suppressions |
+| Fuzz | success |
+| Windows (MSVC) | success (4500/4500) |
+| Dependency Scan | success mechanically; F017 semantic fix in follow-up commit |
 
-| Gate | At `42c30c4` |
-|------|----------------|
-| ASan / UBSan / Fuzz / Linux | **green** |
-| TSan | **red** — CrashBreadcrumb data race (F013); seqlock insufficient |
-| Windows | **red** — C4875 on `legends_app` + C4324 alignas (F014) |
-| Dependency Scan mechanics | green; inventory dishonest on FluidSynth pin (F015) |
+Codex re-audit NO-GO on `621a099` for **F017** (FluidSynth generic purl → empty OSV; mt32 pin omitted) and doc honesty.
 
-## Remediation follow-up (this track)
+## F017 remediation (this track)
 
 | Item | Action |
 |------|--------|
-| #39 / F013 | **Mutex-serialize** breadcrumb ring (not seqlock+memcpy) |
-| F014 | Attach `legends_gsl_msvc_options` to **all** gsl consumers including `legends_app` |
-| F015 | SBOM inventories **runtime** `1.1.6-noglib` from `version.h`, not unused CMake pin |
-| Docs honesty | Residual tracker + tasks must cite post-fix green SHA only |
+| FluidSynth PURL | `pkg:deb/debian/fluidsynth@1.1.6` (OSV matches DEBIAN-CVE-*) |
+| #43 ignores | CVE + DEBIAN-CVE + DLA + CVE-2025-68617 family |
+| Positive control | CI bare FluidSynth scan must detect DEBIAN-CVE-2021-21417 & DEBIAN-CVE-2025-56225 |
+| mt32emu | Inventoried from `LEGENDS_DEP_MT32EMU_TAG` |
+| Dead pin | `LEGENDS_DEP_FLUIDSYNTH_TAG` documented unused |
 
-## Historical pre-residual green
+## Issue state
 
-Mandatory stack green on `98450e6` / run [29435150647](https://github.com/CharlesHoskinson/ProjectLegends/actions/runs/29435150647) — **does not** prove post-seqlock master.
+| ID | State | Note |
+|----|--------|------|
+| #38 | closed | atomic; proven TSan green |
+| #39 | open → close after F017 commit CI green with TSan still clean | mutex fix proven on 621a099 |
+| #40 | open | MSan park |
+| #42 | open | full tree SBOM still future |
+| #43 | open | upgrade then drop ignores |
+| #44 | open | scoped `/wd4875` still present |
+| #45 #47 #48 | closed | lane complete |
 
-## Still open (expected)
+## Prior NO-GO audits
 
-| ID | Topic |
-|----|--------|
-| #40 | MSan re-entry (`docs/ci/msan-reentry.md`) |
-| #42 | Full vendored-tree SBOM beyond pins + fluidsynth header |
-| #43 | fluidsynth upgrade; drop `osv-scanner.toml` ignores |
-| #44 | Remove scoped `/wd4875` after Windows green under gsl-lite v1.1.0 without it |
+- Closeout NO-GO `42c30c4` / 29437942535 — F013/F014  
+- Re-proof NO-GO `621a099` / 29440398476 — F017 only (runtime green)

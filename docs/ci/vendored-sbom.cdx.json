@@ -3,7 +3,7 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-07-15T18:23:52Z",
+    "timestamp": "2026-07-15T19:01:40Z",
     "component": {
       "type": "application",
       "name": "ProjectLegends",
@@ -16,7 +16,7 @@
       },
       {
         "name": "legends:sbom-note",
-        "value": "Active CMake pins + in-tree FluidSynth version.h (audit F015). Unused LEGENDS_DEP_FLUIDSYNTH_TAG is not inventoried."
+        "value": "FetchContent pins + vendored FluidSynth via version.h. FluidSynth uses deb purl for OSV match (F017). LEGENDS_DEP_FLUIDSYNTH_TAG is dead/unused."
       }
     ]
   },
@@ -55,11 +55,29 @@
     },
     {
       "type": "library",
+      "name": "mt32emu",
+      "version": "2.7.0",
+      "bom-ref": "pkg:github/munt/munt@v2.7.0",
+      "purl": "pkg:github/munt/munt@v2.7.0",
+      "description": "Active FetchContent pin LEGENDS_DEP_MT32EMU_TAG=v2.7.0"
+    },
+    {
+      "type": "library",
       "name": "fluidsynth",
-      "version": "1.1.6-noglib",
-      "bom-ref": "pkg:generic/fluidsynth@1.1.6-noglib",
-      "purl": "pkg:generic/fluidsynth@1.1.6",
-      "description": "Vendored runtime at engine/src/libs/fluidsynth; version from engine/include/fluidsynth/version.h (1.1.6-noglib). NOT the unused LEGENDS_DEP_FLUIDSYNTH_TAG CMake pin. Tracked #43."
+      "version": "1.1.6",
+      "bom-ref": "pkg:deb/debian/fluidsynth@1.1.6",
+      "purl": "pkg:deb/debian/fluidsynth@1.1.6",
+      "description": "Vendored runtime engine/src/libs/fluidsynth; header version '1.1.6-noglib' from engine/include/fluidsynth/version.h. PURL uses Debian ecosystem @1.1.6 so OSV can match CVE records for the baseline (#43). Not LEGENDS_DEP_FLUIDSYNTH_TAG.",
+      "properties": [
+        {
+          "name": "legends:header-version",
+          "value": "1.1.6-noglib"
+        },
+        {
+          "name": "legends:source-path",
+          "value": "engine/src/libs/fluidsynth"
+        }
+      ]
     }
   ]
 }

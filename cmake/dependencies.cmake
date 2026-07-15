@@ -25,7 +25,10 @@ set(LEGENDS_DEP_GOOGLETEST_TAG  "v1.14.0"  CACHE STRING "GoogleTest version tag"
 set(LEGENDS_DEP_BENCHMARK_TAG   "v1.8.3"   CACHE STRING "Google Benchmark version tag")
 
 # Phase 3: Enhanced Features
-set(LEGENDS_DEP_FLUIDSYNTH_TAG  "v2.3.5"   CACHE STRING "FluidSynth version tag")
+# DEAD PIN: not used by FetchContent. Runtime Fluidsynth is the vendored
+# 1.1.6-noglib tree (engine/src/libs/fluidsynth + version.h). Do not invent
+# SBOM rows from this tag (audit F015/F017). Prefer deletion in a cleanup PR.
+set(LEGENDS_DEP_FLUIDSYNTH_TAG  "v2.3.5"   CACHE STRING "UNUSED FluidSynth tag (vendored tree is authoritative)")
 set(LEGENDS_DEP_MT32EMU_TAG     "v2.7.0"   CACHE STRING "MUNT/mt32emu version tag")
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -840,6 +840,57 @@ jobs:
           set -euo pipefail
           python3 scripts/generate_vendored_sbom.py --check
 
+      # F017 positive control: unconfigured scan MUST see FluidSynth baseline CVEs
+      # so #43 ignores are exercised (not empty false-green).
+      - name: FluidSynth baseline must be detectable without ignores
+        run: |
+          set -euo pipefail
+          mkdir -p scan-out
+          python3 - <<'PY'
+          import json, pathlib
+          sbom = json.loads(pathlib.Path("docs/ci/vendored-sbom.cdx.json").read_text())
+          fluid = [c for c in sbom["components"] if c.get("name") == "fluidsynth"]
+          assert len(fluid) == 1, fluid
+          assert fluid[0]["purl"].startswith("pkg:deb/debian/fluidsynth@"), fluid[0]
+          pathlib.Path("scan-out/fluidsynth-only.cdx.json").write_text(
+              json.dumps({
+                  "bomFormat": "CycloneDX",
+                  "specVersion": "1.5",
+                  "version": 1,
+                  "components": fluid,
+              })
+          )
+          print("fluidsynth component:", fluid[0]["purl"], fluid[0]["version"])
+          PY
+          ./osv-scanner --sbom scan-out/fluidsynth-only.cdx.json \
+            --format json \
+            --output scan-out/fluidsynth-bare.json || true
+          test -s scan-out/fluidsynth-bare.json
+          python3 - <<'PY'
+          import json, pathlib, sys
+          data = json.loads(pathlib.Path("scan-out/fluidsynth-bare.json").read_text())
+          ids = set()
+          upstream = set()
+          for r in data.get("results") or []:
+              for p in r.get("packages") or []:
+                  for v in p.get("vulnerabilities") or []:
+                      ids.add(v.get("id") or "")
+                      for u in v.get("upstream") or []:
+                          upstream.add(u)
+          print("detected ids:", sorted(ids))
+          print("upstream:", sorted(upstream))
+          need = {"DEBIAN-CVE-2021-21417", "DEBIAN-CVE-2025-56225"}
+          # Accept either DEBIAN-prefixed or plain CVE ids.
+          ok = (
+              need.issubset(ids)
+              or {"CVE-2021-21417", "CVE-2025-56225"}.issubset(ids | upstream)
+          )
+          if not ok:
+              print("ERROR: FluidSynth bare scan did not surface #43 CVEs", file=sys.stderr)
+              sys.exit(1)
+          print("dependency-scan: FluidSynth baseline CVEs are detectable")
+          PY
+
       - name: Scan checked-in vendored SBOM
         run: |
           set -euo pipefail
@@ -850,16 +901,32 @@ jobs:
             --config osv-scanner.toml \
             --format json \
             --output scan-out/vendored-sbom.json
+          set +e
           ./osv-scanner --sbom docs/ci/vendored-sbom.cdx.json \
             --config osv-scanner.toml
+          rc=$?
+          set -e
+          echo "production human-readable exit: ${rc}"
+          if [ "$rc" -ne 0 ]; then
+            echo "ERROR: production scan with ignores must exit 0" >&2
+            exit 1
+          fi
           test -s scan-out/vendored-sbom.json
           python3 - <<'PY'
           import json, pathlib, sys
           sbom = json.loads(pathlib.Path("docs/ci/vendored-sbom.cdx.json").read_text())
           comps = sbom.get("components") or []
-          print(f"SBOM components: {len(comps)}")
-          if len(comps) < 4:
-              print("ERROR: expected >= 4 components in vendored-sbom.cdx.json", file=sys.stderr)
+          names = {c.get("name") for c in comps}
+          print(f"SBOM components: {len(comps)} {sorted(names)}")
+          if len(comps) < 5:
+              print("ERROR: expected >= 5 components", file=sys.stderr)
+              sys.exit(1)
+          if "fluidsynth" not in names or "mt32emu" not in names:
+              print("ERROR: fluidsynth and mt32emu required", file=sys.stderr)
+              sys.exit(1)
+          fluid = next(c for c in comps if c["name"] == "fluidsynth")
+          if not fluid["purl"].startswith("pkg:deb/debian/fluidsynth@"):
+              print("ERROR: fluidsynth must use Debian purl for OSV", file=sys.stderr)
               sys.exit(1)
           print("dependency-scan: production SBOM scan completed")
           PY
@@ -877,11 +944,20 @@ jobs:
           rc=$?
           set -e
           echo "seed scan exit code: ${rc}"
-          if [ "$rc" -eq 0 ]; then
-            echo "ERROR: expected osv-scanner to report vulns for seed-known-vuln.cdx.json" >&2
-            exit 1
-          fi
           test -s scan-out/seed-vuln.json
+          python3 - <<'PY'
+          import json, pathlib, sys
+          data = json.loads(pathlib.Path("scan-out/seed-vuln.json").read_text())
+          n = 0
+          for r in data.get("results") or []:
+              for p in r.get("packages") or []:
+                  n += len(p.get("vulnerabilities") or [])
+          print("seed vuln count", n)
+          # Prefer non-zero process exit; also accept JSON with vulns if exit is 0.
+          if n < 1:
+              print("ERROR: seed fixture produced no vulnerabilities", file=sys.stderr)
+              sys.exit(1)
+          PY
           echo "dependency-scan: seed known-vuln fixture failed closed as expected"
 
       - name: Upload scan results

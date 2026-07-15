@@ -2,11 +2,36 @@
 # Hygiene: every ignore entry links a tracking issue; delete the entry in the
 # same PR that upgrades/removes the vulnerable component.
 # See openspec/changes/ci-stabilize-mandatory-lanes design D5 and issue #43.
+#
+# FluidSynth is inventoried with pkg:deb/debian/fluidsynth@1.1.6 so OSV returns
+# DEBIAN-CVE-* IDs (and sometimes DLA aliases). Ignore both the upstream CVE
+# IDs and the Debian-prefixed IDs that osv-scanner actually emits.
 
 [[IgnoredVulns]]
 id = "CVE-2021-21417"
-reason = "Vendored fluidsynth (engine/src/libs/fluidsynth). Tracked in https://github.com/CharlesHoskinson/ProjectLegends/issues/43 — upgrade/patch then remove this ignore."
+reason = "Vendored fluidsynth 1.1.6-noglib (engine/src/libs/fluidsynth). Tracked https://github.com/CharlesHoskinson/ProjectLegends/issues/43 — upgrade/patch then remove."
+
+[[IgnoredVulns]]
+id = "DEBIAN-CVE-2021-21417"
+reason = "Debian OSV id for CVE-2021-21417 on fluidsynth 1.1.6. Same #43 baseline."
+
+[[IgnoredVulns]]
+id = "DLA-2697-1"
+reason = "Debian LTS advisory alias covering CVE-2021-21417 for fluidsynth. Same #43 baseline."
 
 [[IgnoredVulns]]
 id = "CVE-2025-56225"
-reason = "Vendored fluidsynth (engine/src/libs/fluidsynth). Tracked in https://github.com/CharlesHoskinson/ProjectLegends/issues/43 — upgrade/patch then remove this ignore."
+reason = "Vendored fluidsynth 1.1.6-noglib. Tracked https://github.com/CharlesHoskinson/ProjectLegends/issues/43."
+
+[[IgnoredVulns]]
+id = "DEBIAN-CVE-2025-56225"
+reason = "Debian OSV id for CVE-2025-56225 on fluidsynth. Same #43 baseline."
+
+# Additional Debian-record hit when scanning 1.1.6 via deb purl (same tree).
+[[IgnoredVulns]]
+id = "DEBIAN-CVE-2025-68617"
+reason = "Debian OSV record for fluidsynth null-deref class issues affecting the 1.1.6 coordinate. Tracked under https://github.com/CharlesHoskinson/ProjectLegends/issues/43 until upgrade."
+
+[[IgnoredVulns]]
+id = "CVE-2025-68617"
+reason = "Upstream id for DEBIAN-CVE-2025-68617 if emitted. Same #43 baseline."
