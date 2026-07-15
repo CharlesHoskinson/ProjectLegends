@@ -247,8 +247,8 @@ add_executable(fuzz_config_parser
 # it explicitly (audit FINDING-004).
 target_link_libraries(fuzz_config_parser PRIVATE
     legends_core
-    gsl::gsl-lite-v1
 )
+legends_link_gsl(fuzz_config_parser PRIVATE)
 
 target_include_directories(fuzz_config_parser PRIVATE
     ${CMAKE_SOURCE_DIR}/src

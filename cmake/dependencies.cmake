@@ -50,25 +50,39 @@ if(NOT gsl-lite_FOUND)
     FetchContent_MakeAvailable(gsl-lite)
 endif()
 
-# MSVC 19.51+ (VS 18 2026): C4875 from gsl-lite [[gsl::suppress]] non-string args
-# becomes C2220 under consumer /WX. Silence ONLY on the third-party INTERFACE
-# target so the warning disable propagates solely to TUs that include gsl-lite
-# headers via target_link_libraries — not via global project flags (#44 / F019).
-# Remove when upstream uses string-literal suppress form under the pinned tag.
-if(MSVC)
-    foreach(_gsl_tgt IN ITEMS gsl-lite gsl_lite)
-        if(TARGET ${_gsl_tgt})
-            get_target_property(_gsl_type ${_gsl_tgt} TYPE)
-            if(_gsl_type STREQUAL "INTERFACE_LIBRARY" OR _gsl_type STREQUAL "STATIC_LIBRARY"
-               OR _gsl_type STREQUAL "SHARED_LIBRARY" OR _gsl_type STREQUAL "OBJECT_LIBRARY")
-                target_compile_options(${_gsl_tgt} INTERFACE
-                    $<$<COMPILE_LANGUAGE:CXX>:/wd4875>
-                )
-                message(STATUS "MSVC: attached /wd4875 to third-party target ${_gsl_tgt} (gsl-lite C4875)")
-            endif()
+# MSVC 19.51+ (VS 18 2026): C4875 from gsl-lite [[gsl::suppress]] non-string
+# args becomes C2220 under consumer /WX. INTERFACE options on the gsl-lite
+# target alone do NOT silence warnings when compiling consumer .cpp files that
+# #include <gsl-lite/gsl-lite.hpp> (CI F019). Consumers must get PRIVATE /wd4875.
+#
+# legends_link_gsl(<target> [PRIVATE|PUBLIC|INTERFACE])
+#   Links gsl::gsl-lite-v1 and, on MSVC, applies /wd4875 to this target's TUs.
+function(legends_link_gsl target_name)
+    set(_vis PRIVATE)
+    if(ARGC GREATER 1)
+        set(_vis ${ARGV1})
+    endif()
+    if(NOT _vis MATCHES "^(PRIVATE|PUBLIC|INTERFACE)$")
+        message(FATAL_ERROR "legends_link_gsl: visibility must be PRIVATE|PUBLIC|INTERFACE")
+    endif()
+    if(NOT TARGET ${target_name})
+        message(FATAL_ERROR "legends_link_gsl: target '${target_name}' does not exist")
+    endif()
+    target_link_libraries(${target_name} ${_vis} gsl::gsl-lite-v1)
+    if(MSVC)
+        # PRIVATE always: silence when compiling this target's sources.
+        target_compile_options(${target_name} PRIVATE
+            $<$<COMPILE_LANGUAGE:CXX>:/wd4875>
+        )
+        # If gsl is re-exported PUBLIC/INTERFACE, dependents that compile against
+        # headers pulling gsl also need the disable.
+        if(_vis STREQUAL "PUBLIC" OR _vis STREQUAL "INTERFACE")
+            target_compile_options(${target_name} INTERFACE
+                $<$<COMPILE_LANGUAGE:CXX>:/wd4875>
+            )
         endif()
-    endforeach()
-endif()
+    endif()
+endfunction()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SDL3 (Platform Backend)

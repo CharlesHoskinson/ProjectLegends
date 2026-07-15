@@ -100,8 +100,8 @@ elseif(MSVC)
     target_link_options(legends_compile_options INTERFACE /GUARD:CF)
 endif()
 
-# #44 / F019: C4875 silence lives on the gsl-lite third-party target only
-# (see cmake/dependencies.cmake after FetchContent). Project Tier A still uses /WX.
+# #44 / F019: link gsl via legends_link_gsl() (cmake/dependencies.cmake) so MSVC
+# consumers get PRIVATE /wd4875. Do not rely on INTERFACE flags on gsl-lite alone.
 
 if(WIN32)
     target_compile_definitions(legends_compile_options INTERFACE WIN32 _CRT_SECURE_NO_WARNINGS)
@@ -204,9 +204,8 @@ target_include_directories(legends_core
 target_link_libraries(legends_core
     PUBLIC
         aibox_core  # forwarding headers in include/legends/ reference aibox headers
-    PRIVATE
-        gsl::gsl-lite-v1
 )
+legends_link_gsl(legends_core PRIVATE)
 
 target_compile_definitions(legends_core
     PUBLIC
@@ -303,9 +302,7 @@ target_compile_definitions(legends_pal
         PAL_DEFAULT_BACKEND="${PAL_DEFAULT_BACKEND}"
 )
 
-target_link_libraries(legends_pal PRIVATE
-    gsl::gsl-lite-v1
-)
+legends_link_gsl(legends_pal PRIVATE)
 
 target_compile_definitions(legends_pal
     PRIVATE
@@ -356,7 +353,7 @@ target_include_directories(legends_ipc
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(legends_ipc PUBLIC gsl::gsl-lite-v1)
+legends_link_gsl(legends_ipc PUBLIC)
 
 target_compile_definitions(legends_ipc PUBLIC
     gsl_CONFIG_DEFAULTS_VERSION=1
@@ -580,9 +577,8 @@ target_link_libraries(legends_app
     PUBLIC
         legends_core
         legends_pal
-    PRIVATE
-        gsl::gsl-lite-v1
 )
+legends_link_gsl(legends_app PRIVATE)
 
 target_compile_definitions(legends_app PRIVATE
     gsl_CONFIG_DEFAULTS_VERSION=1
@@ -600,9 +596,7 @@ function(legends_configure_app_entrypoint_target target_name)
         ${CMAKE_BINARY_DIR}/include
     )
 
-    target_link_libraries(${target_name} PRIVATE
-        gsl::gsl-lite-v1
-    )
+    legends_link_gsl(${target_name} PRIVATE)
 
     target_compile_definitions(${target_name} PRIVATE
         gsl_CONFIG_DEFAULTS_VERSION=1
@@ -791,8 +785,8 @@ if(LEGENDS_BUILD_TESTS)
         legends_ipc
         GTest::gtest_main
         GTest::gmock
-        gsl::gsl-lite-v1  # Tests may use gsl-lite directly for testing
     )
+    legends_link_gsl(legends_unit_tests PRIVATE)
 
     # Engine host sources for IPC dispatcher tests (not part of legends_app)
     target_sources(legends_unit_tests PRIVATE

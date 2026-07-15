@@ -94,9 +94,9 @@ add_executable(aibox_unit_tests
 target_link_libraries(aibox_unit_tests PRIVATE
     aibox_core
     aibox_test_fixtures
-    gsl::gsl-lite-v1
     GTest::gtest_main
 )
+legends_link_gsl(aibox_unit_tests PRIVATE)
 
 # Enable library mode for tests (contract violations throw instead of terminate)
 target_compile_definitions(aibox_unit_tests PRIVATE

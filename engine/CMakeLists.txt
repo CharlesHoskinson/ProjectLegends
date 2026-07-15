@@ -270,8 +270,8 @@ endif()
 # gsl-lite is provided by the root CMakeLists.txt (v1.0.0).
 # Do NOT declare a separate FetchContent here — it would conflict.
 
-# Link gsl-lite to aibox_core (target provided by root build)
-target_link_libraries(aibox_core PRIVATE gsl::gsl-lite-v1)
+# Link gsl-lite to aibox_core (helper from root cmake/dependencies.cmake)
+legends_link_gsl(aibox_core PRIVATE)
 
 # gsl-lite v1 strict C++23 configuration for engine
 target_compile_definitions(aibox_core PRIVATE
