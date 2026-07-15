@@ -337,6 +337,7 @@ jobs:
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch'
     strategy:
+      fail-fast: false
       matrix:
         # address + undefined + thread only. MSan retired: stock libc++ is not
         # instrumented (crashes on startup). Re-entry:
@@ -362,7 +363,10 @@ jobs:
           - sanitizer: thread
             flags: "-stdlib=libc++ -fsanitize=thread -fno-omit-frame-pointer"
             c_flags: "-fsanitize=thread -fno-omit-frame-pointer"
-            env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/tsan-suppressions.txt"
+            # Base TSAN_OPTIONS only — suppressions path is set at test time
+            # using $GITHUB_WORKSPACE (matrix env cannot reliably expand
+            # github.workspace; empty expansion produced suppressions=/...).
+            env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1"
 
     steps:
       - uses: actions/checkout@v4
@@ -372,6 +376,14 @@ jobs:
           sudo apt-get update -y
           # llvm-18 provides llvm-symbolizer required for suppression matching
           sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev llvm-18
+          # Ensure bare `llvm-symbolizer` is on PATH (package ships -18 suffix).
+          if ! command -v llvm-symbolizer >/dev/null 2>&1; then
+            if command -v llvm-symbolizer-18 >/dev/null 2>&1; then
+              sudo ln -sf "$(command -v llvm-symbolizer-18)" /usr/local/bin/llvm-symbolizer
+            elif [ -x /usr/lib/llvm-18/bin/llvm-symbolizer ]; then
+              sudo ln -sf /usr/lib/llvm-18/bin/llvm-symbolizer /usr/local/bin/llvm-symbolizer
+            fi
+          fi
 
       - name: Configure
         run: |
@@ -390,11 +402,14 @@ jobs:
 
       - name: Test
         run: |
+          set -euo pipefail
           export ${{ matrix.env }}
-          # Confirm symbolizer is available for TSan suppression matching
           if [ "${{ matrix.sanitizer }}" = "thread" ]; then
             command -v llvm-symbolizer
-            test -f "${{ github.workspace }}/tsan-suppressions.txt"
+            test -f "${GITHUB_WORKSPACE}/tsan-suppressions.txt"
+            # Append suppressions with an absolute path at runtime.
+            export TSAN_OPTIONS="${TSAN_OPTIONS}:suppressions=${GITHUB_WORKSPACE}/tsan-suppressions.txt"
+            echo "TSAN_OPTIONS=${TSAN_OPTIONS}"
           fi
           ctest --test-dir build --output-on-failure
 
