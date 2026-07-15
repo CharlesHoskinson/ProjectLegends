@@ -366,8 +366,11 @@ jobs:
           # Do not re-add allow_failure without a new tracked exit criterion
           # (see CONTRIBUTING.md demotion rule).
           - sanitizer: thread
-            flags: "-fsanitize=thread -fno-omit-frame-pointer"
-            c_flags: "-fsanitize=thread -fno-omit-frame-pointer"
+            # -Wno-error=tsan: g++-13 libstdc++ uses atomic_thread_fence which
+            # emits -Wtsan under -fsanitize=thread; project -Werror turns that
+            # into a hard build failure in crash_breadcrumb.cpp (and friends).
+            flags: "-fsanitize=thread -fno-omit-frame-pointer -Wno-error=tsan"
+            c_flags: "-fsanitize=thread -fno-omit-frame-pointer -Wno-error=tsan"
             # Base TSAN_OPTIONS only — suppressions path is set at test time
             # using $GITHUB_WORKSPACE (matrix env cannot reliably expand
             # github.workspace; empty expansion produced suppressions=/...).
@@ -510,21 +513,26 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          # clang-18 required for -fsanitize=fuzzer (CMake early-outs on non-Clang).
-          # Default to libstdc++ so Ubuntu's libclang_rt.fuzzer (libstdc++ ABI)
-          # links. pure -stdlib=libc++ left std::__cxx11 unresolved even with
-          # -lstdc++ dual-link (FINDING-004). libstdc++ <expected> is gated on
-          # __cpp_concepts>=202002L; clang-18 only reports 201907L — raise the
-          # feature-test macro so C++23 try_compile succeeds (single stdlib).
-          sudo apt-get install -y cmake ninja-build clang-18 g++-13
+          # clang required for -fsanitize=fuzzer (CMake early-outs on non-Clang).
+          # Prefer clang-19: reports __cpp_concepts=202002 so libstdc++ exposes
+          # std::expected (clang-18 only reports 201907L → configure fail).
+          # Stay on pure libstdc++ so Ubuntu libclang_rt.fuzzer links
+          # (FINDING-004; libc++ dual-link left std::__cxx11 unresolved).
+          # g++-13 keeps a C++23 libstdc++ available on the runner.
+          if ! sudo apt-get install -y cmake ninja-build clang-19 g++-13; then
+            echo "clang-19 not in default apt; installing via llvm.sh"
+            sudo apt-get install -y cmake ninja-build g++-13 wget lsb-release software-properties-common gnupg
+            wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+            sudo bash /tmp/llvm.sh 19
+          fi
+          command -v clang++-19
 
       - name: Configure
         run: |
           cmake -B build -G Ninja \
-            -DCMAKE_C_COMPILER=clang-18 \
-            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_C_COMPILER=clang-19 \
+            -DCMAKE_CXX_COMPILER=clang++-19 \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_FLAGS="-Wno-builtin-macro-redefined -D__cpp_concepts=202002L" \
             -DENABLE_FUZZING=ON \
             -DENABLE_ASAN=ON \
             -DLEGENDS_BUILD_TESTS=ON \
