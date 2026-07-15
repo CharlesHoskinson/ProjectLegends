@@ -11,9 +11,11 @@
 # Format: https://github.com/google/sanitizers/wiki/ThreadSanitizerSuppressions
 #
 # History:
-# - #38 race:g_active_instance REMOVED 2026-07-15 — symbol is std::atomic;
-#   dead suppression under green TSan (run 29435150647).
-# - #39 CrashBreadcrumb::add REMOVED 2026-07-15 — fixed with per-slot seqlock
-#   in crash_breadcrumb.{h,cpp}. If TSan re-fires, file a new issue.
+# - #38 race:g_active_instance removed (std::atomic). Re-prove green TSan on
+#   synchronized SHA after any related change.
+# - #39 CrashBreadcrumb: first seqlock attempt failed TSan (audit F013:
+#   non-atomic payload memcpy is still a data race). Replaced with
+#   std::mutex serialization in crash_breadcrumb.{h,cpp}. Confirm green
+#   TSan on the fixing SHA before treating as closed.
 
-# (intentionally empty — known race families fixed or proven atomic)
+# (no active race suppressions)

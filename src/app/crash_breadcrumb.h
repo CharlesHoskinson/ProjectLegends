@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2024-2025 Charles Hoskinson and Contributors
 //
-// Crash breadcrumb ring buffer with per-slot sequence numbers (seqlock)
-// so concurrent add/readInto is race-free under TSan (#39).
+// Crash breadcrumb ring buffer. Serialized with a mutex so concurrent
+// add/readInto/clear are data-race free under TSan (#39 / audit F013).
+// Frequency is crash/debug path only — lock cost is acceptable.
 
 #pragma once
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <vector>
 
 namespace legends {
@@ -52,19 +53,12 @@ public:
     [[nodiscard]] size_t readInto(BreadcrumbEntry* out, size_t max_entries) const;
     void   clear();
 
-    [[nodiscard]] uint64_t totalCount() const {
-        return write_index_.load(std::memory_order_acquire);
-    }
+    [[nodiscard]] uint64_t totalCount() const;
 
 private:
-    // Per-slot seqlock: odd = write in progress, even = stable snapshot.
-    struct alignas(64) Slot {
-        std::atomic<uint64_t> seq{0};
-        BreadcrumbEntry       data{};
-    };
-
-    Slot                     slots_[kCapacity];
-    std::atomic<uint64_t>    write_index_{0};
+    mutable std::mutex       mu_;
+    BreadcrumbEntry          entries_[kCapacity];
+    uint64_t                 write_index_{0};
 
     [[nodiscard]] static uint32_t currentThreadId();
     [[nodiscard]] static uint64_t currentTimestampUs();

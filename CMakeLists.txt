@@ -592,6 +592,7 @@ target_link_libraries(legends_app
         legends_pal
     PRIVATE
         gsl::gsl-lite-v1
+        $<BUILD_INTERFACE:legends_gsl_msvc_options>
 )
 
 target_compile_definitions(legends_app PRIVATE
@@ -610,7 +611,10 @@ function(legends_configure_app_entrypoint_target target_name)
         ${CMAKE_BINARY_DIR}/include
     )
 
-    target_link_libraries(${target_name} PRIVATE gsl::gsl-lite-v1)
+    target_link_libraries(${target_name} PRIVATE
+        gsl::gsl-lite-v1
+        $<BUILD_INTERFACE:legends_gsl_msvc_options>
+    )
 
     target_compile_definitions(${target_name} PRIVATE
         gsl_CONFIG_DEFAULTS_VERSION=1
