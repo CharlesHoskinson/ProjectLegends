@@ -1,0 +1,43 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-07-15T00:00:00Z",
+    "component": {
+      "type": "application",
+      "name": "ProjectLegends",
+      "version": "0.0.0-dev"
+    },
+    "properties": [
+      {
+        "name": "legends:sbom-note",
+        "value": "Hand-curated inventory of pinned/vendored components for OSV scanning until automated CMake SBOM lands (#42)."
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "fluidsynth",
+      "version": "2.3.3",
+      "bom-ref": "pkg:generic/fluidsynth@2.3.3",
+      "purl": "pkg:generic/fluidsynth@2.3.3",
+      "description": "Vendored at engine/src/libs/fluidsynth (version approximate; see DEPENDENCIES.md)"
+    },
+    {
+      "type": "library",
+      "name": "gsl-lite",
+      "version": "1.0.0",
+      "bom-ref": "pkg:github/gsl-lite/gsl-lite@v1.0.0",
+      "purl": "pkg:github/gsl-lite/gsl-lite@v1.0.0"
+    },
+    {
+      "type": "library",
+      "name": "googletest",
+      "version": "1.14.0",
+      "bom-ref": "pkg:github/google/googletest@v1.14.0",
+      "purl": "pkg:github/google/googletest@v1.14.0"
+    }
+  ]
+}

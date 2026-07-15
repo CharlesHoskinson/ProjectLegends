@@ -1107,19 +1107,53 @@ DOSBoxContext::~DOSBoxContext() {
     }
 }
 
+// Member init order must match declaration order in dosbox_context.h
+// (public subsystem fields first, then private config_).
+// Platform providers (mutex/atomic-backed) stay default-constructed; only
+// non-owned provider pointers are transferred.
 DOSBoxContext::DOSBoxContext(DOSBoxContext&& other) noexcept
-    : config_(std::move(other.config_))
-    , initialized_(other.initialized_)
-    , stop_requested_(other.stop_requested_.load())
-    , last_error_(std::move(other.last_error_))
-    , timing(std::move(other.timing))
+    : timing(std::move(other.timing))
     , cpu_state(std::move(other.cpu_state))
     , mixer(std::move(other.mixer))
     , vga(std::move(other.vga))
     , pic(std::move(other.pic))
     , keyboard(std::move(other.keyboard))
     , input(std::move(other.input))
+    , memory(other.memory)  // raw-pointer ownership; null out source below
+    , dma(other.dma)
+    , dos(other.dos)
+    , dos_filesystem(other.dos_filesystem)
+    , config_(std::move(other.config_))
+    , initialized_(other.initialized_)
+    , stop_requested_(other.stop_requested_.load())
+    , last_error_(std::move(other.last_error_))
+    , timing_provider_(other.timing_provider_)
+    , display_provider_(other.display_provider_)
+    , input_provider_(other.input_provider_)
+    , audio_provider_(other.audio_provider_)
 {
+    // Transfer heap ownership: MemoryState/DmaState/VgaState/DosFilesystemState
+    // hold raw pointers. Default move would alias; omitting memory entirely
+    // leaked ~16MB under ASan (FINDING-001 C3 MoveConstruction/MoveAssignment).
+    other.memory.base = nullptr;
+    other.memory.size = 0;
+    other.memory.pages = 0;
+    other.memory.phandlers = nullptr;
+    other.memory.mhandles = nullptr;
+    other.dma.controllers[0] = nullptr;
+    other.dma.controllers[1] = nullptr;
+    other.vga.hw = nullptr;
+    other.dos_filesystem.files = nullptr;
+    for (auto& d : other.dos_filesystem.drives) {
+        d = nullptr;
+    }
+    for (auto& d : other.dos_filesystem.devices) {
+        d = nullptr;
+    }
+    other.timing_provider_ = nullptr;
+    other.display_provider_ = nullptr;
+    other.input_provider_ = nullptr;
+    other.audio_provider_ = nullptr;
     other.initialized_ = false;
 }
 
@@ -1133,6 +1167,10 @@ DOSBoxContext& DOSBoxContext::operator=(DOSBoxContext&& other) noexcept {
         initialized_ = other.initialized_;
         stop_requested_ = other.stop_requested_.load();
         last_error_ = std::move(other.last_error_);
+        timing_provider_ = other.timing_provider_;
+        display_provider_ = other.display_provider_;
+        input_provider_ = other.input_provider_;
+        audio_provider_ = other.audio_provider_;
         timing = std::move(other.timing);
         cpu_state = std::move(other.cpu_state);
         mixer = std::move(other.mixer);
@@ -1140,7 +1178,30 @@ DOSBoxContext& DOSBoxContext::operator=(DOSBoxContext&& other) noexcept {
         pic = std::move(other.pic);
         keyboard = std::move(other.keyboard);
         input = std::move(other.input);
+        memory = other.memory;
+        dma = other.dma;
+        dos = other.dos;
+        dos_filesystem = other.dos_filesystem;
 
+        other.memory.base = nullptr;
+        other.memory.size = 0;
+        other.memory.pages = 0;
+        other.memory.phandlers = nullptr;
+        other.memory.mhandles = nullptr;
+        other.dma.controllers[0] = nullptr;
+        other.dma.controllers[1] = nullptr;
+        other.vga.hw = nullptr;
+        other.dos_filesystem.files = nullptr;
+        for (auto& d : other.dos_filesystem.drives) {
+            d = nullptr;
+        }
+        for (auto& d : other.dos_filesystem.devices) {
+            d = nullptr;
+        }
+        other.timing_provider_ = nullptr;
+        other.display_provider_ = nullptr;
+        other.input_provider_ = nullptr;
+        other.audio_provider_ = nullptr;
         other.initialized_ = false;
     }
     return *this;

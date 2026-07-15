@@ -105,7 +105,8 @@ void dosbox_clear_last_error(void) {
     std::memset(&g_last_error, 0, sizeof(g_last_error));
 }
 
-const char* dosbox_error_code_name(dosbox_error_code code) {
+const char* dosbox_error_code_name(int code) {
+    // Switch on int so out-of-range wire/test values hit default, not UBSan.
     switch (code) {
         case DOSBOX_OK: return "OK";
 

@@ -75,7 +75,8 @@ TEST(DosboxLogLevelTest, LevelNameReturnsCorrectStrings) {
 }
 
 TEST(DosboxLogLevelTest, UnknownLevelReturnsUnknown) {
-    EXPECT_STREQ(dosbox_log_level_name(static_cast<dosbox_log_level>(99)), "UNKNOWN");
+    // Raw int path — unknown level names without constructing an invalid enum.
+    EXPECT_STREQ(dosbox_log_level_name(99), "UNKNOWN");
 }
 
 TEST(DosboxLogLevelTest, CppWrapperWorks) {

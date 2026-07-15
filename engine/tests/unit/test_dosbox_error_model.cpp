@@ -46,7 +46,8 @@ TEST(DosboxErrorCodeTest, FatalErrorCodes) {
 }
 
 TEST(DosboxErrorCodeTest, UnknownCodeReturnsUnknown) {
-    EXPECT_STREQ(error_code_name(static_cast<ErrorCode>(99999)), "ERR_UNKNOWN");
+    // Call the C name API with a raw int (not an invalid enum load).
+    EXPECT_STREQ(dosbox_error_code_name(99999), "ERR_UNKNOWN");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

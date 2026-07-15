@@ -34,37 +34,34 @@ TEST(IpcControlChannelTest, ServerClientConnect) {
 }
 
 TEST(IpcControlChannelTest, BidirectionalSendRecv) {
+    // FINDING-005 / issue #48: create_server blocks until a client connects, so
+    // a fixed 50ms sleep races under CI load. Use long timeouts and no sleep —
+    // connect_client already retries ERROR_FILE_NOT_FOUND / ERROR_PIPE_BUSY.
     auto name = cc_name("cc_bidir");
 
     std::thread server_thread([&name]() {
-        auto server = ControlChannel::create_server(name, 5000);
-        ASSERT_TRUE(server.has_value());
+        auto server = ControlChannel::create_server(name, 15000);
+        ASSERT_TRUE(server.has_value()) << "create_server failed";
 
-        // Server receives from client
-        auto msg = server->recv(2000);
-        ASSERT_TRUE(msg.has_value());
+        auto msg = server->recv(10000);
+        ASSERT_TRUE(msg.has_value()) << "server did not receive Handshake";
         EXPECT_EQ(msg->header.msg_type, MsgType::Handshake);
         EXPECT_EQ(msg->header.sequence_id, 1u);
 
-        // Server sends response
         std::array<uint8_t, 12> payload{};
         auto r = server->send(MsgType::HandshakeAck, 1, payload);
-        EXPECT_TRUE(r.has_value());
+        ASSERT_TRUE(r.has_value()) << "server failed to send HandshakeAck";
     });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    auto client = ControlChannel::connect_client(name, 15000);
+    ASSERT_TRUE(client.has_value()) << "connect_client failed";
 
-    auto client = ControlChannel::connect_client(name, 5000);
-    ASSERT_TRUE(client.has_value());
-
-    // Client sends to server
     std::array<uint8_t, 16> payload{};
     auto r = client->send(MsgType::Handshake, 1, payload);
-    EXPECT_TRUE(r.has_value());
+    ASSERT_TRUE(r.has_value()) << "client failed to send Handshake";
 
-    // Client receives from server
-    auto msg = client->recv(2000);
-    ASSERT_TRUE(msg.has_value());
+    auto msg = client->recv(10000);
+    ASSERT_TRUE(msg.has_value()) << "client did not receive HandshakeAck";
     EXPECT_EQ(msg->header.msg_type, MsgType::HandshakeAck);
 
     server_thread.join();

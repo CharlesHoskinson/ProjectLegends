@@ -88,8 +88,9 @@ dosbox_log_level dosbox_get_log_level(void);
 
 /**
  * @brief Convert log level to string.
+ * Takes int so unknown levels can be named without invalid-enum UB (R1 FINDING-002).
  */
-const char* dosbox_log_level_name(dosbox_log_level level);
+const char* dosbox_log_level_name(int level);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -119,7 +120,7 @@ enum class LogLevel : int {
  * @brief Convert LogLevel to string.
  */
 [[nodiscard]] inline const char* log_level_name(LogLevel level) noexcept {
-    return dosbox_log_level_name(static_cast<dosbox_log_level>(level));
+    return dosbox_log_level_name(static_cast<int>(level));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

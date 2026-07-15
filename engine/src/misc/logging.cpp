@@ -58,7 +58,8 @@ dosbox_log_level dosbox_get_log_level(void) {
     return g_min_log_level.load(std::memory_order_relaxed);
 }
 
-const char* dosbox_log_level_name(dosbox_log_level level) {
+const char* dosbox_log_level_name(int level) {
+    // Switch on int so out-of-range values hit default, not UBSan invalid-enum.
     switch (level) {
         case DOSBOX_LOG_ERROR: return "ERROR";
         case DOSBOX_LOG_WARN:  return "WARN";

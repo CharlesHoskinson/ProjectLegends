@@ -81,6 +81,19 @@ set(FUZZ_LINK_OPTIONS
     -fsanitize=fuzzer
 )
 
+# Ubuntu's packaged libclang_rt.fuzzer is built against libstdc++. Prefer a
+# pure libstdc++ fuzz build (CI: clang-19 has __cpp_concepts=202002 so
+# libstdc++ exposes std::expected; clang-18 only reports 201907L).
+# If a local build still uses -stdlib=libc++, force-link shared libstdc++ so
+# fuzzer std::__cxx11 symbols resolve. Dual-stdlib is a fallback only —
+# production CI does not use libc++ for fuzz (FINDING-004).
+string(CONCAT _legends_fuzz_stdlib_probe
+    "${CMAKE_CXX_FLAGS} ${CMAKE_EXE_LINKER_FLAGS}")
+if(UNIX AND NOT APPLE AND _legends_fuzz_stdlib_probe MATCHES "stdlib=libc\\+\\+")
+    list(APPEND FUZZ_LINK_OPTIONS -Wl,--no-as-needed -lstdc++ -Wl,--as-needed)
+    message(STATUS "  Also linking libstdc++ (libFuzzer ABI under libc++)")
+endif()
+
 # Add sanitizers if requested
 if(ENABLE_ASAN)
     list(APPEND FUZZ_COMPILE_OPTIONS -fsanitize=address)
@@ -202,6 +215,7 @@ add_executable(fuzz_input_injection
 target_link_libraries(fuzz_input_injection PRIVATE
     legends_core
     aibox_core
+    legends_pal  # pal::Platform::initialize/shutdown (headless)
 )
 
 target_compile_options(fuzz_input_injection PRIVATE
@@ -224,10 +238,16 @@ target_compile_definitions(fuzz_input_injection PRIVATE
 add_executable(fuzz_config_parser
     fuzz_config_parser.cpp
     ${CMAKE_SOURCE_DIR}/src/app/config_parser.cpp
+    # config_parser::loadDefaults calls legends::getConfigDir (not in legends_core)
+    ${CMAKE_SOURCE_DIR}/src/app/platform_dirs.cpp
 )
 
+# config_parser.cpp pulls include/legends/gsl.hpp → gsl-lite. legends_core
+# keeps gsl-lite PRIVATE, so fuzz targets that compile app sources must link
+# it explicitly (audit FINDING-004).
 target_link_libraries(fuzz_config_parser PRIVATE
     legends_core
+    gsl::gsl-lite-v1
 )
 
 target_include_directories(fuzz_config_parser PRIVATE

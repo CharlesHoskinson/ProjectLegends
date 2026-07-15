@@ -213,8 +213,34 @@ PRs run the following CI jobs:
 - C ABI verification
 - Static analysis (clang-tidy)
 - Fuzz testing (30s smoke)
+- Sanitizer builds (ASan, UBSan, **enforced TSan**)
 
-Merge-to-main additionally runs sanitizer builds (ASan, UBSan, TSan, MSan).
+Nightly / `workflow_dispatch` also runs dependency scanning (osv-scanner over
+vendored trees; see `osv-scanner.toml` for issue-linked baseline ignores).
+
+**MSan** is retired from CI until an instrumented libc++ is available
+([#40](https://github.com/CharlesHoskinson/ProjectLegends/issues/40)).
+
+Known TSan races are listed in `tsan-suppressions.txt` (one entry per family,
+each with a tracking issue). Do not widen suppressions without review.
+
+### Lane demotion rule (R1)
+
+Any of the following is a **demotion** and **MUST** land with a tracked GitHub
+issue that states an explicit exit criterion (when the demotion is removed):
+
+- `allow_failure` / `continue-on-error` on a gate job or step
+- `|| true` (or equivalent) that swallows a gate failure
+- Retiring or narrowing a lane's trigger tier
+- Deleting or relaxing a test assertion solely to make CI green
+- Adding a TSan suppression or `DISABLED_` / `GTEST_SKIP` that hides a real bug
+  (intentional contract tests under TSan are the documented exception; see #45)
+
+YAML comments alone do **not** count as an exit plan. Prefer fixing the root
+cause; if temporary relief is required, open the issue first, link it from the
+code/workflow, and remove the demotion in the PR that closes the issue.
+
+See `CI-THESIS.md` (R1) and `openspec/changes/ci-stabilize-mandatory-lanes/`.
 
 ---
 

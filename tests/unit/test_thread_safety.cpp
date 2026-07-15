@@ -6,6 +6,10 @@
  * - LEGENDS_ERR_WRONG_THREAD is returned for cross-thread access
  * - Thread affinity checking works correctly
  * - Single-threaded access model is enforced
+ *
+ * Under LEGENDS_TSAN_BUILD (R1 / issue #45), intentional wrong-thread tests
+ * are skipped so enforced TSan does not treat deliberate races as failures.
+ * Non-TSan lanes still run the full suite.
  */
 
 #include <gtest/gtest.h>
@@ -16,6 +20,16 @@
 #include <stdexcept>
 #include <vector>
 #include <chrono>
+
+#if defined(LEGENDS_TSAN_BUILD)
+#define LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD() \
+    GTEST_SKIP() << "Intentional cross-thread call; excluded under TSan " \
+                    "(https://github.com/CharlesHoskinson/ProjectLegends/issues/45)"
+#else
+#define LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD() \
+    do {                                        \
+    } while (0)
+#endif
 
 class ThreadSafetyTest : public ::testing::Test {
 protected:
@@ -32,6 +46,7 @@ protected:
 
 // Test that step_cycles from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, StepCyclesFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -48,6 +63,7 @@ TEST_F(ThreadSafetyTest, StepCyclesFromWrongThreadReturnsError) {
 
 // Test that step_ms from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, StepMsFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -64,6 +80,7 @@ TEST_F(ThreadSafetyTest, StepMsFromWrongThreadReturnsError) {
 
 // Test that capture_text from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, CaptureTextFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -80,6 +97,7 @@ TEST_F(ThreadSafetyTest, CaptureTextFromWrongThreadReturnsError) {
 
 // Test that capture_rgb from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, CaptureRgbFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -97,6 +115,7 @@ TEST_F(ThreadSafetyTest, CaptureRgbFromWrongThreadReturnsError) {
 
 // Test that key_event from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, KeyEventFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -112,6 +131,7 @@ TEST_F(ThreadSafetyTest, KeyEventFromWrongThreadReturnsError) {
 
 // Test that mouse_event from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, MouseEventFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -127,6 +147,7 @@ TEST_F(ThreadSafetyTest, MouseEventFromWrongThreadReturnsError) {
 
 // Test that save_state from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, SaveStateFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -143,6 +164,7 @@ TEST_F(ThreadSafetyTest, SaveStateFromWrongThreadReturnsError) {
 
 // Test that load_state from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, LoadStateFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -164,6 +186,7 @@ TEST_F(ThreadSafetyTest, LoadStateFromWrongThreadReturnsError) {
 
 // Test that reset from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, ResetFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -179,6 +202,7 @@ TEST_F(ThreadSafetyTest, ResetFromWrongThreadReturnsError) {
 
 // Test that get_state_hash from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST_F(ThreadSafetyTest, GetStateHashFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -196,6 +220,8 @@ TEST_F(ThreadSafetyTest, GetStateHashFromWrongThreadReturnsError) {
 // Test that destroy may be allowed from any thread for cleanup purposes
 // Note: Some implementations allow destroy from any thread to facilitate cleanup
 TEST_F(ThreadSafetyTest, DestroyFromAnyThreadAllowed) {
+    // Intentional cross-thread destroy; excluded under TSan (issue #45).
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -261,6 +287,7 @@ TEST_F(ThreadSafetyTest, OwnerThreadCanCallAllAPIs) {
 
 // Test multiple threads trying to access same handle concurrently
 TEST_F(ThreadSafetyTest, ConcurrentAccessReturnsWrongThread) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -289,6 +316,7 @@ TEST_F(ThreadSafetyTest, ConcurrentAccessReturnsWrongThread) {
 
 // Test that read-only queries from wrong thread still return WRONG_THREAD
 TEST_F(ThreadSafetyTest, ReadOnlyQueriesFromWrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -324,6 +352,8 @@ TEST_F(ThreadSafetyTest, ReadOnlyQueriesFromWrongThreadReturnsError) {
 
 // Test thread ID checking consistency
 TEST_F(ThreadSafetyTest, ThreadAffinityConsistentAcrossMultipleCalls) {
+    // Intentional wrong-thread step loop; excluded under TSan (issue #45).
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -350,6 +380,7 @@ TEST_F(ThreadSafetyTest, ThreadAffinityConsistentAcrossMultipleCalls) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 TEST_F(ThreadSafetyTest, DestroyFromWrongThreadReturnsWrongThread) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -368,6 +399,7 @@ TEST_F(ThreadSafetyTest, DestroyFromWrongThreadReturnsWrongThread) {
 }
 
 TEST_F(ThreadSafetyTest, ResetStepDestroyFromWrongThread) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -436,6 +468,9 @@ TEST_F(ThreadSafetyTest, RapidCreateDestroyCycle) {
 }
 
 TEST_F(ThreadSafetyTest, ConcurrentDestroyAttempts) {
+    // Intentional multi-thread destroy races; excluded under TSan (issue #45).
+    // Audit FINDING-003: this test was missed by the initial skip injection.
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
