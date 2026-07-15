@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Generate docs/ci/vendored-sbom.cdx.json from real dependency identities.
+"""Generate docs/ci/vendored-sbom.cdx.json for OSV scanning.
 
-Sources:
-  1. cmake/dependencies.cmake pins consumed by FetchContent
-  2. In-tree vendored FluidSynth version.h (authoritative for linked code)
-
-FluidSynth purl uses Debian ecosystem coordinates so OSV can match
-CVE/DEBIAN-CVE records for 1.1.6 (audit F017). Generic purls return empty.
+Inventory rules (#42 / F017):
+  1. Every LEGENDS_DEP_*_TAG that is used by FetchContent, or is an optional
+     feature pin with a real FetchContent path.
+  2. In-tree libraries under engine/src/libs that are **linked** by default CI
+     targets (headless legends/aibox), with explicit version sources.
+  3. Never inventory deleted/unlinked FluidSynth 1.1.6.
 
 Usage:
   python3 scripts/generate_vendored_sbom.py
@@ -27,8 +27,12 @@ ROOT = Path(__file__).resolve().parents[1]
 CMAKE_DEPS = ROOT / "cmake" / "dependencies.cmake"
 OUT = ROOT / "docs" / "ci" / "vendored-sbom.cdx.json"
 FLUID_VERSION_H = ROOT / "engine" / "include" / "fluidsynth" / "version.h"
+ZMBV_H = ROOT / "engine" / "src" / "libs" / "zmbv" / "zmbv.h"
+PHYSFS_H = ROOT / "engine" / "src" / "libs" / "physfs" / "physfs.h"
+TINYFD_H = ROOT / "engine" / "src" / "libs" / "tinyfiledialogs" / "tinyfiledialogs.h"
+XBRZ_CHANGELOG = ROOT / "engine" / "src" / "libs" / "xBRZ" / "Changelog.txt"
 
-# Pins that have a FetchContent_Declare / MakeAvailable path in dependencies.cmake.
+# Pins with FetchContent paths in dependencies.cmake (optional features included).
 ACTIVE_PIN_MAP = {
     "LEGENDS_DEP_GSL_LITE_TAG": {
         "name": "gsl-lite",
@@ -50,73 +54,145 @@ ACTIVE_PIN_MAP = {
         "tag_to_version": lambda t: t.lstrip("v"),
         "purl_template": "pkg:github/google/benchmark@{tag}",
     },
-    # Optional feature pin (LEGENDS_ENABLE_MT32) but FetchContent path is real.
     "LEGENDS_DEP_MT32EMU_TAG": {
         "name": "mt32emu",
         "tag_to_version": lambda t: t.lstrip("v"),
         "purl_template": "pkg:github/munt/munt@{tag}",
     },
+    # Only when LEGENDS_ENABLE_FLUIDSYNTH=ON; still inventoriable as the
+    # only supported Fluidsynth identity after vendored-tree removal.
+    "LEGENDS_DEP_FLUIDSYNTH_TAG": {
+        "name": "fluidsynth",
+        "tag_to_version": lambda t: t.lstrip("v"),
+        "purl_template": "pkg:github/FluidSynth/fluidsynth@{tag}",
+        "optional_feature": True,
+    },
 }
 
-PIN_RE = re.compile(
-    r'set\((LEGENDS_DEP_\w+_TAG)\s+"([^"]+)"',
-    re.MULTILINE,
-)
-FLUID_VER_RE = re.compile(r'#define\s+FLUIDSYNTH_VERSION\s+"([^"]+)"')
+PIN_RE = re.compile(r'set\((LEGENDS_DEP_\w+_TAG)\s+"([^"]+)"', re.MULTILINE)
 
 
 def parse_pins(text: str) -> dict[str, str]:
     return {m.group(1): m.group(2) for m in PIN_RE.finditer(text)}
 
 
-def fluidsynth_runtime_component() -> dict:
-    """Inventory the *vendored* Fluidsynth, with OSV-matchable coordinates.
+def linked_tree_components() -> list[dict]:
+    """In-tree libs linked by default CI (see CMakeLists legends_app sources)."""
+    comps: list[dict] = []
 
-    version.h string is e.g. 1.1.6-noglib. OSV Debian data keys on 1.1.6.
-    Use pkg:deb/debian/fluidsynth@1.1.6 so osv-scanner returns DEBIAN-CVE-*
-    (which we baseline via osv-scanner.toml / #43). Do not use pkg:generic —
-    that returns empty results (audit F017).
-    """
-    text = FLUID_VERSION_H.read_text(encoding="utf-8", errors="replace")
-    m = FLUID_VER_RE.search(text)
-    if not m:
-        raise SystemExit(f"Cannot parse FLUIDSYNTH_VERSION from {FLUID_VERSION_H}")
-    header_version = m.group(1)  # 1.1.6-noglib
-    numeric = header_version.split("-")[0]
-    purl = f"pkg:deb/debian/fluidsynth@{numeric}"
-    return {
-        "type": "library",
-        "name": "fluidsynth",
-        "version": numeric,
-        "bom-ref": purl,
-        "purl": purl,
-        "description": (
-            f"Vendored runtime engine/src/libs/fluidsynth; header version "
-            f"'{header_version}' from engine/include/fluidsynth/version.h. "
-            f"PURL uses Debian ecosystem @{numeric} so OSV can match CVE "
-            f"records for the baseline (#43). Not LEGENDS_DEP_FLUIDSYNTH_TAG."
+    # ZMBV video codec — compiled into legends_app always.
+    zmbv_ver = "unknown"
+    if ZMBV_H.exists():
+        # No stable #define; use path-local identity for honesty.
+        zmbv_ver = "dosbox-x-vendored"
+    comps.append(
+        {
+            "type": "library",
+            "name": "zmbv",
+            "version": zmbv_ver,
+            "bom-ref": f"pkg:generic/zmbv@{zmbv_ver}",
+            "purl": f"pkg:generic/zmbv@{zmbv_ver}",
+            "description": "Linked in legends_app (engine/src/libs/zmbv). DOSBox-X vendored codec.",
+            "properties": [
+                {"name": "legends:source-path", "value": "engine/src/libs/zmbv"},
+                {"name": "legends:linked-default", "value": "true"},
+            ],
+        }
+    )
+
+    # Optional trees present but not linked by default headless CI — inventory
+    # with linked-default=false so SBOM is complete for #42 without claiming
+    # they are in the default binary.
+    for name, path, ver, purl, note in (
+        (
+            "physfs",
+            "engine/src/libs/physfs",
+            "vendored",
+            "pkg:generic/physfs@vendored",
+            "PhysicsFS tree; not in aibox_core default sources",
         ),
-        "properties": [
+        (
+            "libchdr",
+            "engine/src/libs/libchdr",
+            "vendored",
+            "pkg:generic/libchdr@vendored",
+            "CHD library + nested lzma/zstd; not default-linked",
+        ),
+        (
+            "mt32-vendored",
+            "engine/src/libs/mt32",
+            "vendored",
+            "pkg:generic/mt32emu-vendored@vendored",
+            "In-tree munt snapshot; optional FetchContent pin is separate (mt32emu)",
+        ),
+        (
+            "tinyfiledialogs",
+            "engine/src/libs/tinyfiledialogs",
+            "vendored",
+            "pkg:generic/tinyfiledialogs@vendored",
+            "Optional dialogs helper",
+        ),
+        (
+            "xbrz",
+            "engine/src/libs/xBRZ",
+            "vendored",
+            "pkg:generic/xbrz@vendored",
+            "Scaler; optional video path",
+        ),
+        (
+            "decoders",
+            "engine/src/libs/decoders",
+            "vendored-bundle",
+            "pkg:generic/dosbox-decoders@vendored-bundle",
+            "Audio decoder bundle (dr_*, stb, opus, ogg, speexdsp)",
+        ),
+        (
+            "gui_tk",
+            "engine/src/libs/gui_tk",
+            "vendored",
+            "pkg:generic/gui_tk@vendored",
+            "Legacy GUI toolkit remnant",
+        ),
+        (
+            "passthroughio",
+            "engine/src/libs/passthroughio",
+            "vendored",
+            "pkg:generic/passthroughio@vendored",
+            "Local I/O helper",
+        ),
+    ):
+        if not (ROOT / path).exists():
+            continue
+        comps.append(
             {
-                "name": "legends:header-version",
-                "value": header_version,
-            },
-            {
-                "name": "legends:source-path",
-                "value": "engine/src/libs/fluidsynth",
-            },
-        ],
-    }
+                "type": "library",
+                "name": name,
+                "version": ver,
+                "bom-ref": purl,
+                "purl": purl,
+                "description": note,
+                "properties": [
+                    {"name": "legends:source-path", "value": path},
+                    {"name": "legends:linked-default", "value": "false"},
+                ],
+            }
+        )
+
+    return comps
 
 
 def build_sbom(pins: dict[str, str]) -> dict:
     components: list[dict] = []
+
     for pin_name, meta in ACTIVE_PIN_MAP.items():
         if pin_name not in pins:
-            raise SystemExit(f"Missing expected pin {pin_name} in dependencies.cmake")
+            raise SystemExit(f"Missing pin {pin_name} in dependencies.cmake")
         tag = pins[pin_name]
         version = meta["tag_to_version"](tag)
         purl = meta["purl_template"].format(tag=tag)
+        desc = f"FetchContent pin {pin_name}={tag}"
+        if meta.get("optional_feature"):
+            desc += " (optional LEGENDS_ENABLE_FLUIDSYNTH; no in-tree 1.1.6 copy)"
         components.append(
             {
                 "type": "library",
@@ -124,21 +200,23 @@ def build_sbom(pins: dict[str, str]) -> dict:
                 "version": version,
                 "bom-ref": purl,
                 "purl": purl,
-                "description": f"Active FetchContent pin {pin_name}={tag}",
+                "description": desc,
             }
         )
 
-    components.append(fluidsynth_runtime_component())
-
-    # Fail closed: every LEGENDS_DEP_*_TAG must either be inventoried or
-    # explicitly listed as dead/unused (not silently dropped).
-    known_dead = {"LEGENDS_DEP_FLUIDSYNTH_TAG"}  # declared, never FetchContent'd
+    # Fail closed: every pin must be mapped.
     for pin_name in pins:
-        if pin_name in ACTIVE_PIN_MAP or pin_name in known_dead:
-            continue
+        if pin_name not in ACTIVE_PIN_MAP:
+            raise SystemExit(f"Unmapped pin {pin_name} — update ACTIVE_PIN_MAP")
+
+    # Fail closed: vendored 1.1.6 must not exist.
+    if FLUID_VERSION_H.exists():
         raise SystemExit(
-            f"Unmapped active pin {pin_name} — add to ACTIVE_PIN_MAP or known_dead"
+            f"Refusing SBOM generation: {FLUID_VERSION_H} still exists. "
+            "Vulnerable vendored FluidSynth must stay deleted (#43)."
         )
+
+    components.extend(linked_tree_components())
 
     return {
         "bomFormat": "CycloneDX",
@@ -162,9 +240,9 @@ def build_sbom(pins: dict[str, str]) -> dict:
                 {
                     "name": "legends:sbom-note",
                     "value": (
-                        "FetchContent pins + vendored FluidSynth via version.h. "
-                        "FluidSynth uses deb purl for OSV match (F017). "
-                        "LEGENDS_DEP_FLUIDSYNTH_TAG is dead/unused."
+                        "FetchContent pins + engine/src/libs inventory. "
+                        "Vendored FluidSynth 1.1.6 removed (#43). "
+                        "linked-default property marks CI default link graph."
                     ),
                 },
             ],
@@ -188,12 +266,14 @@ def main() -> int:
     pins = parse_pins(CMAKE_DEPS.read_text(encoding="utf-8"))
     sbom = build_sbom(pins)
 
-    fluid = next(c for c in sbom["components"] if c["name"] == "fluidsynth")
-    if not fluid["purl"].startswith("pkg:deb/debian/fluidsynth@"):
-        print("ERROR: fluidsynth purl must be Debian for OSV match", file=sys.stderr)
-        return 1
-    if "mt32emu" not in {c["name"] for c in sbom["components"]}:
-        print("ERROR: mt32emu pin missing from SBOM", file=sys.stderr)
+    names = {c["name"] for c in sbom["components"]}
+    if "fluidsynth" in names:
+        fluid = next(c for c in sbom["components"] if c["name"] == "fluidsynth")
+        if fluid["version"].startswith("1.1"):
+            print("ERROR: must not inventory FluidSynth 1.1.x", file=sys.stderr)
+            return 1
+    if "zmbv" not in names or "mt32emu" not in names:
+        print("ERROR: zmbv and mt32emu required", file=sys.stderr)
         return 1
 
     if args.check:
@@ -202,12 +282,12 @@ def main() -> int:
             return 1
         existing = json.loads(OUT.read_text(encoding="utf-8"))
         if keyset(existing) != keyset(sbom):
-            print("STALE vendored-sbom.cdx.json — run scripts/generate_vendored_sbom.py", file=sys.stderr)
+            print("STALE vendored-sbom.cdx.json — regenerate", file=sys.stderr)
             print("expected:", keyset(sbom), file=sys.stderr)
             print("actual:  ", keyset(existing), file=sys.stderr)
             return 1
-        if len(existing.get("components", [])) < 5:
-            print("ERROR: expected >= 5 components", file=sys.stderr)
+        if FLUID_VERSION_H.exists():
+            print("ERROR: vendored fluidsynth version.h still present", file=sys.stderr)
             return 1
         print(f"OK {OUT} ({len(existing['components'])} components)")
         return 0
@@ -216,7 +296,7 @@ def main() -> int:
     OUT.write_text(json.dumps(sbom, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {OUT} ({len(sbom['components'])} components)")
     for c in sbom["components"]:
-        print(f"  - {c['name']}@{c['version']}  {c['purl']}")
+        print(f"  - {c['name']}@{c['version']}")
     return 0
 
 

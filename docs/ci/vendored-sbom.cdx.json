@@ -3,7 +3,7 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-07-15T19:01:40Z",
+    "timestamp": "2026-07-15T19:08:09Z",
     "component": {
       "type": "application",
       "name": "ProjectLegends",
@@ -16,7 +16,7 @@
       },
       {
         "name": "legends:sbom-note",
-        "value": "FetchContent pins + vendored FluidSynth via version.h. FluidSynth uses deb purl for OSV match (F017). LEGENDS_DEP_FLUIDSYNTH_TAG is dead/unused."
+        "value": "FetchContent pins + engine/src/libs inventory. Vendored FluidSynth 1.1.6 removed (#43). linked-default property marks CI default link graph."
       }
     ]
   },
@@ -27,7 +27,7 @@
       "version": "1.1.0",
       "bom-ref": "pkg:github/gsl-lite/gsl-lite@v1.1.0",
       "purl": "pkg:github/gsl-lite/gsl-lite@v1.1.0",
-      "description": "Active FetchContent pin LEGENDS_DEP_GSL_LITE_TAG=v1.1.0"
+      "description": "FetchContent pin LEGENDS_DEP_GSL_LITE_TAG=v1.1.0"
     },
     {
       "type": "library",
@@ -35,7 +35,7 @@
       "version": "3.2.8",
       "bom-ref": "pkg:github/libsdl-org/SDL@release-3.2.8",
       "purl": "pkg:github/libsdl-org/SDL@release-3.2.8",
-      "description": "Active FetchContent pin LEGENDS_DEP_SDL3_TAG=release-3.2.8"
+      "description": "FetchContent pin LEGENDS_DEP_SDL3_TAG=release-3.2.8"
     },
     {
       "type": "library",
@@ -43,7 +43,7 @@
       "version": "1.14.0",
       "bom-ref": "pkg:github/google/googletest@v1.14.0",
       "purl": "pkg:github/google/googletest@v1.14.0",
-      "description": "Active FetchContent pin LEGENDS_DEP_GOOGLETEST_TAG=v1.14.0"
+      "description": "FetchContent pin LEGENDS_DEP_GOOGLETEST_TAG=v1.14.0"
     },
     {
       "type": "library",
@@ -51,7 +51,7 @@
       "version": "1.8.3",
       "bom-ref": "pkg:github/google/benchmark@v1.8.3",
       "purl": "pkg:github/google/benchmark@v1.8.3",
-      "description": "Active FetchContent pin LEGENDS_DEP_BENCHMARK_TAG=v1.8.3"
+      "description": "FetchContent pin LEGENDS_DEP_BENCHMARK_TAG=v1.8.3"
     },
     {
       "type": "library",
@@ -59,23 +59,175 @@
       "version": "2.7.0",
       "bom-ref": "pkg:github/munt/munt@v2.7.0",
       "purl": "pkg:github/munt/munt@v2.7.0",
-      "description": "Active FetchContent pin LEGENDS_DEP_MT32EMU_TAG=v2.7.0"
+      "description": "FetchContent pin LEGENDS_DEP_MT32EMU_TAG=v2.7.0"
     },
     {
       "type": "library",
       "name": "fluidsynth",
-      "version": "1.1.6",
-      "bom-ref": "pkg:deb/debian/fluidsynth@1.1.6",
-      "purl": "pkg:deb/debian/fluidsynth@1.1.6",
-      "description": "Vendored runtime engine/src/libs/fluidsynth; header version '1.1.6-noglib' from engine/include/fluidsynth/version.h. PURL uses Debian ecosystem @1.1.6 so OSV can match CVE records for the baseline (#43). Not LEGENDS_DEP_FLUIDSYNTH_TAG.",
+      "version": "2.5.2",
+      "bom-ref": "pkg:github/FluidSynth/fluidsynth@v2.5.2",
+      "purl": "pkg:github/FluidSynth/fluidsynth@v2.5.2",
+      "description": "FetchContent pin LEGENDS_DEP_FLUIDSYNTH_TAG=v2.5.2 (optional LEGENDS_ENABLE_FLUIDSYNTH; no in-tree 1.1.6 copy)"
+    },
+    {
+      "type": "library",
+      "name": "zmbv",
+      "version": "dosbox-x-vendored",
+      "bom-ref": "pkg:generic/zmbv@dosbox-x-vendored",
+      "purl": "pkg:generic/zmbv@dosbox-x-vendored",
+      "description": "Linked in legends_app (engine/src/libs/zmbv). DOSBox-X vendored codec.",
       "properties": [
         {
-          "name": "legends:header-version",
-          "value": "1.1.6-noglib"
+          "name": "legends:source-path",
+          "value": "engine/src/libs/zmbv"
         },
         {
+          "name": "legends:linked-default",
+          "value": "true"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "physfs",
+      "version": "vendored",
+      "bom-ref": "pkg:generic/physfs@vendored",
+      "purl": "pkg:generic/physfs@vendored",
+      "description": "PhysicsFS tree; not in aibox_core default sources",
+      "properties": [
+        {
           "name": "legends:source-path",
-          "value": "engine/src/libs/fluidsynth"
+          "value": "engine/src/libs/physfs"
+        },
+        {
+          "name": "legends:linked-default",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "libchdr",
+      "version": "vendored",
+      "bom-ref": "pkg:generic/libchdr@vendored",
+      "purl": "pkg:generic/libchdr@vendored",
+      "description": "CHD library + nested lzma/zstd; not default-linked",
+      "properties": [
+        {
+          "name": "legends:source-path",
+          "value": "engine/src/libs/libchdr"
+        },
+        {
+          "name": "legends:linked-default",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "mt32-vendored",
+      "version": "vendored",
+      "bom-ref": "pkg:generic/mt32emu-vendored@vendored",
+      "purl": "pkg:generic/mt32emu-vendored@vendored",
+      "description": "In-tree munt snapshot; optional FetchContent pin is separate (mt32emu)",
+      "properties": [
+        {
+          "name": "legends:source-path",
+          "value": "engine/src/libs/mt32"
+        },
+        {
+          "name": "legends:linked-default",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "tinyfiledialogs",
+      "version": "vendored",
+      "bom-ref": "pkg:generic/tinyfiledialogs@vendored",
+      "purl": "pkg:generic/tinyfiledialogs@vendored",
+      "description": "Optional dialogs helper",
+      "properties": [
+        {
+          "name": "legends:source-path",
+          "value": "engine/src/libs/tinyfiledialogs"
+        },
+        {
+          "name": "legends:linked-default",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "xbrz",
+      "version": "vendored",
+      "bom-ref": "pkg:generic/xbrz@vendored",
+      "purl": "pkg:generic/xbrz@vendored",
+      "description": "Scaler; optional video path",
+      "properties": [
+        {
+          "name": "legends:source-path",
+          "value": "engine/src/libs/xBRZ"
+        },
+        {
+          "name": "legends:linked-default",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "decoders",
+      "version": "vendored-bundle",
+      "bom-ref": "pkg:generic/dosbox-decoders@vendored-bundle",
+      "purl": "pkg:generic/dosbox-decoders@vendored-bundle",
+      "description": "Audio decoder bundle (dr_*, stb, opus, ogg, speexdsp)",
+      "properties": [
+        {
+          "name": "legends:source-path",
+          "value": "engine/src/libs/decoders"
+        },
+        {
+          "name": "legends:linked-default",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "gui_tk",
+      "version": "vendored",
+      "bom-ref": "pkg:generic/gui_tk@vendored",
+      "purl": "pkg:generic/gui_tk@vendored",
+      "description": "Legacy GUI toolkit remnant",
+      "properties": [
+        {
+          "name": "legends:source-path",
+          "value": "engine/src/libs/gui_tk"
+        },
+        {
+          "name": "legends:linked-default",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "passthroughio",
+      "version": "vendored",
+      "bom-ref": "pkg:generic/passthroughio@vendored",
+      "purl": "pkg:generic/passthroughio@vendored",
+      "description": "Local I/O helper",
+      "properties": [
+        {
+          "name": "legends:source-path",
+          "value": "engine/src/libs/passthroughio"
+        },
+        {
+          "name": "legends:linked-default",
+          "value": "false"
         }
       ]
     }

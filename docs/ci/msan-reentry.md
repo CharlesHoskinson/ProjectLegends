@@ -1,7 +1,8 @@
-# MSan re-entry checklist (#40)
+# MSan re-entry checklist (#40) — P4 parked
 
-MSan is **retired** from the mandatory CI matrix. Stock Ubuntu libc++ is not
-MSan-instrumented; binaries crash at startup and the lane verifies nothing.
+MSan is **retired** from the mandatory CI matrix (`sanitizer: [address, undefined, thread]` only).
+`.github/workflows/ci.yml` comments forbid re-adding `"memory"` without this checklist.
+Stock Ubuntu libc++ is not MSan-instrumented; binaries crash at startup and the lane verifies nothing.
 
 ## Exit criterion (re-add the matrix leg only when all are true)
 

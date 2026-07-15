@@ -25,10 +25,9 @@ set(LEGENDS_DEP_GOOGLETEST_TAG  "v1.14.0"  CACHE STRING "GoogleTest version tag"
 set(LEGENDS_DEP_BENCHMARK_TAG   "v1.8.3"   CACHE STRING "Google Benchmark version tag")
 
 # Phase 3: Enhanced Features
-# DEAD PIN: not used by FetchContent. Runtime Fluidsynth is the vendored
-# 1.1.6-noglib tree (engine/src/libs/fluidsynth + version.h). Do not invent
-# SBOM rows from this tag (audit F015/F017). Prefer deletion in a cleanup PR.
-set(LEGENDS_DEP_FLUIDSYNTH_TAG  "v2.3.5"   CACHE STRING "UNUSED FluidSynth tag (vendored tree is authoritative)")
+# FluidSynth: vendored 1.1.6-noglib tree REMOVED (#43 CVEs). Optional builds
+# must use a system package or FetchContent of a fixed modern release.
+set(LEGENDS_DEP_FLUIDSYNTH_TAG  "v2.5.2"   CACHE STRING "FluidSynth FetchContent tag when LEGENDS_ENABLE_FLUIDSYNTH=ON")
 set(LEGENDS_DEP_MT32EMU_TAG     "v2.7.0"   CACHE STRING "MUNT/mt32emu version tag")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -99,13 +98,23 @@ endif()
 # FluidSynth (MIDI Synthesis) — Phase 3, Sprint 4
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# FluidSynth provides SoundFont-based MIDI synthesis.
-# Optional: gated by LEGENDS_ENABLE_FLUIDSYNTH
+# Optional: LEGENDS_ENABLE_FLUIDSYNTH. The historical in-tree 1.1.6-noglib copy
+# was removed for CVE-2021-21417 / CVE-2025-56225 (#43). Prefer system package;
+# otherwise FetchContent a fixed modern tag (LEGENDS_DEP_FLUIDSYNTH_TAG).
 
 if(LEGENDS_ENABLE_FLUIDSYNTH)
     find_package(FluidSynth QUIET)
     if(NOT FluidSynth_FOUND)
-        message(STATUS "FluidSynth not found — FluidSynth MIDI device unavailable")
+        message(STATUS "FluidSynth not found, fetching ${LEGENDS_DEP_FLUIDSYNTH_TAG}...")
+        FetchContent_Declare(FluidSynth
+            GIT_REPOSITORY https://github.com/FluidSynth/fluidsynth.git
+            GIT_TAG        ${LEGENDS_DEP_FLUIDSYNTH_TAG}
+            GIT_SHALLOW    TRUE
+        )
+        set(enable-libinstpatch OFF CACHE BOOL "" FORCE)
+        set(enable-aufile OFF CACHE BOOL "" FORCE)
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(FluidSynth)
     else()
         message(STATUS "Found FluidSynth: ${FluidSynth_VERSION}")
     endif()

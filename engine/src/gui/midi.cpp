@@ -99,7 +99,8 @@ static struct {
 #include "midi_mt32.h"
 #endif
 
-#if C_FLUIDSYNTH || defined(WIN32) && !defined(HX_DOS) && !defined(_WIN32_WINDOWS)
+// Softsynth requires C_FLUIDSYNTH + external FluidSynth (vendored tree removed, #43).
+#if C_FLUIDSYNTH
 #include "midi_synth.h"
 #endif
 
@@ -612,7 +613,7 @@ public:
 		Section_prop * section = static_cast<Section_prop *>(configuration);
 		const char * dev=section->Get_string("mididevice");
 		std::string fullconf = section->Get_string("midiconfig");
-#if C_FLUIDSYNTH || defined(WIN32) && !defined(HX_DOS) && !defined(_WIN32_WINDOWS)
+#if C_FLUIDSYNTH
 		synthsamplerate = section->Get_int("samplerate");
 		if (synthsamplerate == 0) synthsamplerate = 44100;
 #endif

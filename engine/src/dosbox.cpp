@@ -1396,7 +1396,7 @@ void DOSBOX_SetupConfigSections(void) {
     const char* cputype_values[] = {"auto", "8086", "8086_prefetch", "80186", "80186_prefetch", "286", "286_prefetch", "386", "386_prefetch", "486old", "486old_prefetch", "486", "486_prefetch", "pentium", "pentium_mmx", "ppro_slow", "pentium_ii", "pentium_iii", "experimental", nullptr };
     const char* rates[] = {  "49716", "48000", "44100", "32000","22050", "16000", "11025", "8000", nullptr };
     const char* pcrates[] = {  "65536", "49716", "48000", "44100", "32000","22050", "16000", "11025", "8000", nullptr };
-#if C_FLUIDSYNTH || defined(WIN32) && !defined(HX_DOS)
+#if C_FLUIDSYNTH
     const char* devices[] = { "default", "win32", "alsa", "oss", "coreaudio", "coremidi", "mt32", "synth", "fluidsynth", "timidity", "none", nullptr };
 #else
     const char* devices[] = { "default", "win32", "alsa", "oss", "coreaudio", "coremidi", "mt32", "timidity", "none", nullptr }; // FIXME: add some way to offer the actually available choices.
@@ -3625,7 +3625,7 @@ void DOSBOX_SetupConfigSections(void) {
          "Enabling this property has the same effect: the device starts recognising messages on MIDI channels 1-8 and 10 instead.\n"
          "Default is false.");
 
-#if C_FLUIDSYNTH || defined(WIN32) && !defined(HX_DOS)
+#if C_FLUIDSYNTH
 	const char *fluiddrivers[] = {"pulseaudio", "alsa", "oss", "coreaudio", "dsound", "portaudio", "sndman", "jack", "file", "default", nullptr };
 	Pstring = secprop->Add_string("fluid.driver",Property::Changeable::WhenIdle,"default");
 	Pstring->Set_values(fluiddrivers);

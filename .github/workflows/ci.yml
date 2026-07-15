@@ -342,6 +342,8 @@ jobs:
         # address + undefined + thread only. MSan retired: stock libc++ is not
         # instrumented (crashes on startup). Re-entry:
         # https://github.com/CharlesHoskinson/ProjectLegends/issues/40
+        # MSan intentionally absent (#40). Re-entry only after docs/ci/msan-reentry.md.
+        # Do not add matrix value "memory" without instrumented libc++ proof.
         sanitizer: [address, undefined, thread]
         include:
           # Drive sanitizers with g++-13 (native libstdc++ C++23), not clang.
@@ -840,63 +842,24 @@ jobs:
           set -euo pipefail
           python3 scripts/generate_vendored_sbom.py --check
 
-      # F017 positive control: unconfigured scan MUST see FluidSynth baseline CVEs
-      # so #43 ignores are exercised (not empty false-green).
-      - name: FluidSynth baseline must be detectable without ignores
+      - name: Assert FluidSynth 1.1.6 tree is gone (#43)
         run: |
           set -euo pipefail
-          mkdir -p scan-out
-          python3 - <<'PY'
-          import json, pathlib
-          sbom = json.loads(pathlib.Path("docs/ci/vendored-sbom.cdx.json").read_text())
-          fluid = [c for c in sbom["components"] if c.get("name") == "fluidsynth"]
-          assert len(fluid) == 1, fluid
-          assert fluid[0]["purl"].startswith("pkg:deb/debian/fluidsynth@"), fluid[0]
-          pathlib.Path("scan-out/fluidsynth-only.cdx.json").write_text(
-              json.dumps({
-                  "bomFormat": "CycloneDX",
-                  "specVersion": "1.5",
-                  "version": 1,
-                  "components": fluid,
-              })
-          )
-          print("fluidsynth component:", fluid[0]["purl"], fluid[0]["version"])
-          PY
-          ./osv-scanner --sbom scan-out/fluidsynth-only.cdx.json \
-            --format json \
-            --output scan-out/fluidsynth-bare.json || true
-          test -s scan-out/fluidsynth-bare.json
-          python3 - <<'PY'
-          import json, pathlib, sys
-          data = json.loads(pathlib.Path("scan-out/fluidsynth-bare.json").read_text())
-          ids = set()
-          upstream = set()
-          for r in data.get("results") or []:
-              for p in r.get("packages") or []:
-                  for v in p.get("vulnerabilities") or []:
-                      ids.add(v.get("id") or "")
-                      for u in v.get("upstream") or []:
-                          upstream.add(u)
-          print("detected ids:", sorted(ids))
-          print("upstream:", sorted(upstream))
-          need = {"DEBIAN-CVE-2021-21417", "DEBIAN-CVE-2025-56225"}
-          # Accept either DEBIAN-prefixed or plain CVE ids.
-          ok = (
-              need.issubset(ids)
-              or {"CVE-2021-21417", "CVE-2025-56225"}.issubset(ids | upstream)
-          )
-          if not ok:
-              print("ERROR: FluidSynth bare scan did not surface #43 CVEs", file=sys.stderr)
-              sys.exit(1)
-          print("dependency-scan: FluidSynth baseline CVEs are detectable")
-          PY
+          if [ -e engine/include/fluidsynth/version.h ] || [ -d engine/src/libs/fluidsynth ]; then
+            echo "ERROR: vendored FluidSynth 1.1.6 tree must stay deleted (#43)" >&2
+            exit 1
+          fi
+          if grep -q '\[\[IgnoredVulns\]\]' osv-scanner.toml; then
+            echo "ERROR: osv-scanner.toml must not contain FluidSynth CVE ignores after #43 removal" >&2
+            exit 1
+          fi
+          echo "dependency-scan: no vendored FluidSynth; no CVE ignores"
 
       - name: Scan checked-in vendored SBOM
         run: |
           set -euo pipefail
           mkdir -p scan-out
           test -f docs/ci/vendored-sbom.cdx.json
-          # Production inventory (with baseline ignores for #43 fluidsynth).
           ./osv-scanner --sbom docs/ci/vendored-sbom.cdx.json \
             --config osv-scanner.toml \
             --format json \
@@ -908,7 +871,7 @@ jobs:
           set -e
           echo "production human-readable exit: ${rc}"
           if [ "$rc" -ne 0 ]; then
-            echo "ERROR: production scan with ignores must exit 0" >&2
+            echo "ERROR: production scan must exit 0 (no accepted ignores for CVEs)" >&2
             exit 1
           fi
           test -s scan-out/vendored-sbom.json
@@ -918,16 +881,17 @@ jobs:
           comps = sbom.get("components") or []
           names = {c.get("name") for c in comps}
           print(f"SBOM components: {len(comps)} {sorted(names)}")
-          if len(comps) < 5:
-              print("ERROR: expected >= 5 components", file=sys.stderr)
+          if len(comps) < 8:
+              print("ERROR: expected expanded #42 inventory (>=8 components)", file=sys.stderr)
               sys.exit(1)
-          if "fluidsynth" not in names or "mt32emu" not in names:
-              print("ERROR: fluidsynth and mt32emu required", file=sys.stderr)
+          if "zmbv" not in names or "mt32emu" not in names:
+              print("ERROR: zmbv + mt32emu required", file=sys.stderr)
               sys.exit(1)
-          fluid = next(c for c in comps if c["name"] == "fluidsynth")
-          if not fluid["purl"].startswith("pkg:deb/debian/fluidsynth@"):
-              print("ERROR: fluidsynth must use Debian purl for OSV", file=sys.stderr)
-              sys.exit(1)
+          # Optional fluidsynth pin must not be 1.1.x
+          for c in comps:
+              if c.get("name") == "fluidsynth" and str(c.get("version", "")).startswith("1.1"):
+                  print("ERROR: must not inventory Fluidsynth 1.1.x", file=sys.stderr)
+                  sys.exit(1)
           print("dependency-scan: production SBOM scan completed")
           PY
 

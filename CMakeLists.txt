@@ -100,13 +100,9 @@ elseif(MSVC)
     target_link_options(legends_compile_options INTERFACE /GUARD:CF)
 endif()
 
-# MSVC C4875: gsl-lite [[gsl::suppress]] non-string-literal form under /WX.
-# Scoped to targets that compile against gsl-lite headers only (FINDING-011 / #44)
-# — not every legends_compile_options consumer. Remove when gsl-lite pin advances.
-add_library(legends_gsl_msvc_options INTERFACE)
-if(MSVC)
-    target_compile_options(legends_gsl_msvc_options INTERFACE /wd4875)
-endif()
+# #44: /wd4875 removed — gsl-lite v1.1.0 is expected to compile under /WX without
+# silencing C4875 globally or via a special interface. If Windows CI regresses,
+# prefer fixing the pin over reintroducing a warning disable.
 
 if(WIN32)
     target_compile_definitions(legends_compile_options INTERFACE WIN32 _CRT_SECURE_NO_WARNINGS)
@@ -211,7 +207,6 @@ target_link_libraries(legends_core
         aibox_core  # forwarding headers in include/legends/ reference aibox headers
     PRIVATE
         gsl::gsl-lite-v1
-        $<BUILD_INTERFACE:legends_gsl_msvc_options>
 )
 
 target_compile_definitions(legends_core
@@ -311,7 +306,6 @@ target_compile_definitions(legends_pal
 
 target_link_libraries(legends_pal PRIVATE
     gsl::gsl-lite-v1
-    $<BUILD_INTERFACE:legends_gsl_msvc_options>
 )
 
 target_compile_definitions(legends_pal
@@ -363,10 +357,7 @@ target_include_directories(legends_ipc
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(legends_ipc
-    PUBLIC gsl::gsl-lite-v1
-    PRIVATE $<BUILD_INTERFACE:legends_gsl_msvc_options>
-)
+target_link_libraries(legends_ipc PUBLIC gsl::gsl-lite-v1)
 
 target_compile_definitions(legends_ipc PUBLIC
     gsl_CONFIG_DEFAULTS_VERSION=1
@@ -592,7 +583,6 @@ target_link_libraries(legends_app
         legends_pal
     PRIVATE
         gsl::gsl-lite-v1
-        $<BUILD_INTERFACE:legends_gsl_msvc_options>
 )
 
 target_compile_definitions(legends_app PRIVATE
@@ -613,7 +603,6 @@ function(legends_configure_app_entrypoint_target target_name)
 
     target_link_libraries(${target_name} PRIVATE
         gsl::gsl-lite-v1
-        $<BUILD_INTERFACE:legends_gsl_msvc_options>
     )
 
     target_compile_definitions(${target_name} PRIVATE
@@ -804,7 +793,6 @@ if(LEGENDS_BUILD_TESTS)
         GTest::gtest_main
         GTest::gmock
         gsl::gsl-lite-v1  # Tests may use gsl-lite directly for testing
-        $<BUILD_INTERFACE:legends_gsl_msvc_options>
     )
 
     # Engine host sources for IPC dispatcher tests (not part of legends_app)

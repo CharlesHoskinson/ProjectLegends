@@ -16,11 +16,12 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#if C_FLUIDSYNTH
-#include <fluidsynth.h>
-#else
-#include "fluidsynth.h"
+// Vendored FluidSynth 1.1.6-noglib was removed for CVE #43.
+// FluidSynth MIDI requires C_FLUIDSYNTH and a system/FetchContent install.
+#if !C_FLUIDSYNTH
+#error "midi_synth.h requires C_FLUIDSYNTH and an external FluidSynth package"
 #endif
+#include <fluidsynth.h>
 #include <math.h>
 #include <string.h>
 #include "control.h"
