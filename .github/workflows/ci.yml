@@ -519,12 +519,10 @@ jobs:
           # Stay on pure libstdc++ so Ubuntu libclang_rt.fuzzer links
           # (FINDING-004; libc++ dual-link left std::__cxx11 unresolved).
           # g++-13 keeps a C++23 libstdc++ available on the runner.
-          if ! sudo apt-get install -y cmake ninja-build clang-19 g++-13; then
-            echo "clang-19 not in default apt; installing via llvm.sh"
-            sudo apt-get install -y cmake ninja-build g++-13 wget lsb-release software-properties-common gnupg
-            wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
-            sudo bash /tmp/llvm.sh 19
-          fi
+          # Fail closed: no curl|bash llvm.sh fallback (FINDING-008 hygiene —
+          # mutable remote install script as root). ubuntu-24.04 ships clang-19
+          # in universe; if apt cannot install it, the job must fail visibly.
+          sudo apt-get install -y cmake ninja-build clang-19 g++-13
           command -v clang++-19
 
       - name: Configure
