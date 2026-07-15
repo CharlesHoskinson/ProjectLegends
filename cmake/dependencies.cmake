@@ -50,6 +50,26 @@ if(NOT gsl-lite_FOUND)
     FetchContent_MakeAvailable(gsl-lite)
 endif()
 
+# MSVC 19.51+ (VS 18 2026): C4875 from gsl-lite [[gsl::suppress]] non-string args
+# becomes C2220 under consumer /WX. Silence ONLY on the third-party INTERFACE
+# target so the warning disable propagates solely to TUs that include gsl-lite
+# headers via target_link_libraries — not via global project flags (#44 / F019).
+# Remove when upstream uses string-literal suppress form under the pinned tag.
+if(MSVC)
+    foreach(_gsl_tgt IN ITEMS gsl-lite gsl_lite)
+        if(TARGET ${_gsl_tgt})
+            get_target_property(_gsl_type ${_gsl_tgt} TYPE)
+            if(_gsl_type STREQUAL "INTERFACE_LIBRARY" OR _gsl_type STREQUAL "STATIC_LIBRARY"
+               OR _gsl_type STREQUAL "SHARED_LIBRARY" OR _gsl_type STREQUAL "OBJECT_LIBRARY")
+                target_compile_options(${_gsl_tgt} INTERFACE
+                    $<$<COMPILE_LANGUAGE:CXX>:/wd4875>
+                )
+                message(STATUS "MSVC: attached /wd4875 to third-party target ${_gsl_tgt} (gsl-lite C4875)")
+            endif()
+        endif()
+    endforeach()
+endif()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SDL3 (Platform Backend)
 # ─────────────────────────────────────────────────────────────────────────────

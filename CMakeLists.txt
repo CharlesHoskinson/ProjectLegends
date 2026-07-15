@@ -100,9 +100,8 @@ elseif(MSVC)
     target_link_options(legends_compile_options INTERFACE /GUARD:CF)
 endif()
 
-# #44: /wd4875 removed — gsl-lite v1.1.0 is expected to compile under /WX without
-# silencing C4875 globally or via a special interface. If Windows CI regresses,
-# prefer fixing the pin over reintroducing a warning disable.
+# #44 / F019: C4875 silence lives on the gsl-lite third-party target only
+# (see cmake/dependencies.cmake after FetchContent). Project Tier A still uses /WX.
 
 if(WIN32)
     target_compile_definitions(legends_compile_options INTERFACE WIN32 _CRT_SECURE_NO_WARNINGS)
