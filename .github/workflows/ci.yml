@@ -809,7 +809,12 @@ jobs:
     name: Dependency Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # R1 residual: also run on push to master so post-merge master stays scanned.
+    # PR lanes still skip (SBOM hand-curated; full CMake SBOM is #42).
+    if: >
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master')
     steps:
       - uses: actions/checkout@v4
 
@@ -844,11 +849,17 @@ jobs:
           ./osv-scanner --sbom docs/ci/vendored-sbom.cdx.json \
             --config osv-scanner.toml
           test -s scan-out/vendored-sbom.json
-          # Inventory non-empty: scanner must have parsed at least one package.
+          # Inventory non-empty: require the checked-in SBOM to list multiple
+          # components (F007 / #42 hygiene — empty inventory must not look green).
           python3 - <<'PY'
           import json, pathlib, sys
+          sbom = json.loads(pathlib.Path("docs/ci/vendored-sbom.cdx.json").read_text())
+          comps = sbom.get("components") or []
+          print(f"SBOM components: {len(comps)}")
+          if len(comps) < 4:
+              print("ERROR: expected >= 4 components in vendored-sbom.cdx.json", file=sys.stderr)
+              sys.exit(1)
           data = json.loads(pathlib.Path("scan-out/vendored-sbom.json").read_text())
-          # Accept either results list or empty-results with successful parse.
           print("scan keys:", sorted(data.keys())[:20])
           print("dependency-scan: SBOM scan completed")
           PY

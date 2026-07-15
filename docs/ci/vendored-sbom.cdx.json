@@ -1,9 +1,9 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "version": 1,
+  "version": 2,
   "metadata": {
-    "timestamp": "2026-07-15T00:00:00Z",
+    "timestamp": "2026-07-15T18:00:00Z",
     "component": {
       "type": "application",
       "name": "ProjectLegends",
@@ -12,32 +12,58 @@
     "properties": [
       {
         "name": "legends:sbom-note",
-        "value": "Hand-curated inventory of pinned/vendored components for OSV scanning until automated CMake SBOM lands (#42)."
+        "value": "Hand-curated inventory of pinned FetchContent + key vendored components for OSV scanning. Pins from cmake/dependencies.cmake and DEPENDENCIES.md. Expand toward automated CMake SBOM (#42)."
       }
     ]
   },
   "components": [
     {
       "type": "library",
-      "name": "fluidsynth",
-      "version": "2.3.3",
-      "bom-ref": "pkg:generic/fluidsynth@2.3.3",
-      "purl": "pkg:generic/fluidsynth@2.3.3",
-      "description": "Vendored at engine/src/libs/fluidsynth (version approximate; see DEPENDENCIES.md)"
-    },
-    {
-      "type": "library",
       "name": "gsl-lite",
       "version": "1.0.0",
       "bom-ref": "pkg:github/gsl-lite/gsl-lite@v1.0.0",
-      "purl": "pkg:github/gsl-lite/gsl-lite@v1.0.0"
+      "purl": "pkg:github/gsl-lite/gsl-lite@v1.0.0",
+      "description": "FetchContent pin LEGENDS_DEP_GSL_LITE_TAG=v1.0.0"
+    },
+    {
+      "type": "library",
+      "name": "SDL",
+      "version": "3.2.8",
+      "bom-ref": "pkg:github/libsdl-org/SDL@release-3.2.8",
+      "purl": "pkg:github/libsdl-org/SDL@release-3.2.8",
+      "description": "FetchContent pin LEGENDS_DEP_SDL3_TAG=release-3.2.8 (optional PAL backend)"
     },
     {
       "type": "library",
       "name": "googletest",
       "version": "1.14.0",
       "bom-ref": "pkg:github/google/googletest@v1.14.0",
-      "purl": "pkg:github/google/googletest@v1.14.0"
+      "purl": "pkg:github/google/googletest@v1.14.0",
+      "description": "FetchContent pin LEGENDS_DEP_GOOGLETEST_TAG=v1.14.0"
+    },
+    {
+      "type": "library",
+      "name": "benchmark",
+      "version": "1.8.3",
+      "bom-ref": "pkg:github/google/benchmark@v1.8.3",
+      "purl": "pkg:github/google/benchmark@v1.8.3",
+      "description": "FetchContent pin LEGENDS_DEP_BENCHMARK_TAG=v1.8.3"
+    },
+    {
+      "type": "library",
+      "name": "fluidsynth",
+      "version": "2.3.5",
+      "bom-ref": "pkg:github/FluidSynth/fluidsynth@v2.3.5",
+      "purl": "pkg:github/FluidSynth/fluidsynth@v2.3.5",
+      "description": "Pin LEGENDS_DEP_FLUIDSYNTH_TAG=v2.3.5; also vendored snapshot under engine/src/libs/fluidsynth. CVE baseline: #43 / osv-scanner.toml"
+    },
+    {
+      "type": "library",
+      "name": "munt",
+      "version": "2.7.0",
+      "bom-ref": "pkg:github/munt/munt@libmt32emu_2_7_0",
+      "purl": "pkg:github/munt/munt@libmt32emu_2_7_0",
+      "description": "FetchContent pin LEGENDS_DEP_MT32EMU_TAG=v2.7.0; vendored mt32 under engine/src/libs/mt32"
     }
   ]
 }
