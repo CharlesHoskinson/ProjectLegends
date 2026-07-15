@@ -220,6 +220,8 @@ TEST_F(ThreadSafetyTest, GetStateHashFromWrongThreadReturnsError) {
 // Test that destroy may be allowed from any thread for cleanup purposes
 // Note: Some implementations allow destroy from any thread to facilitate cleanup
 TEST_F(ThreadSafetyTest, DestroyFromAnyThreadAllowed) {
+    // Intentional cross-thread destroy; excluded under TSan (issue #45).
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 
@@ -350,6 +352,8 @@ TEST_F(ThreadSafetyTest, ReadOnlyQueriesFromWrongThreadReturnsError) {
 
 // Test thread ID checking consistency
 TEST_F(ThreadSafetyTest, ThreadAffinityConsistentAcrossMultipleCalls) {
+    // Intentional wrong-thread step loop; excluded under TSan (issue #45).
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 

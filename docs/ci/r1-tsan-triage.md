@@ -35,12 +35,49 @@ CI `thread` job is the live evidence that refines or removes entries.
 
 | Field | Value |
 |-------|--------|
-| Tests | `tests/unit/test_thread_safety.cpp` (`*FromWrongThread*`), `tests/unit/test_contract_gates.cpp` (`ContractGate_Threading.WrongThreadReturnsError`) |
-| Behavior | Spawn secondary thread, call `legends_*`, expect `LEGENDS_ERR_WRONG_THREAD` |
-| Stack sample | Worker thread enters `legends_step_*` / capture while owner thread holds the instance |
+| Tests | Full inventory below; each starts with `LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD()` |
+| Behavior | Spawn secondary thread, call `legends_*`, expect `LEGENDS_ERR_WRONG_THREAD` (or accept OK/WRONG_THREAD for destroy policy) |
+| Stack sample | Worker thread enters `legends_step_*` / capture / destroy while owner thread holds the instance |
 | Issue | https://github.com/CharlesHoskinson/ProjectLegends/issues/45 |
-| Handling | **Not suppressed** — gated with `GTEST_SKIP` under `LEGENDS_TSAN_BUILD` so non-TSan lanes still run them |
+| Handling | **Not suppressed** — gated with `GTEST_SKIP` under `LEGENDS_TSAN_BUILD` so non-TSan lanes still run them. No `race:legends_destroy` in `tsan-suppressions.txt`. |
 | Exit | Reject path TSan-clean or dedicated `tsan-excluded` CTest label |
+
+### Family C inventory (FINDING-003 / #45)
+
+All of the following intentionally call `legends_*` from a non-owner thread and must keep
+`LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD()` as the first executable statement:
+
+**`tests/unit/test_thread_safety.cpp`**
+
+| Test | Notes |
+|------|--------|
+| `StepCyclesFromWrongThreadReturnsError` | wrong-thread step_cycles |
+| `StepMsFromWrongThreadReturnsError` | wrong-thread step_ms |
+| `CaptureTextFromWrongThreadReturnsError` | wrong-thread capture_text |
+| `CaptureRgbFromWrongThreadReturnsError` | wrong-thread capture_rgb |
+| `KeyEventFromWrongThreadReturnsError` | wrong-thread key_event |
+| `MouseEventFromWrongThreadReturnsError` | wrong-thread mouse_event |
+| `SaveStateFromWrongThreadReturnsError` | wrong-thread save_state |
+| `LoadStateFromWrongThreadReturnsError` | wrong-thread load_state |
+| `ResetFromWrongThreadReturnsError` | wrong-thread reset |
+| `GetStateHashFromWrongThreadReturnsError` | wrong-thread get_state_hash |
+| `DestroyFromAnyThreadAllowed` | wrong-thread destroy (policy: OK or WRONG_THREAD) |
+| `ConcurrentAccessReturnsWrongThread` | multi-thread step_cycles |
+| `ReadOnlyQueriesFromWrongThreadReturnsError` | wrong-thread read-only queries |
+| `ThreadAffinityConsistentAcrossMultipleCalls` | repeated wrong-thread steps |
+| `DestroyFromWrongThreadReturnsWrongThread` | wrong-thread destroy expects WRONG_THREAD |
+| `ResetStepDestroyFromWrongThread` | wrong-thread reset + step |
+| `ConcurrentDestroyAttempts` | multi-thread destroy (FINDING-003 miss fixed) |
+
+**`tests/unit/test_contract_gates.cpp`**
+
+| Test | Notes |
+|------|--------|
+| `ContractGate_Threading.WrongThreadReturnsError` | contract-gate wrong-thread step |
+
+**Not Family C** (same-thread / owner-only; no skip required):
+`OwnerThreadCanCallAllAPIs`, `HandleRegistryNoUseAfterFree`, `RapidCreateDestroyCycle`,
+`REQ_TH_003_LogCallbackExceptionDoesNotPropagate`, and other non-cross-thread contract tests.
 
 ## MSan (not a race family)
 
