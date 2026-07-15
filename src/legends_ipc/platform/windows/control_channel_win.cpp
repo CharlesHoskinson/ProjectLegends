@@ -190,21 +190,23 @@ ControlChannel::raw_write(std::span<const uint8_t> data) {
 
     OVERLAPPED ov{};
     ov.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
-    DWORD written = 0;
+    if (!ov.hEvent) return std::unexpected(IpcError::SpawnFailed);
 
+    // With FILE_FLAG_OVERLAPPED, always complete via GetOverlappedResult —
+    // lpNumberOfBytesWritten is not reliable on success (FINDING-005 / #48).
+    DWORD written = 0;
     BOOL ok = WriteFile(handle_, data.data(),
-                        static_cast<DWORD>(data.size()), &written, &ov);
+                        static_cast<DWORD>(data.size()), nullptr, &ov);
     if (!ok) {
         DWORD err = GetLastError();
-        if (err == ERROR_IO_PENDING) {
-            if (!GetOverlappedResult(handle_, &ov, &written, TRUE)) {
-                CloseHandle(ov.hEvent);
-                return std::unexpected(IpcError::BrokenPipe);
-            }
-        } else {
+        if (err != ERROR_IO_PENDING) {
             CloseHandle(ov.hEvent);
             return std::unexpected(IpcError::BrokenPipe);
         }
+    }
+    if (!GetOverlappedResult(handle_, &ov, &written, TRUE)) {
+        CloseHandle(ov.hEvent);
+        return std::unexpected(IpcError::BrokenPipe);
     }
     CloseHandle(ov.hEvent);
     return static_cast<size_t>(written);
@@ -216,20 +218,23 @@ ControlChannel::raw_read(std::span<uint8_t> buffer, uint32_t timeout_ms) {
 
     OVERLAPPED ov{};
     ov.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
-    DWORD bytes_read = 0;
+    if (!ov.hEvent) return std::unexpected(IpcError::SpawnFailed);
 
+    DWORD bytes_read = 0;
     BOOL ok = ReadFile(handle_, buffer.data(),
-                       static_cast<DWORD>(buffer.size()), &bytes_read, &ov);
+                       static_cast<DWORD>(buffer.size()), nullptr, &ov);
     if (!ok) {
         DWORD err = GetLastError();
         if (err == ERROR_IO_PENDING) {
             DWORD wait = WaitForSingleObject(ov.hEvent, timeout_ms);
             if (wait == WAIT_TIMEOUT) {
                 CancelIo(handle_);
+                // Drain the cancelled I/O so the handle stays usable.
+                GetOverlappedResult(handle_, &ov, &bytes_read, TRUE);
                 CloseHandle(ov.hEvent);
                 return size_t{0};
             }
-            if (!GetOverlappedResult(handle_, &ov, &bytes_read, FALSE)) {
+            if (wait != WAIT_OBJECT_0) {
                 CloseHandle(ov.hEvent);
                 return std::unexpected(IpcError::BrokenPipe);
             }
@@ -240,6 +245,10 @@ ControlChannel::raw_read(std::span<uint8_t> buffer, uint32_t timeout_ms) {
             CloseHandle(ov.hEvent);
             return std::unexpected(IpcError::BrokenPipe);
         }
+    }
+    if (!GetOverlappedResult(handle_, &ov, &bytes_read, TRUE)) {
+        CloseHandle(ov.hEvent);
+        return std::unexpected(IpcError::BrokenPipe);
     }
     CloseHandle(ov.hEvent);
     return static_cast<size_t>(bytes_read);

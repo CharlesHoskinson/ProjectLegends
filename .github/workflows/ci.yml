@@ -505,29 +505,27 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          # libc++ required: stock libstdc++ with clang-18 lacks C++23
-          # std::expected (engine/cmake/test_cxx23.cpp fails configure).
-          # Match Linux (clang) matrix: -stdlib=libc++.
-          # Fuzz CMake also force-links libstdc++ so Ubuntu's libFuzzer
-          # (built against libstdc++) resolves under libc++ (FINDING-004).
-          sudo apt-get install -y cmake ninja-build clang-18 \
-            libc++-18-dev libc++abi-18-dev
+          # g++-13 + libstdc++: C++23 std::expected works without libc++, and
+          # Ubuntu's libFuzzer is built against libstdc++ (FINDING-004).
+          # clang-18 + libc++ configured OK but failed link on fuzzer iostreams.
+          sudo apt-get install -y cmake ninja-build g++-13 clang-18
 
       - name: Configure
         run: |
           cmake -B build -G Ninja \
-            -DCMAKE_C_COMPILER=clang-18 \
-            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
-            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" \
             -DENABLE_FUZZING=ON \
             -DENABLE_ASAN=ON \
             -DLEGENDS_BUILD_TESTS=ON \
             -DLEGENDS_HEADLESS=ON
 
       - name: Build fuzz targets
-        run: cmake --build build --target fuzz-all generate_fuzz_corpus
+        run: |
+          # libFuzzer is clang; still use clang to link fuzzer RT if needed.
+          # Targets are built as C++ with -fsanitize=fuzzer via the project's flags.
+          cmake --build build --target fuzz-all generate_fuzz_corpus
 
       - name: Generate seed corpus
         run: ./build/tests/fuzz/generate_fuzz_corpus build/tests/fuzz/corpus
