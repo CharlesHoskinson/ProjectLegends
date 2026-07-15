@@ -1,0 +1,12 @@
+# OSV-Scanner baseline for Project Legends dependency-scan CI job.
+# Hygiene: every ignore entry links a tracking issue; delete the entry in the
+# same PR that upgrades/removes the vulnerable component.
+# See openspec/changes/ci-stabilize-mandatory-lanes design D5 and issue #43.
+
+[[IgnoredVulns]]
+id = "CVE-2021-21417"
+reason = "Vendored fluidsynth (engine/src/libs/fluidsynth). Tracked in https://github.com/CharlesHoskinson/ProjectLegends/issues/43 — upgrade/patch then remove this ignore."
+
+[[IgnoredVulns]]
+id = "CVE-2025-56225"
+reason = "Vendored fluidsynth (engine/src/libs/fluidsynth). Tracked in https://github.com/CharlesHoskinson/ProjectLegends/issues/43 — upgrade/patch then remove this ignore."

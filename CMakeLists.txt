@@ -808,6 +808,13 @@ if(LEGENDS_BUILD_TESTS)
         gsl_CONFIG_CONTRACT_CHECKING_ON
         gsl_CONFIG_CONTRACT_VIOLATION_THROWS=1
     )
+    # R1 / issue #45: intentional WRONG_THREAD tests skip under TSan so the
+    # enforced TSan lane does not treat deliberate cross-thread calls as bugs.
+    string(CONCAT _legends_cxx_flags_for_tsan
+        "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} ${CMAKE_CXX_FLAGS_RELEASE}")
+    if(_legends_cxx_flags_for_tsan MATCHES "fsanitize=thread")
+        target_compile_definitions(legends_unit_tests PRIVATE LEGENDS_TSAN_BUILD=1)
+    endif()
     if(MSVC)
         # Test code intentionally exercises [[nodiscard]] APIs in negative paths.
         # Keep /WX on production targets while containing this to test binaries.

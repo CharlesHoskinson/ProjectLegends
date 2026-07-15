@@ -1,0 +1,21 @@
+# ThreadSanitizer suppressions for Project Legends
+#
+# Hygiene policy (R1 / ci-stabilize-mandatory-lanes design D1):
+# - One entry per race family (or single common root cause).
+# - Every entry MUST be preceded by a comment with a tracking issue URL.
+# - No module-wide globs (e.g. no bare "race:engine" matching half the tree).
+# - Deleting a suppression entry and closing its issue happen in the same PR.
+# - New detections after enforcement land as a new entry + new issue — never
+#   by re-adding allow_failure on the TSan CI leg.
+#
+# Format: https://github.com/google/sanitizers/wiki/ThreadSanitizerSuppressions
+
+# https://github.com/CharlesHoskinson/ProjectLegends/issues/38
+# Engine / embed layer global-state race family (REQ-TH-004).
+# g_active_instance is now atomic; first enforced TSan run may refine this.
+race:g_active_instance
+
+# https://github.com/CharlesHoskinson/ProjectLegends/issues/39
+# CrashBreadcrumb::add: lock-free ring slot field writes vs concurrent readInto.
+race:CrashBreadcrumb::add
+race:legends::CrashBreadcrumb::add

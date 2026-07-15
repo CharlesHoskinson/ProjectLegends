@@ -329,7 +329,8 @@ jobs:
     name: ${{ matrix.sanitizer }} Sanitizer
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: ${{ matrix.allow_failure == true }}
+    # R1: no allow_failure. Known TSan races are suppressed via
+    # tsan-suppressions.txt (issue-linked). MSan retired (#40).
     if: >
       github.event_name == 'pull_request' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
@@ -337,7 +338,10 @@ jobs:
       github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
-        sanitizer: [address, undefined, thread, memory]
+        # address + undefined + thread only. MSan retired: stock libc++ is not
+        # instrumented (crashes on startup). Re-entry:
+        # https://github.com/CharlesHoskinson/ProjectLegends/issues/40
+        sanitizer: [address, undefined, thread]
         include:
           # Note: -stdlib=libc++ is CXX-only; c_flags omit it to avoid -Wunused-command-line-argument
           - sanitizer: address
@@ -348,29 +352,17 @@ jobs:
             flags: "-stdlib=libc++ -fsanitize=undefined -fno-omit-frame-pointer"
             c_flags: "-fsanitize=undefined -fno-omit-frame-pointer"
             env: "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"
-          # TSan detects pre-existing data races in engine global state
-          # (g_active_instance), CrashBreadcrumb::add(), and cross-thread
-          # tests that intentionally exercise wrong-thread paths.
-          # Mark allow-failure until REQ-TH-004 mixer/global state fixes land.
-          # Exit plan (2026-06-10): Sprint 7 tracks removing allow_failure
-          # after the remaining engine global-state races are fixed.
+          # TSan is enforced. Known races suppressed in tsan-suppressions.txt
+          # (one entry per family, issue-linked). Burndown:
+          #   #38 g_active_instance / REQ-TH-004
+          #   #39 CrashBreadcrumb::add
+          # Intentional wrong-thread tests skip under LEGENDS_TSAN_BUILD (#45).
+          # Do not re-add allow_failure without a new tracked exit criterion
+          # (see CONTRIBUTING.md demotion rule).
           - sanitizer: thread
             flags: "-stdlib=libc++ -fsanitize=thread -fno-omit-frame-pointer"
             c_flags: "-fsanitize=thread -fno-omit-frame-pointer"
-            env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1"
-            allow_failure: true
-          # MSan requires all code (including libc++) to be instrumented.
-          # CI uses stock libc++ which is NOT MSan-instrumented, so test
-          # executables crash on startup. Mark as allow-failure until we
-          # build an instrumented libc++ or switch to a pre-built one.
-          # Exit plan (2026-06-10): Sprint 7 tracks replacing stock libc++
-          # with an instrumented runtime or retiring the MSan gate.
-          - sanitizer: memory
-            flags: "-stdlib=libc++ -fsanitize=memory -fPIE -fno-omit-frame-pointer"
-            c_flags: "-fsanitize=memory -fPIE -fno-omit-frame-pointer"
-            linker_flags: "-pie"
-            env: "MSAN_OPTIONS=halt_on_error=1"
-            allow_failure: true
+            env: "TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/tsan-suppressions.txt"
 
     steps:
       - uses: actions/checkout@v4
@@ -378,7 +370,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev
+          # llvm-18 provides llvm-symbolizer required for suppression matching
+          sudo apt-get install -y cmake ninja-build clang-18 libc++-18-dev libc++abi-18-dev llvm-18
 
       - name: Configure
         run: |
@@ -398,6 +391,11 @@ jobs:
       - name: Test
         run: |
           export ${{ matrix.env }}
+          # Confirm symbolizer is available for TSan suppression matching
+          if [ "${{ matrix.sanitizer }}" = "thread" ]; then
+            command -v llvm-symbolizer
+            test -f "${{ github.workspace }}/tsan-suppressions.txt"
+          fi
           ctest --test-dir build --output-on-failure
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -767,7 +765,10 @@ jobs:
   # REQ-SEC-028: Dependency Vulnerability Scanning
   # ─────────────────────────────────────────────────────────────────────────────
   dependency-scan:
-    name: Optional Dependency Scan
+    # R1 D5: real recursive scans of vendored trees (cmake/dependencies.cmake is
+    # not an osv-scanner lockfile). Findings triage: issues #42 (SBOM gap),
+    # #43 (fluidsynth CVEs). Do not re-mute without a tracked exit criterion.
+    name: Dependency Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -778,21 +779,40 @@ jobs:
         run: |
           curl -sL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o osv-scanner
           chmod +x osv-scanner
+          ./osv-scanner --version
 
-      - name: Scan dependencies
+      - name: Scan vendored dependency trees
         run: |
-          ./osv-scanner --lockfile cmake/dependencies.cmake || true
-          # Also scan for known CVEs in vendored code
-          ./osv-scanner -r engine/ || true
-        continue-on-error: true
+          set -euo pipefail
+          mkdir -p scan-out
+          # Supported mode: recursive directory scan (not --lockfile on a
+          # CMake script). Baseline ignores for known fluidsynth CVEs live in
+          # osv-scanner.toml (#43). New findings fail the job.
+          ./osv-scanner -r engine/ \
+            --config osv-scanner.toml \
+            --format json \
+            --output scan-out/engine.json
+          if [ -d external ]; then
+            ./osv-scanner -r external/ \
+              --config osv-scanner.toml \
+              --format json \
+              --output scan-out/external.json
+          fi
+          # Human-readable table on the log (same config; non-zero = new vulns).
+          ./osv-scanner -r engine/ --config osv-scanner.toml
+          if [ -d external ]; then
+            ./osv-scanner -r external/ --config osv-scanner.toml
+          fi
+          test -s scan-out/engine.json
+          echo "dependency-scan: engine JSON artifact written"
 
       - name: Upload scan results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dependency-scan
-          path: "*.json"
-          if-no-files-found: ignore
+          path: scan-out/*.json
+          if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Packaging (tag push only)

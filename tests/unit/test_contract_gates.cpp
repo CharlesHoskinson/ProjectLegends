@@ -5,6 +5,14 @@
 // diagram into law. Each gate is independently verifiable.
 
 #include <gtest/gtest.h>
+
+#if defined(LEGENDS_TSAN_BUILD)
+#define LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD() \
+    GTEST_SKIP() << "Intentional cross-thread call; excluded under TSan " \
+                    "(https://github.com/CharlesHoskinson/ProjectLegends/issues/45)"
+#else
+#define LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD() do {} while (0)
+#endif
 #include <thread>
 #include <vector>
 #include <atomic>
@@ -590,6 +598,7 @@ TEST(ContractGate_Threading, PALThreadsNeverCallCore) {
 
 // 8c) Calling from wrong thread returns LEGENDS_ERR_WRONG_THREAD
 TEST(ContractGate_Threading, WrongThreadReturnsError) {
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     // Create instance on main thread
     legends_handle handle = nullptr;
     legends_error_t err = legends_create(nullptr, &handle);
