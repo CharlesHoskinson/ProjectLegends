@@ -505,7 +505,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y cmake ninja-build clang-18
+          # libc++ required: stock libstdc++ with clang-18 lacks C++23
+          # std::expected (engine/cmake/test_cxx23.cpp fails configure).
+          # Match Linux (clang) matrix: -stdlib=libc++.
+          sudo apt-get install -y cmake ninja-build clang-18 \
+            libc++-18-dev libc++abi-18-dev
 
       - name: Configure
         run: |
@@ -513,6 +517,8 @@ jobs:
             -DCMAKE_C_COMPILER=clang-18 \
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" \
             -DENABLE_FUZZING=ON \
             -DENABLE_ASAN=ON \
             -DLEGENDS_BUILD_TESTS=ON \
