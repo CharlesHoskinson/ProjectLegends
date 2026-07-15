@@ -344,9 +344,12 @@ jobs:
         # https://github.com/CharlesHoskinson/ProjectLegends/issues/40
         sanitizer: [address, undefined, thread]
         include:
-          # Use clang-18 + libstdc++ from g++-13 (C++23 std::expected).
-          # Avoid -stdlib=libc++: it produced mass ASan alloc-dealloc-mismatch
+          # Drive sanitizers with g++-13 (native libstdc++ C++23), not clang.
+          # clang-18 + -stdlib=libc++ caused mass ASan alloc-dealloc-mismatch
           # (operator new vs free) across exception tests (FINDING-001 #47).
+          # clang-18 + default libstdc++ cannot see std::expected: libstdc++
+          # gates <expected> on __cpp_concepts >= 202002L, but clang-18 only
+          # reports 201907L (configure fail after 26a52ed / d706ff1).
           - sanitizer: address
             flags: "-fsanitize=address -fno-omit-frame-pointer"
             c_flags: "-fsanitize=address -fno-omit-frame-pointer"
@@ -376,9 +379,9 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          # g++-13 supplies libstdc++ with C++23; clang-18 is the sanitizer driver.
-          # llvm-18 provides llvm-symbolizer for TSan suppressions.
-          sudo apt-get install -y cmake ninja-build clang-18 g++-13 llvm-18
+          # g++-13: C++23 libstdc++ + ASan/UBSan/TSan. llvm-18: symbolizer for
+          # TSan suppressions (still used under GCC TSan runtime).
+          sudo apt-get install -y cmake ninja-build g++-13 llvm-18
           if ! command -v llvm-symbolizer >/dev/null 2>&1; then
             if command -v llvm-symbolizer-18 >/dev/null 2>&1; then
               sudo ln -sf "$(command -v llvm-symbolizer-18)" /usr/local/bin/llvm-symbolizer
@@ -390,8 +393,8 @@ jobs:
       - name: Configure
         run: |
           cmake -B build -G Ninja \
-            -DCMAKE_C_COMPILER=clang-18 \
-            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
             -DCMAKE_C_FLAGS="${{ matrix.c_flags }}" \
@@ -507,11 +510,12 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          # clang-18 is required for -fsanitize=fuzzer (CMake early-outs on
-          # non-Clang). g++-13 supplies libstdc++ with C++23 std::expected so
-          # we do NOT need -stdlib=libc++. Ubuntu's libclang_rt.fuzzer is built
-          # against libstdc++; pure libc++ linked but failed on std::__cxx11
-          # symbols (FINDING-004). Match sanitizer job: clang driver + libstdc++.
+          # clang-18 required for -fsanitize=fuzzer (CMake early-outs on non-Clang).
+          # Default to libstdc++ so Ubuntu's libclang_rt.fuzzer (libstdc++ ABI)
+          # links. pure -stdlib=libc++ left std::__cxx11 unresolved even with
+          # -lstdc++ dual-link (FINDING-004). libstdc++ <expected> is gated on
+          # __cpp_concepts>=202002L; clang-18 only reports 201907L — raise the
+          # feature-test macro so C++23 try_compile succeeds (single stdlib).
           sudo apt-get install -y cmake ninja-build clang-18 g++-13
 
       - name: Configure
@@ -520,6 +524,7 @@ jobs:
             -DCMAKE_C_COMPILER=clang-18 \
             -DCMAKE_CXX_COMPILER=clang++-18 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-Wno-builtin-macro-redefined -D__cpp_concepts=202002L" \
             -DENABLE_FUZZING=ON \
             -DENABLE_ASAN=ON \
             -DLEGENDS_BUILD_TESTS=ON \
