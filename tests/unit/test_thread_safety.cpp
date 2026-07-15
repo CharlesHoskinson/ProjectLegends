@@ -464,6 +464,9 @@ TEST_F(ThreadSafetyTest, RapidCreateDestroyCycle) {
 }
 
 TEST_F(ThreadSafetyTest, ConcurrentDestroyAttempts) {
+    // Intentional multi-thread destroy races; excluded under TSan (issue #45).
+    // Audit FINDING-003: this test was missed by the initial skip injection.
+    LEGENDS_SKIP_INTENTIONAL_WRONG_THREAD();
     legends_handle handle = nullptr;
     legends_create(nullptr, &handle);
 

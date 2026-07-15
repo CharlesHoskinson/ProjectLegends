@@ -226,8 +226,12 @@ add_executable(fuzz_config_parser
     ${CMAKE_SOURCE_DIR}/src/app/config_parser.cpp
 )
 
+# config_parser.cpp pulls include/legends/gsl.hpp → gsl-lite. legends_core
+# keeps gsl-lite PRIVATE, so fuzz targets that compile app sources must link
+# it explicitly (audit FINDING-004).
 target_link_libraries(fuzz_config_parser PRIVATE
     legends_core
+    gsl::gsl-lite-v1
 )
 
 target_include_directories(fuzz_config_parser PRIVATE

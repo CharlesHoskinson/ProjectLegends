@@ -127,8 +127,11 @@ const dosbox_error* dosbox_get_last_error(void);
 int dosbox_get_last_error_string(char* buffer, size_t buffer_size, size_t* out_length);
 void dosbox_clear_last_error(void);
 
-/* Error code to string */
-const char* dosbox_error_code_name(dosbox_error_code code);
+/* Error code to string.
+ * Takes int (not dosbox_error_code) so unknown/out-of-range values from
+ * wire/tests can be named without C++ UBSan invalid-enum loads (R1 FINDING-002).
+ */
+const char* dosbox_error_code_name(int code);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -192,7 +195,7 @@ enum class ErrorCode : int {
  * @brief Convert ErrorCode to string.
  */
 [[nodiscard]] inline const char* error_code_name(ErrorCode code) noexcept {
-    return dosbox_error_code_name(static_cast<dosbox_error_code>(code));
+    return dosbox_error_code_name(static_cast<int>(code));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
